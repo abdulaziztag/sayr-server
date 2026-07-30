@@ -118,7 +118,8 @@ class Place(Base):
 
     @property
     def gpx_url(self) -> str | None:
-        return f"/media/gpx/{self.gpx_file.name}" if self.gpx_file else None
+        # basename: fastapi-storages может сохранить в колонку полный путь
+        return f"/media/gpx/{Path(self.gpx_file.name).name}" if self.gpx_file else None
 
     def __str__(self) -> str:
         return self.name
@@ -139,7 +140,7 @@ class PlacePhoto(Base):
 
     @property
     def url(self) -> str | None:
-        return f"/media/photos/{self.file.name}" if self.file else None
+        return f"/media/photos/{Path(self.file.name).name}" if self.file else None
 
     @property
     def thumb_url(self) -> str | None:

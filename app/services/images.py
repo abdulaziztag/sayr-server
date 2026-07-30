@@ -33,6 +33,21 @@ def make_thumbnail(photo_filename: str) -> Path:
     return dst
 
 
+def _fonts():
+    """Шрифт с кириллицей: у дефолтного bitmap-шрифта Pillow её нет."""
+    for path in (
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ):
+        try:
+            return ImageFont.truetype(path, 72), ImageFont.truetype(path, 36)
+        except OSError:
+            continue
+    f = ImageFont.load_default()
+    return f, f
+
+
 def _hex(color: str) -> tuple[int, int, int]:
     color = color.lstrip("#")
     return tuple(int(color[i : i + 2], 16) for i in (0, 2, 4))  # type: ignore[return-value]
@@ -50,11 +65,7 @@ def generate_placeholder(filename: str, title: str, category: str) -> Path:
 
     im = im.filter(ImageFilter.GaussianBlur(0.5))
     draw = ImageDraw.Draw(im)
-    try:
-        font = ImageFont.load_default(size=72)
-        small = ImageFont.load_default(size=36)
-    except TypeError:  # у очень старых Pillow load_default без size
-        font = small = ImageFont.load_default()
+    font, small = _fonts()
     draw.text((80, h - 260), title, font=font, fill="white")
     draw.text((80, h - 150), "Фото-заглушка — замените в админке", font=small, fill="#e2e8f0")
 
