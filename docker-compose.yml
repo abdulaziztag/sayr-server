@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: sayr-db
+    environment:
+      POSTGRES_USER: sayr
+      POSTGRES_PASSWORD: sayr
+      POSTGRES_DB: sayr
+    ports:
+      - "5432:5432"
+    volumes:
+      - sayr_pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sayr -d sayr"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  sayr_pgdata:
