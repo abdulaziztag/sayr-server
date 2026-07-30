@@ -21,6 +21,13 @@ _cache: dict[str, tuple[float, dict]] = {}
 _lock = asyncio.Lock()
 
 
+async def _fetch_raw(params: dict) -> dict:
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(OPEN_METEO_URL, params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+
 async def get_forecast(key: str, lat: float, lng: float, elevation_m: int | None) -> dict:
     now = time.monotonic()
     hit = _cache.get(key)
@@ -42,10 +49,7 @@ async def get_forecast(key: str, lat: float, lng: float, elevation_m: int | None
         if elevation_m is not None:
             params["elevation"] = elevation_m
 
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(OPEN_METEO_URL, params=params)
-            resp.raise_for_status()
-            raw = resp.json()
+        raw = await _fetch_raw(params)
 
         daily = raw["daily"]
         payload = {

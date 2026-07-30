@@ -115,7 +115,7 @@ async def _ensure_photos(session, place: Place, item: dict) -> None:
     else:
         for i in range(2):
             fname = f"{place.slug}-{i + 1}.jpg"
-            generate_placeholder(fname, place.name, place.category.value)
+            generate_placeholder(fname, place.name, item["category"])
             session.add(
                 PlacePhoto(
                     place_id=place.id,

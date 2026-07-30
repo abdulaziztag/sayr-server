@@ -11,8 +11,18 @@ from ..services import weather
 router = APIRouter(prefix="/api/v1", tags=["places"])
 
 
-def _point_geog(lng, lat):
-    return func.geography(func.ST_SetSRID(func.ST_MakePoint(lng, lat), 4326))
+def _distance_km_expr(lat: float, lng: float):
+    """Хаверсин на встроенных функциях Postgres — расширения не нужны.
+
+    На каталоге в сотни мест точность и скорость эквивалентны PostGIS."""
+    return 6371 * func.acos(
+        func.least(
+            1.0,
+            func.cos(func.radians(lat)) * func.cos(func.radians(Place.lat))
+            * func.cos(func.radians(Place.lng) - func.radians(lng))
+            + func.sin(func.radians(lat)) * func.sin(func.radians(Place.lat)),
+        )
+    )
 
 
 @router.get("/places", response_model=list[PlaceListItem])
@@ -56,10 +66,8 @@ async def list_places(
             lat, lng = float(lat_s), float(lng_s)
         except ValueError:
             raise HTTPException(422, "near должен быть в формате 'lat,lng'")
-        place_pt = _point_geog(Place.lng, Place.lat)
-        target_pt = _point_geog(lng, lat)
-        stmt = stmt.where(func.ST_DWithin(place_pt, target_pt, radius_km * 1000))
-        stmt = stmt.order_by(func.ST_Distance(place_pt, target_pt))
+        distance_km = _distance_km_expr(lat, lng)
+        stmt = stmt.where(distance_km <= radius_km).order_by(distance_km)
     else:
         stmt = stmt.order_by(Place.name)
 

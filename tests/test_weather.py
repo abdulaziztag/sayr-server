@@ -1,4 +1,3 @@
-import httpx
 import pytest
 
 from app.services import weather
@@ -17,11 +16,11 @@ FAKE_DAILY = {
 def fake_open_meteo(monkeypatch):
     calls = {"count": 0}
 
-    async def fake_get(self, url, params=None):
+    async def fake_fetch(params):
         calls["count"] += 1
-        return httpx.Response(200, json={"daily": FAKE_DAILY}, request=httpx.Request("GET", url))
+        return {"daily": FAKE_DAILY}
 
-    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(weather, "_fetch_raw", fake_fetch)
     weather._cache.clear()
     return calls
 
