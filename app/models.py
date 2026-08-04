@@ -35,6 +35,8 @@ class PlaceCategory(str, enum.Enum):
     spring = "spring"
     plateau = "plateau"
     petroglyphs = "petroglyphs"
+    reserve = "reserve"
+    desert = "desert"
     other = "other"
 
 

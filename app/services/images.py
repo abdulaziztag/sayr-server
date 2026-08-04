@@ -19,7 +19,9 @@ CATEGORY_COLORS: dict[str, tuple[str, str]] = {
     "spring": ("#10b981", "#064e3b"),
     "plateau": ("#84cc16", "#365314"),
     "petroglyphs": ("#a16207", "#422006"),
-    "other": ("#22c55e", "#14532d"),
+    "reserve": ("#166534", "#052e16"),
+    "desert": ("#d97706", "#78350f"),
+    "other": ("#6b7280", "#1f2937"),
 }
 
 
