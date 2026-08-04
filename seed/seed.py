@@ -33,6 +33,7 @@ PLACE_FIELDS = (
     "distance_km",
     "duration_hours",
     "elevation_gain_m",
+    "drive_minutes",
     "best_seasons",
     "kid_friendly",
     "short_desc",

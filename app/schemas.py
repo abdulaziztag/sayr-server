@@ -30,6 +30,8 @@ class PlaceListItem(BaseModel):
     elevation_m: int | None
     distance_km: float | None
     duration_hours: float | None
+    elevation_gain_m: int | None
+    drive_minutes: int | None
     best_seasons: list[str]
     kid_friendly: bool
     short_desc: str
@@ -41,7 +43,6 @@ class PlaceListItem(BaseModel):
 class PlaceDetail(PlaceListItem):
     description_md: str
     how_to_get_md: str
-    elevation_gain_m: int | None
     photos: list[PhotoOut]
     gpx_url: str | None
     gpx_credit: str | None
@@ -80,6 +81,8 @@ def _base_fields(p: Place) -> dict:
         elevation_m=p.elevation_m,
         distance_km=p.distance_km,
         duration_hours=p.duration_hours,
+        elevation_gain_m=p.elevation_gain_m,
+        drive_minutes=p.drive_minutes,
         best_seasons=list(p.best_seasons or []),
         kid_friendly=p.kid_friendly,
         short_desc=p.short_desc,
@@ -98,7 +101,6 @@ def place_detail(p: Place) -> PlaceDetail:
         **_base_fields(p),
         description_md=p.description_md,
         how_to_get_md=p.how_to_get_md,
-        elevation_gain_m=p.elevation_gain_m,
         photos=[photo_out(ph) for ph in p.photos],
         gpx_url=p.gpx_url,
         gpx_credit=p.gpx_credit,
