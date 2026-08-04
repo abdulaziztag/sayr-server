@@ -16,6 +16,8 @@ DAILY_FIELDS = (
     "temperature_2m_max,temperature_2m_min,precipitation_probability_max,"
     "weather_code,wind_speed_10m_max"
 )
+# Почасовой нужен для ленты «ровно на длину похода» после нажатия «Пойду»
+HOURLY_FIELDS = "temperature_2m,precipitation_probability,wind_speed_10m,weather_code"
 
 _cache: dict[str, tuple[float, dict]] = {}
 _lock = asyncio.Lock()
@@ -43,6 +45,7 @@ async def get_forecast(key: str, lat: float, lng: float, elevation_m: int | None
             "latitude": lat,
             "longitude": lng,
             "daily": DAILY_FIELDS,
+            "hourly": HOURLY_FIELDS,
             "timezone": "Asia/Tashkent",
             "forecast_days": 7,
         }
@@ -52,6 +55,7 @@ async def get_forecast(key: str, lat: float, lng: float, elevation_m: int | None
         raw = await _fetch_raw(params)
 
         daily = raw["daily"]
+        hourly = raw.get("hourly") or {}
         payload = {
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "days": [
@@ -64,6 +68,17 @@ async def get_forecast(key: str, lat: float, lng: float, elevation_m: int | None
                     "weathercode": daily["weather_code"][i],
                 }
                 for i in range(len(daily["time"]))
+            ],
+            "hours": [
+                {
+                    # ISO без таймзоны, местное время места: «2026-08-05T08:00»
+                    "time": hourly["time"][i],
+                    "t": hourly["temperature_2m"][i],
+                    "precip_prob": hourly["precipitation_probability"][i],
+                    "wind": hourly["wind_speed_10m"][i],
+                    "weathercode": hourly["weather_code"][i],
+                }
+                for i in range(len(hourly.get("time", [])))
             ],
         }
         _cache[key] = (time.monotonic(), payload)

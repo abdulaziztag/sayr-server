@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from .models import Difficulty, Place, PlaceCategory, PlacePhoto
+from .models import Difficulty, OvernightType, Place, PlaceCategory, PlacePhoto
 
 
 class RegionOut(BaseModel):
@@ -35,6 +35,7 @@ class PlaceListItem(BaseModel):
     drive_km: float | None
     season_from: int | None
     season_to: int | None
+    overnight: OvernightType | None
     best_seasons: list[str]
     kid_friendly: bool
     short_desc: str
@@ -60,9 +61,18 @@ class WeatherDay(BaseModel):
     weathercode: int
 
 
+class WeatherHour(BaseModel):
+    time: str
+    t: float
+    precip_prob: int | None
+    wind: float | None
+    weathercode: int
+
+
 class WeatherOut(BaseModel):
     updated_at: datetime
     days: list[WeatherDay]
+    hours: list[WeatherHour] = []
 
 
 def photo_out(p: PlacePhoto) -> PhotoOut:
@@ -89,6 +99,7 @@ def _base_fields(p: Place) -> dict:
         drive_km=p.drive_km,
         season_from=p.season_from,
         season_to=p.season_to,
+        overnight=p.overnight,
         best_seasons=list(p.best_seasons or []),
         kid_friendly=p.kid_friendly,
         short_desc=p.short_desc,

@@ -37,6 +37,7 @@ PLACE_FIELDS = (
     "drive_km",
     "season_from",
     "season_to",
+    "overnight",
     "best_seasons",
     "kid_friendly",
     "short_desc",

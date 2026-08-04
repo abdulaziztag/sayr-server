@@ -118,7 +118,8 @@
       "photo_credit": "Фото: Marat Nadjibaev, Wikimedia Commons (CC BY-SA 4.0)",
       "season_from": 6,
       "season_to": 11,
-      "drive_km": 118
+      "drive_km": 118,
+      "overnight": "tent"
     },
     {
       "slug": "urungach-lakes",
@@ -335,7 +336,8 @@
       "is_published": true,
       "drive_minutes": 422,
       "photo_credit": "Фото: Галиев Ярослав, Wikimedia Commons (CC BY-SA 4.0)",
-      "drive_km": 453
+      "drive_km": 453,
+      "overnight": "yurt"
     },
     {
       "slug": "sarmishsay-petroglyphs",

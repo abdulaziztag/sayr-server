@@ -46,6 +46,13 @@ class Difficulty(str, enum.Enum):
     hard = "hard"
 
 
+class OvernightType(str, enum.Enum):
+    """Способ ночёвки на многодневках — других вариантов в каталоге нет."""
+
+    tent = "tent"
+    yurt = "yurt"
+
+
 class Season(str, enum.Enum):
     spring = "spring"
     summer = "summer"
@@ -99,6 +106,10 @@ class Place(Base):
     # Сезон диапазоном месяцев («май — окт»); best_seasons остаются для фильтра
     season_from: Mapped[int | None] = mapped_column(Integer, nullable=True)
     season_to: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Многодневка: способ ночёвки (null = однодневный выход)
+    overnight: Mapped[OvernightType | None] = mapped_column(
+        Enum(OvernightType, name="overnight_type"), nullable=True
+    )
     best_seasons: Mapped[list[str]] = mapped_column(ARRAY(String(16)), default=list)
     kid_friendly: Mapped[bool] = mapped_column(Boolean, default=False)
 
