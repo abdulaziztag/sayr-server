@@ -93,8 +93,12 @@ class Place(Base):
     distance_km: Mapped[float | None] = mapped_column(Float, nullable=True)
     duration_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
     elevation_gain_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # Время в дороге на машине от Ташкента (OSRM), для «ехать 1:50» и окна выезда
+    # Дорога на машине от Ташкента (OSRM): для «ехать 1:50 · 63 км» и окна выезда
     drive_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    drive_km: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Сезон диапазоном месяцев («май — окт»); best_seasons остаются для фильтра
+    season_from: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    season_to: Mapped[int | None] = mapped_column(Integer, nullable=True)
     best_seasons: Mapped[list[str]] = mapped_column(ARRAY(String(16)), default=list)
     kid_friendly: Mapped[bool] = mapped_column(Boolean, default=False)
 

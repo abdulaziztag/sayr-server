@@ -33,7 +33,10 @@
       "how_to_get_md": "От Ташкента ~90 км (1,5–2 часа): через Газалкент в сторону Чимгана, старт — урочище Аксай у поворота перед зоной отдыха. Летом по выходным ходят организованные группы — для первого раза лучше идти с ними.",
       "is_published": true,
       "drive_minutes": 93,
-      "photo_credit": "Фото: Мустафин М., Wikimedia Commons (CC BY-SA 4.0)"
+      "photo_credit": "Фото: Мустафин М., Wikimedia Commons (CC BY-SA 4.0)",
+      "season_from": 6,
+      "season_to": 11,
+      "drive_km": 85
     },
     {
       "slug": "maly-chimgan",
@@ -58,7 +61,10 @@
       "how_to_get_md": "От Ташкента ~85 км до зоны отдыха Чимган (1,5 часа через Газалкент). Тропа начинается за канаткой, направление — на перевал Песочный, дальше по гребню налево.",
       "is_published": true,
       "drive_minutes": 90,
-      "photo_credit": "Фото: Галиев Ярослав, Wikimedia Commons (CC BY-SA 4.0)"
+      "photo_credit": "Фото: Галиев Ярослав, Wikimedia Commons (CC BY-SA 4.0)",
+      "season_from": 3,
+      "season_to": 11,
+      "drive_km": 87
     },
     {
       "slug": "gulkam-tesniny",
@@ -82,7 +88,10 @@
       "how_to_get_md": "От Ташкента ~85 км до посёлка Чимган. Дальше пешком через перевал Песочный со спуском в долину Гулькама. Идти лучше в группе: в самих теснинах есть пара мест, где нужна страховка рюкзаком/рукой.",
       "is_published": true,
       "drive_minutes": 101,
-      "photo_credit": "Фото: German Stimban, Wikimedia Commons (CC BY-SA 4.0)"
+      "photo_credit": "Фото: German Stimban, Wikimedia Commons (CC BY-SA 4.0)",
+      "season_from": 6,
+      "season_to": 11,
+      "drive_km": 98
     },
     {
       "slug": "pulatkhan-plateau",
@@ -106,7 +115,10 @@
       "how_to_get_md": "От Ташкента через Газалкент в сторону Бричмуллы; стартовые точки маршрутов — в долинах рек у подножия (несколько вариантов захода, самый ходовой — через Терекли). Только с группой или гидом, знающим заход.",
       "is_published": true,
       "drive_minutes": 147,
-      "photo_credit": "Фото: Marat Nadjibaev, Wikimedia Commons (CC BY-SA 4.0)"
+      "photo_credit": "Фото: Marat Nadjibaev, Wikimedia Commons (CC BY-SA 4.0)",
+      "season_from": 6,
+      "season_to": 11,
+      "drive_km": 118
     },
     {
       "slug": "urungach-lakes",
@@ -130,7 +142,10 @@
       "how_to_get_md": "От Ташкента ~160 км (3–3,5 часа): через Газалкент, Чарвак и далее по дороге Пскемской долины до кишлака Урунгач. Последний участок — грунтовка, обычная легковушка проходит аккуратно. Вход в нацпарк платный (наличные).",
       "is_published": true,
       "drive_minutes": 148,
-      "photo_credit": "Фото: Marat Nadjibaev, Wikimedia Commons (CC BY-SA 4.0)"
+      "photo_credit": "Фото: Marat Nadjibaev, Wikimedia Commons (CC BY-SA 4.0)",
+      "season_from": 3,
+      "season_to": 8,
+      "drive_km": 142
     },
     {
       "slug": "beldersay",
@@ -155,7 +170,10 @@
       "how_to_get_md": "От Ташкента ~85 км по трассе на Чимган. Машину оставить у поворота на канатку Бельдерсая (или у зоны отдыха «Мраморная речка») и идти вверх по руслу. Вариант-кольцо стартует от нижней станции канатки через Уртакумбель.",
       "is_published": true,
       "drive_minutes": 84,
-      "photo_credit": "Фото: German Stimban, Wikimedia Commons (CC BY-SA 4.0)"
+      "photo_credit": "Фото: German Stimban, Wikimedia Commons (CC BY-SA 4.0)",
+      "season_from": 3,
+      "season_to": 11,
+      "drive_km": 82
     },
     {
       "slug": "charvak",
@@ -180,7 +198,10 @@
       "how_to_get_md": "От Ташкента ~70–80 км (1,5 часа) через Газалкент. Дорога кольцом обходит всё водохранилище — можно объехать вокруг за пару часов, выбирая пляжи.",
       "is_published": true,
       "drive_minutes": 86,
-      "photo_credit": "Фото: Arina Pan, Wikimedia Commons (CC BY-SA 4.0)"
+      "photo_credit": "Фото: Arina Pan, Wikimedia Commons (CC BY-SA 4.0)",
+      "season_from": 3,
+      "season_to": 11,
+      "drive_km": 89
     },
     {
       "slug": "aktash-waterfalls",
@@ -205,7 +226,10 @@
       "how_to_get_md": "От Ташкента ~60 км через Паркент до Сукока (около часа). Дальше пешком вверх по саю от верхней окраины кишлака.",
       "is_published": false,
       "drive_minutes": 64,
-      "photo_credit": "Фото: Marat Nadjibaev, Wikimedia Commons (CC BY-SA 4.0)"
+      "photo_credit": "Фото: Marat Nadjibaev, Wikimedia Commons (CC BY-SA 4.0)",
+      "season_from": 3,
+      "season_to": 11,
+      "drive_km": 52
     },
     {
       "slug": "yangiabad-waterfalls",
@@ -230,7 +254,10 @@
       "how_to_get_md": "От Ташкента ~110 км через Ахангаран/Ангрен (около 2 часов). Машину оставляют в Янгиабаде, дальше пешком по Дукентсаю.",
       "is_published": false,
       "drive_minutes": 117,
-      "photo_credit": "Фото: Галиев Ярослав, Wikimedia Commons (CC BY-SA 4.0)"
+      "photo_credit": "Фото: Галиев Ярослав, Wikimedia Commons (CC BY-SA 4.0)",
+      "season_from": 3,
+      "season_to": 11,
+      "drive_km": 118
     },
     {
       "slug": "zaamin-national-park",
@@ -255,7 +282,10 @@
       "how_to_get_md": "От Ташкента ~300 км (4–4,5 часа) через Джизак до санатория «Заамин». Можно комбинировать с плато Суффа — туда ведёт отдельная горная дорога.",
       "is_published": true,
       "drive_minutes": 230,
-      "photo_credit": "Фото: Humoyun Mehridinov, Wikimedia Commons (CC BY-SA 4.0)"
+      "photo_credit": "Фото: Humoyun Mehridinov, Wikimedia Commons (CC BY-SA 4.0)",
+      "season_from": 3,
+      "season_to": 11,
+      "drive_km": 262
     },
     {
       "slug": "nuratau-sentob",
@@ -279,7 +309,8 @@
       "how_to_get_md": "Кишлак Сентоб (Навоийская область): от Ташкента ~330 км через Джизак, от Самарканда ~200 км. Тропа начинается у южной окраины кишлака и поднимается на западный гребень. Ночёвку в гостевом доме бронировать заранее.",
       "is_published": true,
       "drive_minutes": 310,
-      "photo_credit": "Фото: Clemens Schmillen, Wikimedia Commons (CC BY-SA 4.0)"
+      "photo_credit": "Фото: Clemens Schmillen, Wikimedia Commons (CC BY-SA 4.0)",
+      "drive_km": 338
     },
     {
       "slug": "aydarkul-dunes",
@@ -303,7 +334,8 @@
       "how_to_get_md": "~70 км (около полутора часов) на машине к северу от Нураты до кишлака Янгиказган, дальше несколько километров грунтовки по пустыне до лагерей. Обычно заезжают по пути между Самаркандом/Нуратой и Бухарой; ночёвку в юрте бронировать заранее.",
       "is_published": true,
       "drive_minutes": 422,
-      "photo_credit": "Фото: Галиев Ярослав, Wikimedia Commons (CC BY-SA 4.0)"
+      "photo_credit": "Фото: Галиев Ярослав, Wikimedia Commons (CC BY-SA 4.0)",
+      "drive_km": 453
     },
     {
       "slug": "sarmishsay-petroglyphs",
@@ -327,7 +359,8 @@
       "how_to_get_md": "30–40 км от Навои (полчаса на машине), от Ташкента ~430 км — логично совмещать с поездкой в Нурату или Айдаркуль.",
       "is_published": true,
       "drive_minutes": 468,
-      "photo_credit": "Фото: Relisa Granovskaya, Wikimedia Commons (CC BY-SA 4.0)"
+      "photo_credit": "Фото: Relisa Granovskaya, Wikimedia Commons (CC BY-SA 4.0)",
+      "drive_km": 510
     },
     {
       "slug": "sangardak-waterfall",
@@ -351,7 +384,10 @@
       "how_to_get_md": "От Термеза ~190 км (3 часа) через Денау, от Ташкента — дальняя поездка (~700 км), обычно в связке с Байсуном и югом страны.",
       "is_published": true,
       "drive_minutes": 491,
-      "photo_credit": "Фото: Jonibek Qo'zimurodov, Wikimedia Commons (CC BY-SA 4.0)"
+      "photo_credit": "Фото: Jonibek Qo'zimurodov, Wikimedia Commons (CC BY-SA 4.0)",
+      "season_from": 3,
+      "season_to": 8,
+      "drive_km": 544
     },
     {
       "slug": "hazrat-daud-cave",
@@ -375,7 +411,8 @@
       "how_to_get_md": "От Самарканда ~70 км в сторону Нурабада (около часа). Парковка у подножия лестницы; наверх — только пешком, будни спокойнее выходных.",
       "is_published": true,
       "drive_minutes": 334,
-      "photo_credit": "Фото: Peretz Partensky, Wikimedia Commons (CC BY-SA 2.0)"
+      "photo_credit": "Фото: Peretz Partensky, Wikimedia Commons (CC BY-SA 2.0)",
+      "drive_km": 372
     }
   ]
 }

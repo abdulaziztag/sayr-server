@@ -30,8 +30,10 @@ def main() -> None:
                 print(f"{place['slug']}: маршрут не найден, пропуск")
                 continue
             minutes = round(routes[0]["duration"] / 60)
+            km = round(routes[0]["distance"] / 1000)
             place["drive_minutes"] = minutes
-            print(f"{place['slug']}: {minutes} мин")
+            place["drive_km"] = km
+            print(f"{place['slug']}: {minutes} мин · {km} км")
             time.sleep(1)  # публичный OSRM просит ≤1 rps
 
     DATA.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")

@@ -32,6 +32,9 @@ class PlaceListItem(BaseModel):
     duration_hours: float | None
     elevation_gain_m: int | None
     drive_minutes: int | None
+    drive_km: float | None
+    season_from: int | None
+    season_to: int | None
     best_seasons: list[str]
     kid_friendly: bool
     short_desc: str
@@ -83,6 +86,9 @@ def _base_fields(p: Place) -> dict:
         duration_hours=p.duration_hours,
         elevation_gain_m=p.elevation_gain_m,
         drive_minutes=p.drive_minutes,
+        drive_km=p.drive_km,
+        season_from=p.season_from,
+        season_to=p.season_to,
         best_seasons=list(p.best_seasons or []),
         kid_friendly=p.kid_friendly,
         short_desc=p.short_desc,
