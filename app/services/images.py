@@ -65,11 +65,8 @@ def generate_placeholder(filename: str, title: str, category: str) -> Path:
         row = tuple(round(top[i] + (bottom[i] - top[i]) * k) for i in range(3))
         im.paste(Image.new("RGB", (w, 1), row), (0, y))
 
+    # Чистый градиент без текста: подписи на кадрах запрещены дизайн-системой
     im = im.filter(ImageFilter.GaussianBlur(0.5))
-    draw = ImageDraw.Draw(im)
-    font, small = _fonts()
-    draw.text((80, h - 260), title, font=font, fill="white")
-    draw.text((80, h - 150), "Фото-заглушка — замените в админке", font=small, fill="#e2e8f0")
 
     dst = PHOTOS_DIR / filename
     im.save(dst, "JPEG", quality=85)
