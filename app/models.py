@@ -1,11 +1,12 @@
 import enum
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from fastapi_storages import FileSystemStorage
 from fastapi_storages.integrations.sqlalchemy import FileType
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Enum,
     Float,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -142,6 +144,25 @@ class Place(Base):
 
     def __str__(self) -> str:
         return self.name
+
+
+class TripIntent(Base):
+    """«Я пойду сюда в этот день». Аккаунтов нет — голос привязан к устройству."""
+
+    __tablename__ = "trip_intents"
+    __table_args__ = (
+        UniqueConstraint("place_id", "day", "device_id", name="uq_intent_place_day_device"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    place_id: Mapped[int] = mapped_column(
+        ForeignKey("places.id", ondelete="CASCADE"), index=True
+    )
+    day: Mapped[date] = mapped_column(Date, index=True)
+    device_id: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class PlacePhoto(Base):
