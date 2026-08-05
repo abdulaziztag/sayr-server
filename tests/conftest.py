@@ -5,6 +5,9 @@ os.environ.setdefault(
     "SAYR_DATABASE_URL", "postgresql+psycopg://sayr:sayr@localhost:5432/sayr_test"
 )
 os.environ.setdefault("SAYR_MEDIA_DIR", tempfile.mkdtemp(prefix="sayr-media-"))
+# Обязательные в проде — в тестах подставляем заведомо непригодные значения
+os.environ.setdefault("SAYR_ADMIN_PASSWORD", "test-only")
+os.environ.setdefault("SAYR_SECRET_KEY", "test-only")
 
 import pytest
 from asgi_lifespan import LifespanManager

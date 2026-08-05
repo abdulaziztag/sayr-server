@@ -71,7 +71,14 @@ def mount_admin(app: FastAPI) -> Admin:
         app,
         engine,
         title="Sayr Admin",
-        authentication_backend=BasicAuthBackend(secret_key=settings.secret_key),
+        # session_kwargs уходят в SessionMiddleware: по умолчанию он ставит
+        # cookie без Secure и с same_site=lax — на публичном сервере это
+        # сессия админа открытым текстом
+        authentication_backend=BasicAuthBackend(
+            secret_key=settings.secret_key,
+            https_only=settings.admin_cookie_secure,
+            same_site="strict",
+        ),
     )
     admin.add_view(PlaceAdmin)
     admin.add_view(PlacePhotoAdmin)

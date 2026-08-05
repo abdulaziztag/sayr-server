@@ -7,7 +7,9 @@ services:
       POSTGRES_PASSWORD: sayr
       POSTGRES_DB: sayr
     ports:
-      - "5432:5432"
+      # Только локально: docker publish обходит ufw, открытый наружу 5432
+      # фаервол бы не закрыл
+      - "127.0.0.1:5432:5432"
     volumes:
       - sayr_pgdata:/var/lib/postgresql/data
       - ./docker/initdb:/docker-entrypoint-initdb.d
