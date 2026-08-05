@@ -1,0 +1,17 @@
+# /etc/caddy/Caddyfile — подставь свой домен.
+# Caddy сам получит и продлит сертификат Let's Encrypt.
+
+sayr.example.com {
+	encode zstd gzip
+
+	# Фото и треки отдаём с диска, минуя приложение: на слабом VPS это заметно
+	# дешевле, чем гонять статику через uvicorn
+	handle /media/* {
+		root * /opt/sayr
+		file_server
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:8000
+	}
+}

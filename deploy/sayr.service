@@ -1,0 +1,34 @@
+# /etc/systemd/system/sayr.service
+# Запуск API без контейнеров. Пути под установку в /opt/sayr.
+
+[Unit]
+Description=Sayr API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=sayr
+Group=sayr
+WorkingDirectory=/opt/sayr
+
+# .env читает само приложение (pydantic-settings), systemd его не парсит.
+# Файл должен быть доступен пользователю sayr и закрыт от остальных: chmod 600
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+
+# Воркеров — по числу ядер, но на маленьком VPS двух достаточно
+ExecStart=/opt/sayr/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+
+Restart=on-failure
+RestartSec=3
+
+# Сервису нужен на запись только каталог с загруженными фото
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/sayr/media
+
+[Install]
+WantedBy=multi-user.target

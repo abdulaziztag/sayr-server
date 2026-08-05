@@ -28,42 +28,95 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"   # SAYR_SECRET_KEY
 
 ## Деплой на VPS
 
-Нужны docker и docker compose. TLS обязателен: без него cookie админки и логин
-идут открытым текстом, а Android с боевого домена заблокирует cleartext.
+Два варианта. TLS обязателен в обоих: без него cookie админки и логин идут
+открытым текстом, а Android с боевого домена заблокирует cleartext.
+
+### Вариант A — без Docker (мало места на диске)
+
+Занимает порядка 200 МБ: окружение ~80 МБ, код с фотографиями ~20 МБ,
+Python от uv ~50 МБ, Postgres из apt ~50 МБ. Вариант с Docker при тех же
+задачах съедает около полутора гигабайт — сам движок плюс образы Postgres
+и Python. Команды под Debian/Ubuntu, на другом дистрибутиве поменяются
+названия пакетов.
 
 ```bash
-git clone <repo> sayr-server && cd sayr-server
-cp .env.example .env && $EDITOR .env      # пароли, ключ, POSTGRES_PASSWORD
-docker compose -f compose.prod.yml up -d --build
+# 1. Postgres из системных пакетов
+sudo apt update && sudo apt install -y postgresql
+sudo -u postgres psql -c "CREATE USER sayr WITH PASSWORD 'СИЛЬНЫЙ_ПАРОЛЬ';"
+sudo -u postgres psql -c "CREATE DATABASE sayr OWNER sayr;"
+
+# 2. uv — один бинарник, ставим системно
+curl -LsSf https://astral.sh/uv/install.sh | sudo env UV_INSTALL_DIR=/usr/local/bin sh
+
+# 3. Отдельный пользователь и код
+sudo useradd --system --home-dir /opt/sayr --shell /usr/sbin/nologin sayr
+sudo mkdir -p /opt/sayr && sudo chown sayr:sayr /opt/sayr
+sudo -u sayr git clone https://github.com/abdulaziztag/sayr-server.git /opt/sayr
+cd /opt/sayr
+
+# 4. Окружение. В Debian 12 системный Python — 3.11, нужен 3.12+, его ставит uv
+sudo -u sayr uv python install 3.12
+sudo -u sayr uv sync --frozen --no-dev
+sudo -u sayr uv cache clean          # кэш колёс больше не нужен, освобождает место
+
+# 5. Секреты
+sudo -u sayr cp .env.example .env
+sudo -u sayr nano .env               # пароль админки, SAYR_SECRET_KEY, строка к БД
+sudo chmod 600 .env
+
+# 6. Схема и стартовый каталог
+sudo -u sayr .venv/bin/alembic upgrade head
+sudo -u sayr .venv/bin/python -m seed.seed
+
+# 7. Служба
+sudo cp deploy/sayr.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now sayr
+systemctl status sayr
 ```
 
-`compose.prod.yml` сам применяет миграции при старте. Первый раз залей каталог:
+Postgres из apt по умолчанию слушает только лоопбек — так и оставь, наружу
+он не нужен. Приложение тоже слушает `127.0.0.1:8000`, снаружи его показывает
+reverse proxy.
+
+Обновление потом:
 
 ```bash
+cd /opt/sayr
+sudo -u sayr git pull
+sudo -u sayr uv sync --frozen --no-dev
+sudo -u sayr .venv/bin/alembic upgrade head
+sudo systemctl restart sayr
+```
+
+### Вариант B — Docker
+
+```bash
+git clone https://github.com/abdulaziztag/sayr-server.git sayr-server && cd sayr-server
+cp .env.example .env && $EDITOR .env      # пароли, ключ, POSTGRES_PASSWORD
+docker compose -f compose.prod.yml up -d --build
 docker compose -f compose.prod.yml exec app python -m seed.seed
 ```
 
-Сид идемпотентен — повторный запуск обновит поля мест и не продублирует фото.
-Фотографии 15 мест лежат в `seed/data/photos/`, остальным генерируются заглушки.
+`compose.prod.yml` применяет миграции при старте сам. Postgres наружу не
+пробрасывается: `docker publish` обходит ufw, поэтому открытый 5432 фаервол
+бы не закрыл.
 
-Дальше — reverse proxy на `127.0.0.1:8000`. Пример для Caddy:
+### Reverse proxy и TLS
 
-```
-sayr.example.com {
-    reverse_proxy 127.0.0.1:8000
-}
-```
-
-Наружу порт публикует только proxy: Postgres в compose вообще не пробрасывается,
-приложение слушает лоопбек. `docker publish` обходит ufw, поэтому пробрасывать
-5432 наружу нельзя даже с фаерволом.
+Пример конфига — `deploy/Caddyfile` (Caddy сам получает и продлевает сертификат;
+статику из `media` отдаёт с диска, минуя приложение). Подойдёт и nginx с certbot,
+проксировать на `127.0.0.1:8000`.
 
 ### Что не забыть
 
-- **Том `media`** — фото и GPX, залитые через админку, живут только там.
-  В git их нет; без тома они пропадут при пересоздании контейнера.
-- **Бэкап** — `pg_dump` по cron плюс копия тома `media`.
+- **`media/`** — фото и GPX, залитые через админку, живут только там. В git их
+  нет. Без Docker это каталог `/opt/sayr/media`, с Docker — том `media`;
+  без тома они пропадут при пересоздании контейнера.
+- **Бэкап** — `deploy/backup.sh` в cron: дамп БД плюс архив `media`.
 - **Здоровье** — `GET /healthz` ходит в БД, годится для мониторинга.
+- **Сид идемпотентен** — повторный запуск обновит поля мест и не продублирует
+  фото. Реальные фотографии есть у 15 мест в `seed/data/photos/`, остальным
+  генерируются заглушки.
 - **Адрес в клиентах** зашит в сборку: после деплоя поменять
   `APIClient.baseURL` (iOS) и `API_BASE_URL` (Android) на боевой домен.
 
