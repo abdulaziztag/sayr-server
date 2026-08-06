@@ -49,7 +49,9 @@ jobs:
     env:
       # Ровно те переменные, которые читает tests/conftest.py
       SAYR_DATABASE_URL: postgresql+psycopg://sayr:sayr@localhost:5432/sayr_test
-      SAYR_MEDIA_DIR: ${{ runner.temp }}/sayr-media
+      # Именно github.workspace, а не runner.temp: контекст runner в env
+      # на уровне job'а недоступен, и весь workflow становится невалидным
+      SAYR_MEDIA_DIR: ${{ github.workspace }}/.ci-media
       # Пустышки. Настоящих секретов в тестовом job'е нет и быть не должно.
       # Но без этих двух переменных app/config.py падает на импорте — так задумано
       SAYR_ADMIN_PASSWORD: ci-only-not-a-secret
