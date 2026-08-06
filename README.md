@@ -103,9 +103,25 @@ docker compose -f compose.prod.yml exec app python -m seed.seed
 
 ### Reverse proxy и TLS
 
-Пример конфига — `deploy/Caddyfile` (Caddy сам получает и продлевает сертификат;
-статику из `media` отдаёт с диска, минуя приложение). Подойдёт и nginx с certbot,
-проксировать на `127.0.0.1:8000`.
+Два готовых конфига, оба проксируют на `127.0.0.1:8000`:
+
+- `deploy/nginx-sayr.conf` — если на сервере уже стоит nginx. Кладётся в
+  `/etc/nginx/sites-available/sayr`, симлинк в `sites-enabled`, потом
+  `nginx -t && systemctl reload nginx` и `certbot --nginx -d <домен>`.
+  Именно `reload`, а не `restart`: на общем сервере restart уронил бы
+  соседние сайты.
+- `deploy/Caddyfile` — если веб-сервера ещё нет. Caddy сам получает
+  и продлевает сертификат.
+
+Домена нет? Бесплатный вариант — [duckdns.org](https://www.duckdns.org):
+заводится имя, указывается IP сервера, Let's Encrypt выдаёт на него
+сертификат как на обычный домен.
+
+### Боевой стенд
+
+Сейчас развёрнуто на `https://sayr.duckdns.org` — Ubuntu 24.04, код
+в `/root/Projects/sayr-server`, служба `sayr` в systemd, nginx + certbot,
+деплой по push в main (см. `.github/workflows/ci.yml`).
 
 ### Что не забыть
 
