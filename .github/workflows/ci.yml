@@ -1,24 +1,23 @@
 name: CI/CD
 
-# Тесты — на каждый push в main и на каждый PR.
-# Деплой — только когда main позеленел.
+# Триггера pull_request нет намеренно: этот репозиторий — одностороннее зеркало
+# монорепо, код приезжает только через `git subtree push --prefix=server`.
+# Слитый здесь PR сломал бы следующий subtree push — он перестал бы быть
+# fast-forward. Вести разработку тут всё равно негде.
+# workflow_dispatch оставлен, чтобы можно было передеплоить без нового коммита.
 on:
   push:
-    branches: [main]
-  pull_request:
     branches: [main]
   workflow_dispatch:
 
 # Два пуша подряд не деплоят одновременно: второй прогон встаёт в очередь и
-# ждёт, пока закончится первый. cancel-in-progress для main намеренно
-# выключен — прервать деплой между `alembic upgrade` и `systemctl restart`
-# хуже, чем подождать минуту. GitHub держит в очереди только один ожидающий
-# прогон: если пушей будет три, задеплоится последний, промежуточный
-# отменится сам — это то, что нужно.
-# Для PR и веток отменяем: там деплоя нет, гонки не бывает, минуты дороже.
+# ждёт, пока закончится первый. cancel-in-progress выключен намеренно —
+# прервать деплой между `alembic upgrade` и `systemctl restart` хуже, чем
+# подождать минуту. GitHub держит в очереди один ожидающий прогон: из трёх
+# быстрых пушей задеплоится последний, промежуточный отменится сам.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -50,13 +49,11 @@ jobs:
     env:
       # Ровно те переменные, которые читает tests/conftest.py
       SAYR_DATABASE_URL: postgresql+psycopg://sayr:sayr@localhost:5432/sayr_test
-      SAYR_MEDIA_DIR: ${{ github.workspace }}/.ci-media
-      # Пустышки. Настоящих секретов в тестовом job'е нет и быть не должно:
-      # он выполняет код из pull request'ов. Но без этих двух переменных
-      # app/config.py падает на импорте — так задумано.
+      SAYR_MEDIA_DIR: ${{ runner.temp }}/sayr-media
+      # Пустышки. Настоящих секретов в тестовом job'е нет и быть не должно.
+      # Но без этих двух переменных app/config.py падает на импорте — так задумано
       SAYR_ADMIN_PASSWORD: ci-only-not-a-secret
       SAYR_SECRET_KEY: ci-only-not-a-secret
-      PGPASSWORD: sayr
 
     steps:
       - uses: actions/checkout@v4
@@ -81,27 +78,45 @@ jobs:
       - name: pytest
         run: uv run pytest -q
 
-      - name: Миграции и сид на чистой базе
+      - name: Миграции, сверка схемы и сид на чистой базе
         # Тесты поднимают схему через Base.metadata.create_all и alembic не
         # трогают вообще. На сервере схему катает alembic — значит сломанная
         # миграция прошла бы тесты и легла бы на прод. Проверяем отдельно,
-        # на пустой базе, тем же путём, что и в бою. Сид гоняем следом:
-        # правки в seed/data/places.json — частая причина падений.
+        # на пустой базе, тем же путём, что и в бою:
+        #   upgrade head — миграции вообще накатываются;
+        #   alembic check — итоговая схема совпадает с models.py. Без него
+        #     расхождение вида «в модели index=True, в миграции его нет»
+        #     доезжает до прода незамеченным — ровно такое уже было в 0006;
+        #   seed.seed — правки в seed/data/places.json не ломают импорт.
+        # Базу создаём через psycopg, а не psql: он и так в зависимостях,
+        # а наличие psql на раннере — не контракт
         env:
           SAYR_DATABASE_URL: postgresql+psycopg://sayr:sayr@localhost:5432/sayr_migrations
         run: |
-          psql -h localhost -U sayr -d postgres \
-               -c 'CREATE DATABASE sayr_migrations OWNER sayr'
+          uv run python - <<'PY'
+          import psycopg
+
+          with psycopg.connect(
+              "postgresql://sayr:sayr@localhost:5432/postgres", autocommit=True
+          ) as conn:
+              conn.execute("DROP DATABASE IF EXISTS sayr_migrations")
+              conn.execute("CREATE DATABASE sayr_migrations OWNER sayr")
+          PY
           uv run alembic upgrade head
+          uv run alembic check
           uv run python -m seed.seed
 
   deploy:
     name: Деплой на VPS
     needs: test
-    # Ни на PR, ни на ручной прогон из ветки. Только зелёный main.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Только main. Ручной запуск из main тоже деплоит — это единственный
+    # способ передеплоить без нового коммита
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Худший путь: uv sync с пустым кэшем + дамп + миграции + 40 с ожидания
+    # healthz + откат (ещё один sync и ещё 40 с). Таймаут короче этого пути
+    # оборвал бы ssh ровно посреди деплоя
+    timeout-minutes: 25
 
     steps:
       - name: Ключ в ssh-agent
