@@ -1,0 +1,155 @@
+name: CI/CD
+
+# Тесты — на каждый push в main и на каждый PR.
+# Деплой — только когда main позеленел.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Два пуша подряд не деплоят одновременно: второй прогон встаёт в очередь и
+# ждёт, пока закончится первый. cancel-in-progress для main намеренно
+# выключен — прервать деплой между `alembic upgrade` и `systemctl restart`
+# хуже, чем подождать минуту. GitHub держит в очереди только один ожидающий
+# прогон: если пушей будет три, задеплоится последний, промежуточный
+# отменится сам — это то, что нужно.
+# Для PR и веток отменяем: там деплоя нет, гонки не бывает, минуты дороже.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  test:
+    name: Тесты
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sayr
+          POSTGRES_PASSWORD: sayr
+          POSTGRES_DB: sayr_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sayr -d sayr_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      # Ровно те переменные, которые читает tests/conftest.py
+      SAYR_DATABASE_URL: postgresql+psycopg://sayr:sayr@localhost:5432/sayr_test
+      SAYR_MEDIA_DIR: ${{ github.workspace }}/.ci-media
+      # Пустышки. Настоящих секретов в тестовом job'е нет и быть не должно:
+      # он выполняет код из pull request'ов. Но без этих двух переменных
+      # app/config.py падает на импорте — так задумано.
+      SAYR_ADMIN_PASSWORD: ci-only-not-a-secret
+      SAYR_SECRET_KEY: ci-only-not-a-secret
+      PGPASSWORD: sayr
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Поставить uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Python 3.12
+        # В образе раннера свой Python, но requires-python = ">=3.12",
+        # и на сервере интерпретатор тоже ставит uv — держим одинаково
+        run: uv python install "$PYTHON_VERSION"
+
+      - name: Зависимости
+        # --frozen: если uv.lock разошёлся с pyproject.toml, падаем здесь.
+        # На сервере update.sh выполняет ровно ту же команду, так что
+        # рассинхрон лучше поймать до деплоя, а не во время.
+        run: uv sync --frozen
+
+      - name: pytest
+        run: uv run pytest -q
+
+      - name: Миграции и сид на чистой базе
+        # Тесты поднимают схему через Base.metadata.create_all и alembic не
+        # трогают вообще. На сервере схему катает alembic — значит сломанная
+        # миграция прошла бы тесты и легла бы на прод. Проверяем отдельно,
+        # на пустой базе, тем же путём, что и в бою. Сид гоняем следом:
+        # правки в seed/data/places.json — частая причина падений.
+        env:
+          SAYR_DATABASE_URL: postgresql+psycopg://sayr:sayr@localhost:5432/sayr_migrations
+        run: |
+          psql -h localhost -U sayr -d postgres \
+               -c 'CREATE DATABASE sayr_migrations OWNER sayr'
+          uv run alembic upgrade head
+          uv run python -m seed.seed
+
+  deploy:
+    name: Деплой на VPS
+    needs: test
+    # Ни на PR, ни на ручной прогон из ветки. Только зелёный main.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Ключ в ssh-agent
+        # webfactory/ssh-agent, а не appleboy/ssh-action: это крошечный
+        # JS-action, приватный ключ живёт только в памяти агента и не
+        # ложится в файл внутри workspace. appleboy — docker-action, тянет
+        # образ (плюс ~20 с к каждому прогону) и прячет ssh за своими
+        # параметрами; здесь вся полезная нагрузка — одна удалённая
+        # команда, прятать нечего.
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Отпечаток сервера
+        # Без known_hosts осталось бы StrictHostKeyChecking=no, то есть
+        # деплой кому угодно, кто перехватит DNS/маршрут.
+        env:
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Обновить и проверить
+        # Скрипт лежит в /usr/local/sbin, а не внутри каталога приложения,
+        # который сам же перезаписывается git-пуллом.
+        # В authorized_keys сервера на этот ключ навешена forced command с той
+        # же строкой: даже если ключ утечёт, им нельзя сделать ничего, кроме
+        # этого деплоя — ни шелла, ни произвольной команды.
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+        run: |
+          ssh -p "$SSH_PORT" \
+              -o StrictHostKeyChecking=yes \
+              -o ConnectTimeout=15 \
+              -o ServerAliveInterval=15 \
+              -o ServerAliveCountMax=20 \
+              "$SSH_USER@$SSH_HOST" \
+              '/usr/local/sbin/sayr-update'
+
+      - name: Публичный /healthz
+        # Необязательно. Задай переменную (не секрет) PUBLIC_BASE_URL вида
+        # https://sayr.duckdns.org в Settings → Variables, и деплой заодно
+        # проверит, что снаружи через nginx всё тоже отвечает: сертификат жив,
+        # proxy_pass настроен. Внутренний healthz это не ловит.
+        if: vars.PUBLIC_BASE_URL != ''
+        env:
+          PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
+        run: curl -fsS --retry 5 --retry-delay 3 --max-time 15 "$PUBLIC_BASE_URL/healthz"

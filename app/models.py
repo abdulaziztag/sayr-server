@@ -11,6 +11,7 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -152,12 +153,11 @@ class TripIntent(Base):
     __tablename__ = "trip_intents"
     __table_args__ = (
         UniqueConstraint("place_id", "day", "device_id", name="uq_intent_place_day_device"),
+        Index("ix_trip_intents_place_day", "place_id", "day"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    place_id: Mapped[int] = mapped_column(
-        ForeignKey("places.id", ondelete="CASCADE"), index=True
-    )
+    place_id: Mapped[int] = mapped_column(ForeignKey("places.id", ondelete="CASCADE"))
     day: Mapped[date] = mapped_column(Date, index=True)
     device_id: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(
