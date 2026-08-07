@@ -29,6 +29,17 @@ if settings.cors_origins:
         allow_headers=["*"],
     )
 
+@app.middleware("http")
+async def media_cache_headers(request, call_next):
+    """Cache-Control для фото и треков: без него клиенты перепроверяли файлы
+    при каждом открытии — карточки «мигали» загрузкой. Месяц безопасен:
+    при замене файла имя меняется (OVERWRITE_EXISTING_FILES=False)."""
+    response = await call_next(request)
+    if request.url.path.startswith("/media/"):
+        response.headers["Cache-Control"] = "public, max-age=2592000"
+    return response
+
+
 app.mount("/media", StaticFiles(directory=settings.media_dir), name="media")
 app.include_router(places.router)
 app.include_router(regions.router)
