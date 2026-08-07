@@ -6,7 +6,7 @@ from sqlalchemy import text
 from starlette.staticfiles import StaticFiles
 
 from .admin import mount_admin
-from .api import intents, places, regions
+from .api import intents, places, regions, share
 from .config import settings
 from .db import engine
 
@@ -33,6 +33,7 @@ app.mount("/media", StaticFiles(directory=settings.media_dir), name="media")
 app.include_router(places.router)
 app.include_router(regions.router)
 app.include_router(intents.router)
+app.include_router(share.router)
 mount_admin(app)
 
 

@@ -36,7 +36,7 @@ async def list_places(
     q: str | None = Query(None, max_length=100),
     near: str | None = Query(None, description="lat,lng — сортирует по удалённости"),
     radius_km: float = Query(150, gt=0, le=1000),
-    limit: int = Query(100, le=200),
+    limit: int = Query(100, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
     stmt = (

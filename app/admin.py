@@ -62,8 +62,13 @@ class PlacePhotoAdmin(ModelView, model=PlacePhoto):
     column_list = [PlacePhoto.id, PlacePhoto.place, PlacePhoto.sort_order, PlacePhoto.credit]
 
     async def after_model_change(self, data, model: PlacePhoto, is_created: bool, request) -> None:
+        # Битая картинка не должна ронять сохранение: запись уже в базе,
+        # а 500 после успешного коммита читается как «ничего не сохранилось»
         if model.file:
-            make_thumbnail(Path(model.file.name).name)
+            try:
+                make_thumbnail(Path(model.file.name).name)
+            except Exception:
+                pass
 
 
 def mount_admin(app: FastAPI) -> Admin:

@@ -9,8 +9,12 @@ STAMP=$(date +%F)
 
 mkdir -p "$DEST"
 
-sudo -u postgres pg_dump sayr | gzip >"$DEST/db-$STAMP.sql.gz"
-tar -czf "$DEST/media-$STAMP.tar.gz" -C /opt/sayr media
+# Через tmp+mv: упавший посреди pg_dump иначе оставляет обрезанный архив,
+# который при восстановлении выглядит как нормальный бэкап
+sudo -u postgres pg_dump sayr | gzip >"$DEST/db-$STAMP.sql.gz.tmp"
+mv "$DEST/db-$STAMP.sql.gz.tmp" "$DEST/db-$STAMP.sql.gz"
+tar -czf "$DEST/media-$STAMP.tar.gz.tmp" -C "${MEDIA_ROOT:-/root/Projects/sayr-server}" media
+mv "$DEST/media-$STAMP.tar.gz.tmp" "$DEST/media-$STAMP.tar.gz"
 
 # Место на диске ограничено — старое подчищаем
 find "$DEST" -name '*.gz' -mtime +"$KEEP_DAYS" -delete

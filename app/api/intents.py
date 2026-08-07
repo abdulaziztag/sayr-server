@@ -40,7 +40,9 @@ async def _place_id(slug: str, session: AsyncSession) -> int:
 async def list_intents(
     slug: str,
     device_id: str | None = None,
-    days: int = Query(60, ge=1, le=180),
+    # 62, не 60: календарь клиента показывает два месяца целиком, а 31+31
+    # дней в 60 не помещаются — последние даты оставались без счётчиков
+    days: int = Query(62, ge=1, le=180),
     session: AsyncSession = Depends(get_session),
 ):
     """Сколько человек собирается в место по дням — числа под датами календаря."""
@@ -89,6 +91,9 @@ async def add_intent(
     place_id = await _place_id(slug, session)
     if body.date < date.today():
         raise HTTPException(422, "Дата в прошлом")
+    # Клиент даёт выбрать максимум два месяца вперёд; всё дальше — не человек
+    if body.date > date.today() + timedelta(days=180):
+        raise HTTPException(422, "Дата слишком далеко")
 
     # Устройство идёт куда-то одно в день: старая отметка на эту же дату снимается
     await session.execute(
