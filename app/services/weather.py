@@ -20,7 +20,7 @@ DAILY_FIELDS = (
 HOURLY_FIELDS = "temperature_2m,precipitation_probability,wind_speed_10m,weather_code"
 
 _cache: dict[str, tuple[float, dict]] = {}
-_lock = asyncio.Lock()
+_locks: dict[str, asyncio.Lock] = {}
 
 
 async def _fetch_raw(params: dict) -> dict:
@@ -36,7 +36,10 @@ async def get_forecast(key: str, lat: float, lng: float, elevation_m: int | None
     if hit and now - hit[0] < settings.weather_cache_ttl_sec:
         return hit[1]
 
-    async with _lock:
+    # Лок на место, а не на всё: с общим локом прогноз второго места ждал,
+    # пока Open-Meteo ответит первому
+    lock = _locks.setdefault(key, asyncio.Lock())
+    async with lock:
         hit = _cache.get(key)
         if hit and time.monotonic() - hit[0] < settings.weather_cache_ttl_sec:
             return hit[1]

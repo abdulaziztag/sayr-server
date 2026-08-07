@@ -65,6 +65,10 @@ class Season(str, enum.Enum):
 
 photo_storage = FileSystemStorage(path=str(PHOTOS_DIR))
 gpx_storage = FileSystemStorage(path=str(GPX_DIR))
+# Иначе photo.jpg, загруженный ко второму месту, молча перетирает файл первого:
+# write() коллизий не проверяет, а с этим флагом StorageFile сам дописывает _1
+photo_storage.OVERWRITE_EXISTING_FILES = False
+gpx_storage.OVERWRITE_EXISTING_FILES = False
 
 
 class Region(Base):
