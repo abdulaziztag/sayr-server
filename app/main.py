@@ -6,7 +6,7 @@ from sqlalchemy import text
 from starlette.staticfiles import StaticFiles
 
 from .admin import mount_admin
-from .api import intents, places, regions, share
+from .api import intents, legal, places, regions, share
 from .config import settings
 from .db import engine
 
@@ -45,6 +45,7 @@ app.include_router(places.router)
 app.include_router(regions.router)
 app.include_router(intents.router)
 app.include_router(share.router)
+app.include_router(legal.router)
 mount_admin(app)
 
 
