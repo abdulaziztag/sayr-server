@@ -102,7 +102,27 @@ async def _ensure_photos(session, place: Place, item: dict) -> None:
         return
 
     local_dir = DATA_DIR / "photos" / place.slug
-    local_files = sorted(local_dir.glob("*.[jJpP]*")) if local_dir.exists() else []
+    # Явный список расширений: маска "*.[jJpP]*" ловила и credits.json,
+    # и он уезжал в галерею как «фотография»
+    local_files = (
+        sorted(
+            f for f in local_dir.iterdir()
+            if f.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
+        )
+        if local_dir.exists()
+        else []
+    )
+
+    # У каждого снимка свой автор: фото с Викисклада лежат под CC BY-SA,
+    # где автор указывается поимённо. Общая подпись на всё место называла бы
+    # чужим именем чужую работу, поэтому подписи хранятся в credits.json
+    # рядом с файлами, а photo_credit из JSON остаётся запасным вариантом.
+    credits_file = local_dir / "credits.json" if local_dir.exists() else None
+    per_file = (
+        json.loads(credits_file.read_text())
+        if credits_file and credits_file.exists()
+        else {}
+    )
 
     if local_files:
         for i, src in enumerate(local_files):
@@ -114,7 +134,7 @@ async def _ensure_photos(session, place: Place, item: dict) -> None:
                     place_id=place.id,
                     file=StorageFile(name=fname, storage=photo_storage),
                     sort_order=i,
-                    credit=item.get("photo_credit", ""),
+                    credit=per_file.get(src.name, item.get("photo_credit", "")),
                 )
             )
     else:
