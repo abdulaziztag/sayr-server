@@ -30,7 +30,14 @@ def make_thumbnail(photo_filename: str) -> Path:
     dst = THUMBS_DIR / f"{Path(photo_filename).stem}_thumb.jpg"
     with Image.open(src) as im:
         im = ImageOps.exif_transpose(im).convert("RGB")
-        thumb = ImageOps.fit(im, THUMB_SIZE, Image.Resampling.LANCZOS)
+        # Вписываем в габарит, СОХРАНЯЯ соотношение сторон. Раньше был
+        # ImageOps.fit — он обрезал кадр до ровных 640×400, и миниатюра
+        # получалась другой формы, чем оригинал (1,60 против 1,78 у 16:9).
+        # В полноэкранном просмотре она подставляется на время загрузки,
+        # и снимок на глазах менял пропорции. Кадрируют пусть клиенты —
+        # там, где это нужно по макету (карточки каталога, полароиды).
+        thumb = im.copy()
+        thumb.thumbnail(THUMB_SIZE, Image.Resampling.LANCZOS)
         thumb.save(dst, "JPEG", quality=82)
     return dst
 
