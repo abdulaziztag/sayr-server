@@ -87,19 +87,28 @@ class PlaceTrackAdmin(ModelView, model=PlaceTrack):
     form_excluded_columns = [PlaceTrack.distance_km, PlaceTrack.ascent_m]
 
     async def after_model_change(self, data, model: PlaceTrack, is_created: bool, request) -> None:
-        # Длина и набор — из загруженного файла. Битый GPX не должен ронять
-        # сохранение: запись уже в базе, 500 после коммита читается
-        # как «ничего не сохранилось»
-        if not model.gpx_file:
-            return
-        try:
-            stats = track_stats((GPX_DIR / Path(model.gpx_file.name).name).read_bytes())
-        except Exception:
-            return
-        from sqlalchemy import update
+        # Длина и набор — из загруженного файла. Имя файла берём ИЗ БАЗЫ,
+        # а не из model: sqladmin передаёт сюда объект формы, где gpx_file —
+        # это UploadFile без .name, и обращение к нему молча падало в except,
+        # оставляя у трека «0 км · +0 м». Плюс при коллизии имён хранилище
+        # дописывает _1, и правду знает только колонка.
+        # Битый GPX не должен ронять сохранение: запись уже в базе, 500 после
+        # коммита читается как «ничего не сохранилось»
+        from sqlalchemy import select, update
         from sqlalchemy.ext.asyncio import AsyncSession
 
         async with AsyncSession(engine) as session:
+            stored = (
+                await session.execute(
+                    select(PlaceTrack.gpx_file).where(PlaceTrack.id == model.id)
+                )
+            ).scalar_one_or_none()
+            if not stored:
+                return
+            try:
+                stats = track_stats((GPX_DIR / Path(str(stored)).name).read_bytes())
+            except Exception:
+                return
             await session.execute(
                 update(PlaceTrack)
                 .where(PlaceTrack.id == model.id)

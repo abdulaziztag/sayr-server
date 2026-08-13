@@ -143,7 +143,7 @@ class Place(Base):
     tracks: Mapped[list["PlaceTrack"]] = relationship(
         back_populates="place",
         cascade="all, delete-orphan",
-        order_by="PlaceTrack.sort_order",
+        order_by="[PlaceTrack.sort_order, PlaceTrack.id]",
     )
 
     def __str__(self) -> str:
