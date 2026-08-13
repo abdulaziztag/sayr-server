@@ -41,7 +41,11 @@
       "tracks": [
         {
           "file": "bolshoy-chimgan.gpx",
-          "name": "Западный гребень"
+          "name": "По новой грунтовке"
+        },
+        {
+          "file": "bolshoy-chimgan-aksay.gpx",
+          "name": "Классика от Аксая"
         }
       ]
     },
