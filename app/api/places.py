@@ -41,7 +41,11 @@ async def list_places(
 ):
     stmt = (
         select(Place)
-        .options(selectinload(Place.photos), joinedload(Place.region))
+        .options(
+            selectinload(Place.photos),
+            selectinload(Place.tracks),
+            joinedload(Place.region),
+        )
         .where(Place.is_published)
         .limit(limit)
         .offset(offset)
@@ -78,7 +82,11 @@ async def list_places(
 async def _get_place_or_404(slug: str, session: AsyncSession) -> Place:
     stmt = (
         select(Place)
-        .options(selectinload(Place.photos), joinedload(Place.region))
+        .options(
+            selectinload(Place.photos),
+            selectinload(Place.tracks),
+            joinedload(Place.region),
+        )
         .where(Place.slug == slug, Place.is_published)
     )
     place = (await session.execute(stmt)).unique().scalar_one_or_none()

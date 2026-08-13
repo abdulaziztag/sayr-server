@@ -9,9 +9,10 @@ from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
 from wtforms import SelectMultipleField
 
-from .config import settings
+from .config import GPX_DIR, settings
 from .db import engine
-from .models import Place, PlacePhoto, Region, Season
+from .models import Place, PlacePhoto, PlaceTrack, Region, Season
+from .services.gpx import track_stats
 from .services.images import make_thumbnail
 
 
@@ -71,6 +72,42 @@ class PlacePhotoAdmin(ModelView, model=PlacePhoto):
                 pass
 
 
+class PlaceTrackAdmin(ModelView, model=PlaceTrack):
+    name = "Трек"
+    name_plural = "Треки мест"
+    column_list = [
+        PlaceTrack.id,
+        PlaceTrack.place,
+        PlaceTrack.name,
+        PlaceTrack.distance_km,
+        PlaceTrack.ascent_m,
+        PlaceTrack.sort_order,
+    ]
+    # Статистика считается из файла, руками её не вводят
+    form_excluded_columns = [PlaceTrack.distance_km, PlaceTrack.ascent_m]
+
+    async def after_model_change(self, data, model: PlaceTrack, is_created: bool, request) -> None:
+        # Длина и набор — из загруженного файла. Битый GPX не должен ронять
+        # сохранение: запись уже в базе, 500 после коммита читается
+        # как «ничего не сохранилось»
+        if not model.gpx_file:
+            return
+        try:
+            stats = track_stats((GPX_DIR / Path(model.gpx_file.name).name).read_bytes())
+        except Exception:
+            return
+        from sqlalchemy import update
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        async with AsyncSession(engine) as session:
+            await session.execute(
+                update(PlaceTrack)
+                .where(PlaceTrack.id == model.id)
+                .values(distance_km=stats.distance_km, ascent_m=stats.ascent_m)
+            )
+            await session.commit()
+
+
 def mount_admin(app: FastAPI) -> Admin:
     admin = Admin(
         app,
@@ -87,5 +124,6 @@ def mount_admin(app: FastAPI) -> Admin:
     )
     admin.add_view(PlaceAdmin)
     admin.add_view(PlacePhotoAdmin)
+    admin.add_view(PlaceTrackAdmin)
     admin.add_view(RegionAdmin)
     return admin

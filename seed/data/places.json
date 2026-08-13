@@ -37,7 +37,13 @@
       "photo_credit": "Фото: Мустафин М., Wikimedia Commons (CC BY-SA 4.0)",
       "season_from": 6,
       "season_to": 11,
-      "drive_km": 87
+      "drive_km": 87,
+      "tracks": [
+        {
+          "file": "bolshoy-chimgan.gpx",
+          "name": "Западный гребень"
+        }
+      ]
     },
     {
       "slug": "maly-chimgan",

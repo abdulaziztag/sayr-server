@@ -1,7 +1,8 @@
 """Идемпотентный сид каталога: `uv run python -m seed.seed`.
 
 Данные — seed/data/places.json. Фото: если в seed/data/photos/<slug>/ лежат файлы —
-берём их, иначе генерируем заглушки. GPX: seed/data/gpx/<slug>.gpx, если есть.
+берём их, иначе генерируем заглушки. Треки: список tracks у места
+в places.json, файлы — в seed/data/gpx/.
 Повторный запуск обновляет поля мест и не дублирует фото.
 """
 
@@ -19,7 +20,8 @@ except ImportError:  # расположение менялось между ве
 
 from app.config import GPX_DIR, PHOTOS_DIR
 from app.db import SessionLocal
-from app.models import Place, PlacePhoto, Region, gpx_storage, photo_storage
+from app.models import Place, PlacePhoto, PlaceTrack, Region, gpx_storage, photo_storage
+from app.services.gpx import track_stats
 from app.services.images import generate_placeholder, make_thumbnail
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -43,7 +45,6 @@ PLACE_FIELDS = (
     "short_desc",
     "description_md",
     "how_to_get_md",
-    "gpx_credit",
     "is_published",
 )
 
@@ -80,16 +81,47 @@ async def seed() -> None:
                 if field in item:
                     setattr(place, field, item[field])
 
-            gpx_src = DATA_DIR / "gpx" / f"{slug}.gpx"
-            if gpx_src.exists():
-                shutil.copy(gpx_src, GPX_DIR / gpx_src.name)
-                place.gpx_file = StorageFile(name=gpx_src.name, storage=gpx_storage)
-
             await session.flush()
+            await _ensure_tracks(session, place, item)
             await _ensure_photos(session, place, item)
 
         await session.commit()
     print(f"Seed готов: {created} мест создано, {updated} обновлено.")
+
+
+async def _ensure_tracks(session, place: Place, item: dict) -> None:
+    """Треки места из places.json: tracks: [{file, name, credit}].
+
+    Идемпотентно по имени файла: повторный сид обновляет имя, подпись,
+    порядок и статистику, а не плодит дубликаты.
+    """
+    existing = {
+        Path(t.gpx_file.name).name: t
+        for t in (
+            await session.execute(
+                select(PlaceTrack).where(PlaceTrack.place_id == place.id)
+            )
+        ).scalars()
+    }
+    for order, spec in enumerate(item.get("tracks", [])):
+        src = DATA_DIR / "gpx" / spec["file"]
+        if not src.exists():
+            print(f"  ! {place.slug}: нет файла {spec['file']}, трек пропущен")
+            continue
+        shutil.copy(src, GPX_DIR / src.name)
+        stats = track_stats(src.read_bytes())
+        track = existing.get(src.name)
+        if track is None:
+            track = PlaceTrack(
+                place_id=place.id,
+                gpx_file=StorageFile(name=src.name, storage=gpx_storage),
+            )
+            session.add(track)
+        track.name = spec["name"]
+        track.gpx_credit = spec.get("credit")
+        track.distance_km = stats.distance_km
+        track.ascent_m = stats.ascent_m
+        track.sort_order = order
 
 
 async def _ensure_photos(session, place: Place, item: dict) -> None:

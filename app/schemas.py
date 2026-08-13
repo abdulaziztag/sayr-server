@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from .models import Difficulty, OvernightType, Place, PlaceCategory, PlacePhoto
+from .models import Difficulty, OvernightType, Place, PlaceCategory, PlacePhoto, PlaceTrack
 
 
 class RegionOut(BaseModel):
@@ -44,10 +44,22 @@ class PlaceListItem(BaseModel):
     has_gpx: bool
 
 
+class TrackOut(BaseModel):
+    id: int
+    name: str
+    gpx_url: str
+    credit: str | None
+    distance_km: float
+    ascent_m: int
+
+
 class PlaceDetail(PlaceListItem):
     description_md: str
     how_to_get_md: str
     photos: list[PhotoOut]
+    tracks: list[TrackOut]
+    # Старые клиенты живут на этих полях: заполняются из основного
+    # (первого по порядку) трека
     gpx_url: str | None
     gpx_credit: str | None
 
@@ -105,7 +117,7 @@ def _base_fields(p: Place) -> dict:
         short_desc=p.short_desc,
         cover_url=cover.url if cover else None,
         cover_thumb_url=(cover.thumb_url or cover.url) if cover else None,
-        has_gpx=p.gpx_file is not None,
+        has_gpx=bool(p.tracks),
     )
 
 
@@ -113,12 +125,25 @@ def place_list_item(p: Place) -> PlaceListItem:
     return PlaceListItem(**_base_fields(p))
 
 
+def track_out(t: PlaceTrack) -> TrackOut:
+    return TrackOut(
+        id=t.id,
+        name=t.name,
+        gpx_url=t.gpx_url or "",
+        credit=t.gpx_credit,
+        distance_km=t.distance_km,
+        ascent_m=t.ascent_m,
+    )
+
+
 def place_detail(p: Place) -> PlaceDetail:
+    primary = p.tracks[0] if p.tracks else None
     return PlaceDetail(
         **_base_fields(p),
         description_md=p.description_md,
         how_to_get_md=p.how_to_get_md,
         photos=[photo_out(ph) for ph in p.photos],
-        gpx_url=p.gpx_url,
-        gpx_credit=p.gpx_credit,
+        tracks=[track_out(t) for t in p.tracks],
+        gpx_url=primary.gpx_url if primary else None,
+        gpx_credit=primary.gpx_credit if primary else None,
     )

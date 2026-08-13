@@ -124,9 +124,6 @@ class Place(Base):
     description_md: Mapped[str] = mapped_column(Text, default="")
     how_to_get_md: Mapped[str] = mapped_column(Text, default="")
 
-    gpx_file = mapped_column(FileType(storage=gpx_storage), nullable=True)
-    gpx_credit: Mapped[str | None] = mapped_column(String(300), nullable=True)
-
     is_published: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -141,6 +138,38 @@ class Place(Base):
         cascade="all, delete-orphan",
         order_by="PlacePhoto.sort_order",
     )
+    # Первый по sort_order — основной: его рисует мини-карта, из него
+    # заполняются старые поля gpx_url/gpx_credit в API
+    tracks: Mapped[list["PlaceTrack"]] = relationship(
+        back_populates="place",
+        cascade="all, delete-orphan",
+        order_by="PlaceTrack.sort_order",
+    )
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class PlaceTrack(Base):
+    """Маршрут к месту. Их может быть несколько — разные тропы к одной цели,
+    и человек выбирает между ними по имени, длине и набору."""
+
+    __tablename__ = "place_tracks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    place_id: Mapped[int] = mapped_column(
+        ForeignKey("places.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(200))
+    gpx_file = mapped_column(FileType(storage=gpx_storage), nullable=False)
+    gpx_credit: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    # Считаются на сервере при сохранении (сид, админка): клиент качает
+    # только выбранный файл, а статистику видит до скачивания
+    distance_km: Mapped[float] = mapped_column(Float, default=0)
+    ascent_m: Mapped[int] = mapped_column(Integer, default=0)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    place: Mapped[Place] = relationship(back_populates="tracks")
 
     @property
     def gpx_url(self) -> str | None:
