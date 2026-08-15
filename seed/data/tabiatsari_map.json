@@ -1,0 +1,29 @@
+{
+  "matches": {
+    "_": "Соответствия наших мест точкам tabiatsari.uz. Единственный источник правды для импорта: скрипт предлагает, человек подтверждает здесь. Подтверждено 2026-08-16.",
+    "azadbash": "17e250ed-49d1-4c0d-a2be-00ad97726f21",
+    "babaytag": "35ce383b-523b-4ece-a02c-5e0448b6292e",
+    "badak-lake": "815270df-3899-4ffc-970f-b87f31fed9f9",
+    "bolshoy-chimgan": "fcf02f6e-ff4f-4d7d-85d3-078abba74dcd",
+    "paltau-waterfall": "fc1ec30a-c772-47b9-84c6-1054d51c5e12",
+    "obi-rakhmat": "365da65d-49ad-4187-bdfd-52352accd044",
+    "kyzylnura": "5b814dc7-d762-44dc-abd6-a701b635e597",
+    "maygashkan": "4c694888-1386-4967-9794-f741dab6305f",
+    "maly-chimgan": "618ceac0-cbb3-436a-a206-d93bd9bfa6f1",
+    "mankent-peak": "5381b13e-5e8b-45a5-bc2b-58169cfb97c0",
+    "pulatkhan-plateau": "914e113f-6a22-48dc-b0be-2280c730f5af",
+    "kulasya-tesniny": "bd9706d5-c74d-439f-8c09-f00a58bfceed",
+    "shahkurgan-peak": "dafa2578-01f0-42d8-b727-bb5f7f06b9d3",
+    "tashgul-waterfalls": "a08c82c0-41b1-497b-a4a2-f5e3630fe269",
+    "urungach-lakes": "8f6fba9e-e892-445c-96bd-ce0b79a50b2f"
+  },
+  "skip": {
+    "gulkam-tesniny": "Соответствия нет: ближайшая точка «Yangi Qo'rg'on» в 1,5 км — это старт в кишлаке, а не сам каньон.",
+    "aksay-waterfall": "Соответствия нет: ближайшая точка — вершина Большого Чимгана в 1,8 км, другой объект.",
+    "charvak": "Место снято с публикации: акватория с городской инфраструктурой, не пеший выход."
+  },
+  "ignore_points": {
+    "Qoraqiya Sharsharasi (41.6791,69.8012)": "Дубль в базе источника: та же Каракия в 400 м, отличие только в регистре имени. Берём запись с 4 фото (41.6778,69.7973). Сообщить админам.",
+    "Ozodbosh ×3 (1014, 1180, 1210 м)": "Ступени того же каскада. Местом считается Ozodbosh Sharsharasi (1017 м) — на неё 19 фотографий против четырёх у остальных."
+  }
+}
