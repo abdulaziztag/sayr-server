@@ -4,13 +4,15 @@ import secrets
 from pathlib import Path
 
 from fastapi import FastAPI
-from sqladmin import Admin, ModelView
+from sqladmin import Admin, BaseView, ModelView, expose
 from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
+from starlette.responses import HTMLResponse
 from wtforms import SelectMultipleField
 
+from . import stats
 from .config import GPX_DIR, settings
-from .db import engine
+from .db import SessionLocal, engine
 from .models import Place, PlacePhoto, PlaceTrack, Region, Season
 from .services.gpx import track_stats
 from .services.images import make_thumbnail
@@ -117,6 +119,125 @@ class PlaceTrackAdmin(ModelView, model=PlaceTrack):
             await session.commit()
 
 
+class StatsView(BaseView):
+    """Страница «Статистика»: кто пользуется, что смотрят, что делают.
+
+    Собственный HTML, а не шаблон sqladmin: страница одна, таблиц пять,
+    и заводить ради них каталог шаблонов с наследованием от темы —
+    больше возни, чем пользы. Сессию берём сами: add_base_view,
+    в отличие от модельных вьюх, session_maker внутрь не отдаёт.
+    """
+
+    name = "Статистика"
+    icon = "fa-solid fa-chart-simple"
+
+    @expose("/stats", methods=["GET"])
+    async def page(self, request: Request) -> HTMLResponse:
+        async with SessionLocal() as session:
+            data = await stats.dashboard(session)
+        return HTMLResponse(_render(data))
+
+
+def _cells(values, tag: str = "td") -> str:
+    return "".join(f"<{tag}>{v}</{tag}>" for v in values)
+
+
+def _table(headers: list[str], rows: list[list], empty: str) -> str:
+    if not rows:
+        return f'<p class="text-muted">{empty}</p>'
+    body = "".join(f"<tr>{_cells(row)}</tr>" for row in rows)
+    return (
+        '<div class="table-responsive"><table class="table table-sm">'
+        f"<thead><tr>{_cells(headers, 'th')}</tr></thead><tbody>{body}</tbody>"
+        "</table></div>"
+    )
+
+
+def _render(d: dict) -> str:
+    numbers = [
+        ("Сегодня", d["active_today"]),
+        ("Вчера", d["active_yesterday"]),
+        ("За 7 дней", d["wau"]),
+        ("За 30 дней", d["mau"]),
+        ("Новых за неделю", d["new_week"]),
+        ("Всего устройств", d["total_devices"]),
+    ]
+    tiles = "".join(
+        f'<div class="col"><div class="card"><div class="card-body">'
+        f'<div class="h1 m-0">{value}</div>'
+        f'<div class="text-muted">{label}</div></div></div></div>'
+        for label, value in numbers
+    )
+
+    def top(rows: list[dict]) -> str:
+        return _table(
+            ["Место", "Открытий", "Устройств", "«Пойду»", "Треков"],
+            [
+                [r["name"], r["opens"], r["devices"], r["votes"], r["downloads"]]
+                for r in rows
+            ],
+            "Пока никто ничего не открывал.",
+        )
+
+    days = _table(
+        ["День", "Активных", "Новых", "Мест", "Каталог", "Треков"],
+        [
+            [
+                r["day"].strftime("%d.%m"),
+                r["active_devices"],
+                r["new_devices"],
+                r["place_opens"],
+                r["catalog_opens"],
+                r["gpx_downloads"],
+            ]
+            for r in d["days"]
+        ],
+        "Событий ещё не было.",
+    )
+    upcoming = _table(
+        ["День", "Место", "Человек"],
+        [[r["day"].strftime("%d.%m"), r["name"], r["people"]] for r in d["upcoming"]],
+        "На ближайшие дни никто не собрался.",
+    )
+    shares = _table(
+        ["Место", "Открытий"],
+        [[r["name"], r["opens"]] for r in d["shares"]],
+        "Ссылками пока не делились.",
+    )
+
+    return f"""<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<title>Статистика — Sayr</title>
+<link rel="stylesheet" href="/admin/statics/css/tabler.min.css">
+</head><body class="antialiased">
+<div class="page-wrapper"><div class="container-xl py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="m-0">Статистика</h1>
+    <a href="/admin" class="btn">В админку</a>
+  </div>
+  <p class="text-muted">Обезличенные счётчики. Сырьё живёт
+     {settings.stats_retention_days} дней, дневные итоги — всегда.</p>
+
+  <h2 class="h3 mt-4">Активные устройства</h2>
+  <div class="row row-cards row-cols-2 row-cols-md-3 row-cols-xl-6 g-2">{tiles}</div>
+
+  <h2 class="h3 mt-4">Две недели</h2>
+  {days}
+
+  <h2 class="h3 mt-4">Топ мест за 7 дней</h2>
+  {top(d["top_week"])}
+
+  <h2 class="h3 mt-4">Топ мест за 30 дней</h2>
+  {top(d["top_month"])}
+
+  <h2 class="h3 mt-4">Кто куда собирается</h2>
+  {upcoming}
+
+  <h2 class="h3 mt-4">Открытия ссылок «поделиться» за 30 дней</h2>
+  {shares}
+</div></div></body></html>"""
+
+
 def mount_admin(app: FastAPI) -> Admin:
     admin = Admin(
         app,
@@ -135,4 +256,5 @@ def mount_admin(app: FastAPI) -> Admin:
     admin.add_view(PlacePhotoAdmin)
     admin.add_view(PlaceTrackAdmin)
     admin.add_view(RegionAdmin)
+    admin.add_view(StatsView)
     return admin

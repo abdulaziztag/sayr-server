@@ -223,3 +223,53 @@ class PlacePhoto(Base):
 
     def __str__(self) -> str:
         return self.file.name if self.file else f"photo #{self.id}"
+
+
+class ApiEvent(Base):
+    """Обращение к смысловому маршруту: чем пользуются и насколько часто.
+
+    Пишется сервером из запросов, которые к нему и так приходят, — клиенты
+    никаких «событий» не отправляют. Сырьё живёт срок хранения из настроек,
+    после чего от него остаются только дневные агрегаты.
+    """
+
+    __tablename__ = "api_events"
+    __table_args__ = (Index("ix_api_events_kind_ts", "kind", "ts"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ts: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    # Пусто у страницы шеринга (её открывает браузер) и у клиентов,
+    # которые ещё не научились слать заголовок
+    device: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    # Слаг места; у события gpx — имя файла трека, у каталога пусто
+    slug: Mapped[str | None] = mapped_column(String(160), nullable=True)
+
+
+class DailyStat(Base):
+    """Свёртка за сутки. Живёт вечно: сырьё стирается, история — нет."""
+
+    __tablename__ = "daily_stats"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    active_devices: Mapped[int] = mapped_column(Integer, default=0)
+    new_devices: Mapped[int] = mapped_column(Integer, default=0)
+    place_opens: Mapped[int] = mapped_column(Integer, default=0)
+    catalog_opens: Mapped[int] = mapped_column(Integer, default=0)
+    gpx_downloads: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class Device(Base):
+    """Когда устройство увидели впервые.
+
+    Отдельная таблица, а не вывод из событий: после ротации сырья
+    «новизну» определить будет не из чего, а «всего за историю» —
+    это просто число строк здесь. Строка на устройство, растёт медленно.
+    """
+
+    __tablename__ = "devices"
+
+    device: Mapped[str] = mapped_column(String(64), primary_key=True)
+    first_seen: Mapped[date] = mapped_column(Date, index=True)

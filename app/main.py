@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,11 +11,17 @@ from .admin import mount_admin
 from .api import intents, legal, places, regions, share
 from .config import settings
 from .db import engine
+from .stats import StatsMiddleware, rotate_forever
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    rotation = asyncio.create_task(rotate_forever())
     yield
+    # Снимаем ДО dispose: иначе цикл проснётся над закрытым пулом
+    rotation.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await rotation
     await engine.dispose()
 
 
@@ -39,6 +47,10 @@ async def media_cache_headers(request, call_next):
         response.headers["Cache-Control"] = "public, max-age=2592000"
     return response
 
+
+# Самый внешний слой: add_middleware вставляет в начало списка, а событие
+# пишется по итоговому статусу ответа — включая 304 от StaticFiles
+app.add_middleware(StatsMiddleware)
 
 app.mount("/media", StaticFiles(directory=settings.media_dir), name="media")
 app.include_router(places.router)

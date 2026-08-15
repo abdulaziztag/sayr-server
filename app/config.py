@@ -26,6 +26,12 @@ class Settings(BaseSettings):
 
     weather_cache_ttl_sec: int = 30 * 60
 
+    # Сколько дней держим сырые события статистики. Дневные агрегаты живут
+    # вечно, стирается только сырьё. Тридцать, а не больше: столько же
+    # обещано на /privacy для технических журналов, и два разных срока
+    # означали бы, что в одном из мест мы врём
+    stats_retention_days: int = 30
+
     model_config = {"env_file": SERVER_DIR / ".env", "env_prefix": "SAYR_"}
 
 
