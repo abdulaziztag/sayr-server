@@ -171,7 +171,7 @@ def _render(d: dict) -> str:
 
     def top(rows: list[dict]) -> str:
         return _table(
-            ["Место", "Открытий", "Устройств", "«Пойду»", "Треков"],
+            ["Место", "Открытий", "Устройств", "«Пойду»", "Загрузок GPX"],
             [
                 [r["name"], r["opens"], r["devices"], r["votes"], r["downloads"]]
                 for r in rows
@@ -216,7 +216,11 @@ def _render(d: dict) -> str:
     <a href="/admin" class="btn">В админку</a>
   </div>
   <p class="text-muted">Обезличенные счётчики. Сырьё живёт
-     {settings.stats_retention_days} дней, дневные итоги — всегда.</p>
+     {settings.stats_retention_days} дней, дневные итоги — всегда.<br>
+     «Загрузок GPX» — это обращения за файлом трека, а не осознанные
+     скачивания: приложение подтягивает трек само при открытии места,
+     так что число близко к открытиям мест, у которых трек есть.
+     Повторные открытия отдаёт кэш и сюда не попадают.</p>
 
   <h2 class="h3 mt-4">Активные устройства</h2>
   <div class="row row-cards row-cols-2 row-cols-md-3 row-cols-xl-6 g-2">{tiles}</div>
