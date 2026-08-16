@@ -104,6 +104,74 @@ def clean(data: bytes, epsilon_m: float = _SIMPLIFY_EPSILON_M) -> bytes:
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
+def outbound_only(data: bytes) -> bytes | None:
+    """Обрезать запись «туда-обратно» до пути в одну сторону.
+
+    Люди записывают трек целиком, вместе с возвращением по той же тропе.
+    На карте это двойная линия поверх себя, а в файле — лишняя половина.
+    Возвращаем None, если возврат идёт другой дорогой: там вторая половина
+    несёт свой маршрут, и резать её нельзя.
+
+    Точка разворота — самая дальняя от старта: для выхода на вершину это
+    и есть вершина.
+    """
+    root = ET.fromstring(data)
+    seg = root.find(f".//{_NS}trkseg")
+    if seg is None:
+        return None
+    points = list(seg.findall(f"{_NS}trkpt"))
+    if len(points) < 20:
+        return None
+
+    coords = [(float(p.get("lat")), float(p.get("lon"))) for p in points]
+    # Две трети — порог осторожности, а не вкуса. На 60% оказался маршрут
+    # через две вершины, который сам источник считает кольцом: обрезка по
+    # дальней точке отбросила бы вторую вершину. Выше этой планки геометрия
+    # совпадает с разметкой источника на всех треках, что есть
+    if _retraced_share(coords) < 0.65:
+        return None
+
+    far = max(range(len(coords)), key=lambda i: _haversine_m(*coords[0], *coords[i]))
+    # Разворот у самого края записи — значит это не «туда-обратно»,
+    # а петля, случайно замкнувшаяся рядом со стартом
+    if not 0.2 < far / len(coords) < 0.8:
+        return None
+
+    for point in points[far + 1 :]:
+        seg.remove(point)
+    ET.register_namespace("", _NS[1:-1])
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def _retraced_share(coords: list[tuple[float, float]]) -> float:
+    """Какая доля второй половины пути проходит по первой.
+
+    Сетка вместо перебора всех пар: на десятках тысяч точек квадратичное
+    сравнение считалось бы минутами.
+    """
+    sample = coords[:: max(1, len(coords) // 2000)]
+    half = len(sample) // 2
+    if half < 5:
+        return 0.0
+
+    grid: dict[tuple[float, float], list] = {}
+    for point in sample[:half]:
+        grid.setdefault((round(point[0], 3), round(point[1], 3)), []).append(point)
+
+    hits = 0
+    for point in sample[half:]:
+        key = (round(point[0], 3), round(point[1], 3))
+        neighbours = [
+            other
+            for dx in (-0.001, 0, 0.001)
+            for dy in (-0.001, 0, 0.001)
+            for other in grid.get((round(key[0] + dx, 3), round(key[1] + dy, 3)), [])
+        ]
+        if any(_haversine_m(*point, *other) < 40 for other in neighbours):
+            hits += 1
+    return hits / (len(sample) - half)
+
+
 def _significant(points: list, epsilon_m: float) -> list[int]:
     """Дуглас–Пекер: индексы точек, без которых форма тропы поедет.
 

@@ -29,7 +29,7 @@ except ImportError:  # расположение менялось между ве
 from app.config import GPX_DIR, PHOTOS_DIR
 from app.db import SessionLocal
 from app.models import Place, PlacePhoto, PlaceTrack, gpx_storage, photo_storage
-from app.services.gpx import clean, track_stats
+from app.services.gpx import clean, outbound_only, track_stats
 from app.services.images import make_thumbnail
 
 from . import tabiatsari as ts
@@ -48,6 +48,10 @@ MAX_PHOTOS = 10
 # и нить «выехать — дойти — вернуться засветло» на 40 км не считается.
 # Самый длинный из оставленных — Пулатхан, 22 км
 MAX_TRACK_KM = 30.0
+
+# Дольше этого — уже не выход на день: формула окна выезда
+# (закат − дорога×2 − ход×1,5 − запас) на таком числе уходит в минус
+MAX_DAY_HOURS = 14.0
 
 
 def _declared_elevation(name: str, fallback: int | None) -> int | None:
@@ -98,7 +102,8 @@ async def run(apply: bool) -> None:
 
             print(f"\n{place.name}  ←  {point['name']}")
             _plan_place(place, point, apply)
-            await _plan_tracks(session, place, point_id, names, apply)
+            walked = await _plan_tracks(session, place, point_id, names, apply)
+            _plan_effort(place, walked, apply)
             await _plan_photos(session, place, point_id, apply)
 
         if apply:
@@ -125,23 +130,27 @@ def _plan_place(place: Place, point: dict, apply: bool) -> None:
 
 async def _plan_tracks(
     session, place: Place, point_id: str, names: dict, apply: bool
-) -> None:
+) -> list:
     existing = {
         Path(t.gpx_file.name).name: t
         for t in (
             await session.execute(select(PlaceTrack).where(PlaceTrack.place_id == place.id))
         ).scalars()
     }
+    walked: list = []
     for order, track in enumerate(ts.tracks(point_id), start=len(existing)):
         url = track.get("gpxFileUrl")
         if not url:
             continue
         name = f"{place.slug}-ts-{url.rsplit('/', 1)[-1]}"
-        if name in existing:
-            print(f"  трек «{track['name'][:40]}» уже есть")
-            continue
-
         data = clean(ts.fetch_file(url))
+        # Запись «туда-обратно» режем до пути в одну сторону: на карте она
+        # рисовалась двойной линией поверх себя. Возврат другой дорогой
+        # не трогаем — там своя половина маршрута
+        cut = outbound_only(data)
+        round_trip = track_stats(data).distance_km
+        if cut is not None:
+            data = cut
         stats = track_stats(data)
         # Имя из выверенного списка, транслитерация — запасной путь:
         # механическая замена букв даёт «Бобойтог» вместо «Бабайтаг»
@@ -149,24 +158,77 @@ async def _plan_tracks(
         if stats.distance_km > MAX_TRACK_KM:
             print(f"  ~ пропущен многодневный «{title[:40]}» — {stats.distance_km} км")
             continue
+        mark = " (обрезан до пути туда)" if cut is not None else ""
+        verb = "обновлён" if name in existing else "+ трек"
         print(
-            f"  + трек «{title[:40]}» {stats.distance_km} км, "
-            f"+{stats.ascent_m} м, {len(data) // 1024} КБ, «{_credit(track)}»"
+            f"  {verb} «{title[:40]}» {stats.distance_km} км, "
+            f"+{stats.ascent_m} м, {len(data) // 1024} КБ{mark}"
         )
+        walked.append((round_trip, track))
         if not apply:
             continue
         (GPX_DIR / name).write_bytes(data)
-        session.add(
-            PlaceTrack(
+        row = existing.get(name)
+        if row is None:
+            row = PlaceTrack(
                 place_id=place.id,
                 gpx_file=StorageFile(name=name, storage=gpx_storage),
-                name=title,
-                gpx_credit=_credit(track),
-                distance_km=stats.distance_km,
-                ascent_m=stats.ascent_m,
                 sort_order=order,
             )
-        )
+            session.add(row)
+        row.name = title
+        row.gpx_credit = _credit(track)
+        row.distance_km = stats.distance_km
+        row.ascent_m = stats.ascent_m
+    return walked
+
+
+def _plan_effort(place: Place, walked: list, apply: bool) -> None:
+    """Длина, время и набор для наклеек на главной.
+
+    Заполняем только пустое: у девяти мест эти числа выверены руками,
+    у тридцати одного их нет вовсе, и карточка стоит без наклеек.
+
+    Длина — ПОЛНАЯ, вместе с возвращением, даже если трек обрезан до пути
+    туда: по ней считается окно выезда, и ходить человек будет в обе
+    стороны. Время берём из вилки источника серединой — у него она своя
+    на каждый маршрут, а наша формула сверху добавляет полуторный запас.
+    """
+    if not walked:
+        return
+    # Самый длинный из маршрутов места: наклейка обещает выход целиком,
+    # а не самую короткую его версию
+    km, track = max(walked, key=lambda pair: pair[0])
+
+    if place.distance_km is None:
+        print(f"  длина — → {km} км")
+        if apply:
+            place.distance_km = km
+
+    if place.duration_hours is None:
+        low, high = track.get("timeFrom"), track.get("timeTo")
+        if low and high:
+            hours = round((low + high) / 2 / 60, 1)
+            # Вилки у источника местами дикие: у Бадака 8–31 час, и середина
+            # даёт 19,7 — это ночёвка, а не выход на день, и окно выезда
+            # на таком числе не считается вовсе. Берём нижний край как
+            # реальное ходовое время; если и он за пределом — молчим,
+            # пусть человек проставит руками
+            if hours > MAX_DAY_HOURS:
+                hours = round(low / 60, 1)
+            if hours > MAX_DAY_HOURS:
+                print(f"  ! время не проставлено: у них {low // 60}–{high // 60} ч, это не день")
+                hours = None
+            if hours is not None:
+                print(f"  время — → {hours} ч (у них {low // 60}–{high // 60} ч)")
+                if apply:
+                    place.duration_hours = hours
+
+    if place.elevation_gain_m is None and track.get("elevationGain"):
+        gain = int(track["elevationGain"])
+        print(f"  набор — → {gain} м")
+        if apply:
+            place.elevation_gain_m = gain
 
 
 async def _plan_photos(session, place: Place, point_id: str, apply: bool) -> None:
@@ -208,6 +270,22 @@ async def _plan_photos(session, place: Place, point_id: str, apply: bool) -> Non
     if added:
         tail = f", ещё {skipped} не берём" if skipped > 0 else ""
         print(f"  + фотографий: {added} (свои остаются{tail})")
+
+    # Обложкой становится снимок хайкера: на Wikimedia Commons для этих мест
+    # часто лежит общий вид издалека или вовсе соседняя долина, а у источника
+    # кадр с самой тропы. Порядок задаём явно, а не сдвигом, иначе повторный
+    # запуск каждый раз тасовал бы стопку заново
+    if not apply:
+        return
+    rows = (
+        (await session.execute(select(PlacePhoto).where(PlacePhoto.place_id == place.id)))
+        .scalars()
+        .all()
+    )
+    imported = [p for p in rows if "-ts-" in Path(p.file.name).name]
+    own = [p for p in rows if "-ts-" not in Path(p.file.name).name]
+    for order, row in enumerate(imported + own):
+        row.sort_order = order
 
 
 def main() -> None:
