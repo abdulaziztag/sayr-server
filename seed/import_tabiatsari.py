@@ -77,8 +77,10 @@ def _photo_credit(media: dict) -> str:
 
 
 async def run(apply: bool) -> None:
-    mapping = json.loads(MAP_FILE.read_text("utf-8"))["matches"]
+    config = json.loads(MAP_FILE.read_text("utf-8"))
+    mapping = config["matches"]
     mapping.pop("_", None)
+    names = config.get("track_names", {})
     points = {p["id"]: p for p in ts.points()}
 
     async with SessionLocal() as session:
@@ -96,7 +98,7 @@ async def run(apply: bool) -> None:
 
             print(f"\n{place.name}  ←  {point['name']}")
             _plan_place(place, point, apply)
-            await _plan_tracks(session, place, point_id, apply)
+            await _plan_tracks(session, place, point_id, names, apply)
             await _plan_photos(session, place, point_id, apply)
 
         if apply:
@@ -121,7 +123,9 @@ def _plan_place(place: Place, point: dict, apply: bool) -> None:
             place.elevation_m = elevation
 
 
-async def _plan_tracks(session, place: Place, point_id: str, apply: bool) -> None:
+async def _plan_tracks(
+    session, place: Place, point_id: str, names: dict, apply: bool
+) -> None:
     existing = {
         Path(t.gpx_file.name).name: t
         for t in (
@@ -139,7 +143,9 @@ async def _plan_tracks(session, place: Place, point_id: str, apply: bool) -> Non
 
         data = clean(ts.fetch_file(url))
         stats = track_stats(data)
-        title = to_cyrillic(track["name"])
+        # Имя из выверенного списка, транслитерация — запасной путь:
+        # механическая замена букв даёт «Бобойтог» вместо «Бабайтаг»
+        title = names.get(track["id"]) or to_cyrillic(track["name"])
         if stats.distance_km > MAX_TRACK_KM:
             print(f"  ~ пропущен многодневный «{title[:40]}» — {stats.distance_km} км")
             continue
