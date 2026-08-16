@@ -33,11 +33,21 @@ from app.services.gpx import clean, track_stats
 from app.services.images import make_thumbnail
 
 from . import tabiatsari as ts
+from .translit import to_cyrillic
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 MAP_FILE = DATA_DIR / "tabiatsari_map.json"
 
 CREDIT_SUFFIX = "tabiatsari.uz"
+
+# Больше десятка снимков одного водопада никто не листает, а стопка полароидов
+# на деталке и не рассчитана на такое: у Бадака их 34, у Чимгана 22
+MAX_PHOTOS = 10
+
+# Многодневные маршруты каталог не описывает: место — это выход на день,
+# и нить «выехать — дойти — вернуться засветло» на 40 км не считается.
+# Самый длинный из оставленных — Пулатхан, 22 км
+MAX_TRACK_KM = 30.0
 
 
 def _declared_elevation(name: str, fallback: int | None) -> int | None:
@@ -129,8 +139,12 @@ async def _plan_tracks(session, place: Place, point_id: str, apply: bool) -> Non
 
         data = clean(ts.fetch_file(url))
         stats = track_stats(data)
+        title = to_cyrillic(track["name"])
+        if stats.distance_km > MAX_TRACK_KM:
+            print(f"  ~ пропущен многодневный «{title[:40]}» — {stats.distance_km} км")
+            continue
         print(
-            f"  + трек «{track['name'][:40]}» {stats.distance_km} км, "
+            f"  + трек «{title[:40]}» {stats.distance_km} км, "
             f"+{stats.ascent_m} м, {len(data) // 1024} КБ, «{_credit(track)}»"
         )
         if not apply:
@@ -140,7 +154,7 @@ async def _plan_tracks(session, place: Place, point_id: str, apply: bool) -> Non
             PlaceTrack(
                 place_id=place.id,
                 gpx_file=StorageFile(name=name, storage=gpx_storage),
-                name=track["name"],
+                name=title,
                 gpx_credit=_credit(track),
                 distance_km=stats.distance_km,
                 ascent_m=stats.ascent_m,
@@ -156,16 +170,18 @@ async def _plan_photos(session, place: Place, point_id: str, apply: bool) -> Non
             await session.execute(select(PlacePhoto).where(PlacePhoto.place_id == place.id))
         ).scalars()
     }
-    medias = ts.point(point_id).get("medias") or []
+    medias = [m for m in (ts.point(point_id).get("medias") or []) if m.get("status") == "COMPLETED"]
+    room = max(0, MAX_PHOTOS - len(existing))
+    skipped = len(medias) - room
     added = 0
-    for order, media in enumerate(medias, start=len(existing)):
+    for order, media in enumerate(medias[:room], start=len(existing)):
         # Берём large, а не оригинал: 1200 px при 300 КБ против оригиналов
         # местами в 8448 px и 41 МБ. По всем 111 снимкам это 38 МБ вместо
         # 1,4 ГБ — на машине, где живут ещё шестнадцать чужих сайтов,
         # разница решающая, а для карточки и полного экрана телефона
         # 1200 px хватает с запасом
         url = media.get("large") or media.get("originalUrl")
-        if not url or media.get("status") != "COMPLETED":
+        if not url:
             continue
         name = f"{place.slug}-ts-{url.rsplit('/', 1)[-1]}"
         if name in existing:
@@ -184,7 +200,8 @@ async def _plan_photos(session, place: Place, point_id: str, apply: bool) -> Non
             )
         )
     if added:
-        print(f"  + фотографий: {added} (свои остаются)")
+        tail = f", ещё {skipped} не берём" if skipped > 0 else ""
+        print(f"  + фотографий: {added} (свои остаются{tail})")
 
 
 def main() -> None:
