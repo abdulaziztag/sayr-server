@@ -1,0 +1,1260 @@
+[
+ {
+  "slug": "korangur",
+  "name": "Корангур",
+  "source_name": "Qorangur (2943 m.)",
+  "category": "peak",
+  "region": "Чимган–Чарвак",
+  "lat": 41.395485,
+  "lng": 70.086964,
+  "elevation_m": 2941,
+  "difficulty": "hard",
+  "point_id": "8611c306-090e-4f65-a509-7e0a468e21a7",
+  "tracks": [
+   {
+    "file": "korangur-ts-1.gpx",
+    "name": "Пулатхон платоси (2823 м.) + Корангур чуккиси (2942 м.)",
+    "credit": "Tabiat Sari · tabiatsari.uz",
+    "km": 22.0,
+    "ascent": 1259,
+    "day": true,
+    "level": "hard",
+    "timeFrom": 566,
+    "timeTo": 1514
+   }
+  ]
+ },
+ {
+  "slug": "ispay-sokhibzhamoli",
+  "name": "Испай Сохибжамоли",
+  "source_name": "Ispay Sohibjamoli",
+  "category": "peak",
+  "region": "Пскем",
+  "lat": 41.800443,
+  "lng": 70.30083,
+  "elevation_m": 2533,
+  "difficulty": "medium",
+  "point_id": "755a72f7-568e-4e2e-9ac4-40215f94f8b9",
+  "tracks": [
+   {
+    "file": "ispay-sokhibzhamoli-ts-1.gpx",
+    "name": "Испай Сохибжамоли (2553 м.)",
+    "credit": "Gorets · tabiatsari.uz",
+    "km": 17.3,
+    "ascent": 1835,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 540,
+    "timeTo": 600
+   }
+  ]
+ },
+ {
+  "slug": "korakiya-sharsharasi",
+  "name": "Коракия шаршараси",
+  "source_name": "Qoraqiya sharsharasi",
+  "category": "waterfall",
+  "region": "Угам-Чаткал",
+  "lat": 41.677814,
+  "lng": 69.797318,
+  "elevation_m": 1458,
+  "difficulty": "easy",
+  "point_id": "4a89b310-9bbd-438c-8983-e7be51b22b7b",
+  "tracks": [
+   {
+    "file": "korakiya-sharsharasi-ts-1.gpx",
+    "name": "Коракия Шаршаралари",
+    "credit": "Tabiat Sari · tabiatsari.uz",
+    "km": 3.5,
+    "ascent": 308,
+    "day": true,
+    "level": "easy",
+    "timeFrom": 60,
+    "timeTo": 120
+   },
+   {
+    "file": "korakiya-sharsharasi-ts-2.gpx",
+    "name": "Коракия Шаршаралари ва Петроглифлар",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 12.6,
+    "ascent": 1136,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 420,
+    "timeTo": 480
+   }
+  ]
+ },
+ {
+  "slug": "oktosh-sharsharasi",
+  "name": "Октош шаршараси",
+  "source_name": "Oqtosh sharsharasi",
+  "category": "waterfall",
+  "region": "Угам-Чаткал",
+  "lat": 41.678506,
+  "lng": 69.77388,
+  "elevation_m": 1593,
+  "difficulty": "medium",
+  "point_id": "2a1b53aa-b155-44d6-aefc-37465fb0a581",
+  "tracks": [
+   {
+    "file": "oktosh-sharsharasi-ts-1.gpx",
+    "name": "Октош шаршаралари ва ески рассомлар дачаси ",
+    "credit": "Tabiat Sari · tabiatsari.uz",
+    "km": 5.6,
+    "ascent": 643,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 120,
+    "timeTo": 180
+   }
+  ]
+ },
+ {
+  "slug": "afgon-chukkisi",
+  "name": "Афгон чуккиси",
+  "source_name": "Afg'on cho'qqisi (2441 m.)",
+  "category": "peak",
+  "region": "Чимган–Чарвак",
+  "lat": 41.668792,
+  "lng": 70.149081,
+  "elevation_m": 2427,
+  "difficulty": "hard",
+  "point_id": "d6fa01cd-88a1-480b-94bb-ac4637691e67",
+  "tracks": [
+   {
+    "file": "afgon-chukkisi-ts-1.gpx",
+    "name": "Афгон чуккиси (2441 м.)",
+    "credit": "Gorets · tabiatsari.uz",
+    "km": 15.5,
+    "ascent": 1619,
+    "day": true,
+    "level": "hard",
+    "timeFrom": 600,
+    "timeTo": 660
+   }
+  ]
+ },
+ {
+  "slug": "tuzkon-kuli",
+  "name": "Тузкон кули",
+  "source_name": "Tuzkon ko'li",
+  "category": "lake",
+  "region": "Нурата",
+  "lat": 40.545886,
+  "lng": 67.387306,
+  "elevation_m": 250,
+  "difficulty": "medium",
+  "point_id": "67725ac1-1ab8-4a8e-bd57-17dab36f34b3",
+  "tracks": [
+   {
+    "file": "tuzkon-kuli-ts-1.gpx",
+    "name": "Тузкон кули ва Писталитог тоглари",
+    "credit": "Gorets · tabiatsari.uz",
+    "km": 10.8,
+    "ascent": 372,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 240,
+    "timeTo": 300
+   }
+  ]
+ },
+ {
+  "slug": "kurdupur",
+  "name": "Курдупур",
+  "source_name": "Qurdupur (100 m)",
+  "category": "waterfall",
+  "region": "Пскем",
+  "lat": 41.810271,
+  "lng": 70.208519,
+  "elevation_m": 1684,
+  "difficulty": "easy",
+  "point_id": "84237c6f-fd9f-4ca7-89ec-40c519b39313",
+  "tracks": [
+   {
+    "file": "kurdupur-ts-1.gpx",
+    "name": "Курдупур (100 м)",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 6.1,
+    "ascent": 727,
+    "day": true,
+    "level": "easy",
+    "timeFrom": 240,
+    "timeTo": 300
+   }
+  ]
+ },
+ {
+  "slug": "korakush",
+  "name": "Коракуш",
+  "source_name": "Qoraqush (3864 m)",
+  "category": "peak",
+  "region": "Ахангаран",
+  "lat": 41.24769,
+  "lng": 70.339276,
+  "elevation_m": 3832,
+  "difficulty": "hard",
+  "point_id": "94434c76-81b3-4177-9c9b-55ea35afe24f",
+  "tracks": [
+   {
+    "file": "korakush-ts-1.gpx",
+    "name": "Коракуш (3864 м)",
+    "credit": "Ярослав Шеломенцев · tabiatsari.uz",
+    "km": 17.4,
+    "ascent": 2269,
+    "day": true,
+    "level": "extreme",
+    "timeFrom": 2040,
+    "timeTo": 2100
+   }
+  ]
+ },
+ {
+  "slug": "khavla",
+  "name": "Хавла",
+  "source_name": "Havla (2752 m)",
+  "category": "peak",
+  "region": "Угам-Чаткал",
+  "lat": 41.259522,
+  "lng": 69.903216,
+  "elevation_m": 2752,
+  "difficulty": "hard",
+  "point_id": "8dcf2db2-1db6-4889-a456-a9e8886334ed",
+  "tracks": [
+   {
+    "file": "khavla-ts-1.gpx",
+    "name": "Кумушкон - Хавла - Кизилнура - Кумушкон",
+    "credit": "Ярослав Шеломенцев · tabiatsari.uz",
+    "km": 40.7,
+    "ascent": 2646,
+    "day": false,
+    "level": "extreme",
+    "timeFrom": 2040,
+    "timeTo": 2100
+   }
+  ]
+ },
+ {
+  "slug": "uchtosh",
+  "name": "Учтош",
+  "source_name": "Uchtosh (2840 m)",
+  "category": "peak",
+  "region": "Чимган–Чарвак",
+  "lat": 41.292497,
+  "lng": 69.929545,
+  "elevation_m": 2840,
+  "difficulty": "hard",
+  "point_id": "60a93f98-1ca2-4a11-b073-f881253fb162",
+  "tracks": [
+   {
+    "file": "uchtosh-ts-1.gpx",
+    "name": "Кизилнура (3268 м)",
+    "credit": "Ярослав Шеломенцев · tabiatsari.uz",
+    "km": 15.1,
+    "ascent": 1736,
+    "day": true,
+    "level": "hard",
+    "timeFrom": 420,
+    "timeTo": 480
+   },
+   {
+    "file": "uchtosh-ts-2.gpx",
+    "name": "Кумушкон - Хавла - Кизилнура - Кумушкон",
+    "credit": "Ярослав Шеломенцев · tabiatsari.uz",
+    "km": 40.7,
+    "ascent": 2646,
+    "day": false,
+    "level": "extreme",
+    "timeFrom": 2040,
+    "timeTo": 2100
+   }
+  ]
+ },
+ {
+  "slug": "shakhter",
+  "name": "Шахтёр",
+  "source_name": "Shaxtyor (3190 m)",
+  "category": "peak",
+  "region": "Ахангаран",
+  "lat": 41.145902,
+  "lng": 70.196044,
+  "elevation_m": 3191,
+  "difficulty": "hard",
+  "point_id": "2eb6f22d-7214-4be1-9a7c-d61c181d122c",
+  "tracks": [
+   {
+    "file": "shakhter-ts-1.gpx",
+    "name": "Бобойтог (3556 м) ва Шахтёр (3190 м) чуккилари",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 8.9,
+    "ascent": 2136,
+    "day": true,
+    "level": "hard",
+    "timeFrom": 780,
+    "timeTo": 840
+   }
+  ]
+ },
+ {
+  "slug": "devoli-surkh",
+  "name": "Деволи Сурх",
+  "source_name": "Devoli Surh (3550 m)",
+  "category": "peak",
+  "region": "Пскем",
+  "lat": 41.718711,
+  "lng": 70.294916,
+  "elevation_m": 3534,
+  "difficulty": "hard",
+  "point_id": "2166ab58-6203-4d0c-9b01-fb6391485c69",
+  "tracks": [
+   {
+    "file": "devoli-surkh-ts-1.gpx",
+    "name": "Деволи Сурх",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 19.2,
+    "ascent": 4085,
+    "day": true,
+    "level": "extreme",
+    "timeFrom": 780,
+    "timeTo": 840
+   }
+  ]
+ },
+ {
+  "slug": "zikrbobo",
+  "name": "Зикрбобо",
+  "source_name": "Zikrbobo (4047 m)",
+  "category": "peak",
+  "region": "Чимган–Чарвак",
+  "lat": 41.442949,
+  "lng": 70.585535,
+  "elevation_m": 4047,
+  "difficulty": "hard",
+  "point_id": "4db10943-1c02-496a-9a1c-da5b3372b8b9",
+  "tracks": [
+   {
+    "file": "zikrbobo-ts-1.gpx",
+    "name": "Зикрбобо ва Зикркул",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 13.8,
+    "ascent": 821,
+    "day": true,
+    "level": "extreme",
+    "timeFrom": 600,
+    "timeTo": 660
+   }
+  ]
+ },
+ {
+  "slug": "zikrkul",
+  "name": "Зикркул",
+  "source_name": "Zikrko'l",
+  "category": "lake",
+  "region": "Чимган–Чарвак",
+  "lat": 41.435393,
+  "lng": 70.579951,
+  "elevation_m": 3662,
+  "difficulty": "hard",
+  "point_id": "fbea43e5-d415-4658-b57f-179e5044edf1",
+  "tracks": [
+   {
+    "file": "zikrkul-ts-1.gpx",
+    "name": "Зикрбобо ва Зикркул",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 13.8,
+    "ascent": 821,
+    "day": true,
+    "level": "extreme",
+    "timeFrom": 600,
+    "timeTo": 660
+   }
+  ]
+ },
+ {
+  "slug": "akhsarsoy",
+  "name": "Ахсарсой",
+  "source_name": "Axsarsoy",
+  "category": "waterfall",
+  "region": "Чимган–Чарвак",
+  "lat": 41.690865,
+  "lng": 70.189532,
+  "elevation_m": 1519,
+  "difficulty": "easy",
+  "point_id": "066d1e31-3c87-4152-8493-4232c1a8738a",
+  "tracks": [
+   {
+    "file": "akhsarsoy-ts-1.gpx",
+    "name": "Ахсарсой",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 7.6,
+    "ascent": 39,
+    "day": true,
+    "level": "easy",
+    "timeFrom": 60,
+    "timeTo": 120
+   }
+  ]
+ },
+ {
+  "slug": "obi-par",
+  "name": "Оби Пар",
+  "source_name": "Obi Par",
+  "category": "waterfall",
+  "region": "Пскем",
+  "lat": 41.787582,
+  "lng": 70.179027,
+  "elevation_m": 1564,
+  "difficulty": "medium",
+  "point_id": "be483f1c-1fad-4bef-b543-fcff4cf5cb42",
+  "tracks": [
+   {
+    "file": "obi-par-ts-1.gpx",
+    "name": "Полвонак Шаршаралари: Оби Пар, Опар, Кушпар",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 12.5,
+    "ascent": 1277,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 780,
+    "timeTo": 840
+   }
+  ]
+ },
+ {
+  "slug": "kushpar",
+  "name": "Кушпар",
+  "source_name": "Qoʻshpar",
+  "category": "waterfall",
+  "region": "Пскем",
+  "lat": 41.79669,
+  "lng": 70.186461,
+  "elevation_m": 1793,
+  "difficulty": "medium",
+  "point_id": "4e17cc61-aece-4e7d-9e13-afc44d973f64",
+  "tracks": [
+   {
+    "file": "kushpar-ts-1.gpx",
+    "name": "Полвонак Шаршаралари: Оби Пар, Опар, Кушпар",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 12.5,
+    "ascent": 1277,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 780,
+    "timeTo": 840
+   }
+  ]
+ },
+ {
+  "slug": "opar",
+  "name": "Опар",
+  "source_name": "Opar",
+  "category": "waterfall",
+  "region": "Пскем",
+  "lat": 41.792518,
+  "lng": 70.189216,
+  "elevation_m": 1554,
+  "difficulty": "medium",
+  "point_id": "ecabdb73-a39c-4b03-98cf-22d415d09d42",
+  "tracks": [
+   {
+    "file": "opar-ts-1.gpx",
+    "name": "Полвонак Шаршаралари: Оби Пар, Опар, Кушпар",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 12.5,
+    "ascent": 1277,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 780,
+    "timeTo": 840
+   }
+  ]
+ },
+ {
+  "slug": "amir-temur-chukkisi",
+  "name": "Амир Темур Чуккиси",
+  "source_name": "Amir Temur Cho'qqisi (3766 m)",
+  "category": "peak",
+  "region": "Пскем",
+  "lat": 41.811898,
+  "lng": 70.43888,
+  "elevation_m": 3759,
+  "difficulty": "hard",
+  "point_id": "5bb4c92c-d8ce-4e8c-bbde-8f76d9057f41",
+  "tracks": [
+   {
+    "file": "amir-temur-chukkisi-ts-1.gpx",
+    "name": "Амир Темур Чуккиси",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 29.5,
+    "ascent": 3458,
+    "day": true,
+    "level": "extreme",
+    "timeFrom": 3240,
+    "timeTo": 3300
+   }
+  ]
+ },
+ {
+  "slug": "pioner-chukkisi",
+  "name": "Пионер Чуккиси",
+  "source_name": "Pioner Cho'qqisi (2336 m)",
+  "category": "peak",
+  "region": "Ахангаран",
+  "lat": 41.164114,
+  "lng": 70.121479,
+  "elevation_m": 2323,
+  "difficulty": "medium",
+  "point_id": "8691cac0-4fcf-4e6c-b789-7d372b6b6e7a",
+  "tracks": [
+   {
+    "file": "pioner-chukkisi-ts-1.gpx",
+    "name": "Пионер Чуккиси (2336 м)",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 5.3,
+    "ascent": 1694,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 480,
+    "timeTo": 540
+   }
+  ]
+ },
+ {
+  "slug": "chukurak",
+  "name": "Чукурак",
+  "source_name": "Chuquraq (27 m.) (Kelin Ko'ylak)",
+  "category": "waterfall",
+  "region": "Чимган–Чарвак",
+  "lat": 41.540095,
+  "lng": 70.145265,
+  "elevation_m": 1023,
+  "difficulty": "easy",
+  "point_id": "901cf34c-ac3f-4707-9ac1-45241dc70873",
+  "tracks": [
+   {
+    "file": "chukurak-ts-1.gpx",
+    "name": "Чукурак (27 м.) (Фата Невеста)",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 4.4,
+    "ascent": 188,
+    "day": true,
+    "level": "easy",
+    "timeFrom": 60,
+    "timeTo": 120
+   }
+  ]
+ },
+ {
+  "slug": "temirtosh",
+  "name": "Темиртош",
+  "source_name": "Temirtosh",
+  "category": "lake",
+  "region": "Пскем",
+  "lat": 42.103814,
+  "lng": 70.838184,
+  "elevation_m": 2375,
+  "difficulty": "easy",
+  "point_id": "91fdea8d-f2ec-40ed-a709-009b0d358cc7",
+  "tracks": [
+   {
+    "file": "temirtosh-ts-1.gpx",
+    "name": "Темиртош",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 7.3,
+    "ascent": 460,
+    "day": true,
+    "level": "easy",
+    "timeFrom": 360,
+    "timeTo": 420
+   }
+  ]
+ },
+ {
+  "slug": "korakanish",
+  "name": "Кораканиш",
+  "source_name": "Qoraqanish",
+  "category": "lake",
+  "region": "Пскем",
+  "lat": 42.108236,
+  "lng": 70.877503,
+  "elevation_m": 2465,
+  "difficulty": "easy",
+  "point_id": "ba4842a4-60a3-42a3-a460-a675abca99ac",
+  "tracks": [
+   {
+    "file": "korakanish-ts-1.gpx",
+    "name": "Кораканиш",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 6.7,
+    "ascent": 511,
+    "day": true,
+    "level": "easy",
+    "timeFrom": 420,
+    "timeTo": 480
+   }
+  ]
+ },
+ {
+  "slug": "kashkasuv",
+  "name": "Кашкасув",
+  "source_name": "Qashqasuv",
+  "category": "waterfall",
+  "region": "Чимган–Чарвак",
+  "lat": 41.325693,
+  "lng": 69.944227,
+  "elevation_m": 1705,
+  "difficulty": "easy",
+  "point_id": "fc286dc2-6746-48e2-a07f-7d6d08d2544d",
+  "tracks": [
+   {
+    "file": "kashkasuv-ts-1.gpx",
+    "name": "Кашкасув",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 13.5,
+    "ascent": 612,
+    "day": true,
+    "level": "easy",
+    "timeFrom": 300,
+    "timeTo": 360
+   }
+  ]
+ },
+ {
+  "slug": "korakiya-petrogliflari",
+  "name": "Коракия Петроглифлари",
+  "source_name": "Qoraqiya Petrogliflari",
+  "category": "peak",
+  "region": "Угам-Чаткал",
+  "lat": 41.693644,
+  "lng": 69.816296,
+  "elevation_m": 2245,
+  "difficulty": "medium",
+  "point_id": "3abce8b7-2776-4ed6-a08a-edd0b7116b7b",
+  "tracks": [
+   {
+    "file": "korakiya-petrogliflari-ts-1.gpx",
+    "name": "Коракия Шаршаралари ва Петроглифлар",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 12.6,
+    "ascent": 1136,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 420,
+    "timeTo": 480
+   }
+  ]
+ },
+ {
+  "slug": "kungirbuka",
+  "name": "Кунгирбука",
+  "source_name": "Qo'ng'irbuqa (1980 m)",
+  "category": "peak",
+  "region": "Чимган–Чарвак",
+  "lat": 41.581107,
+  "lng": 69.95215,
+  "elevation_m": 1990,
+  "difficulty": "medium",
+  "point_id": "b1f88e14-dea0-46c5-a6ca-0dc9c45e7b2e",
+  "tracks": [
+   {
+    "file": "kungirbuka-ts-1.gpx",
+    "name": "Кунгирбука (1980 м)",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 5.3,
+    "ascent": 1039,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 420,
+    "timeTo": 480
+   }
+  ]
+ },
+ {
+  "slug": "moviy-toglar",
+  "name": "Мовий Тоглар",
+  "source_name": "Moviy Tog'lar",
+  "category": "peak",
+  "region": "Ахангаран",
+  "lat": 40.770216,
+  "lng": 70.051948,
+  "elevation_m": 2242,
+  "difficulty": "easy",
+  "point_id": "58bba6c1-4e48-449a-a46d-525fc191e108",
+  "tracks": [
+   {
+    "file": "moviy-toglar-ts-1.gpx",
+    "name": "Мовий Тоглар",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 10.9,
+    "ascent": 938,
+    "day": true,
+    "level": "easy",
+    "timeFrom": 480,
+    "timeTo": 540
+   }
+  ]
+ },
+ {
+  "slug": "bayrok",
+  "name": "Байрок",
+  "source_name": "Bayroq (2285m)",
+  "category": "peak",
+  "region": "Чимган–Чарвак",
+  "lat": 41.123889,
+  "lng": 69.985755,
+  "elevation_m": 2245,
+  "difficulty": "medium",
+  "point_id": "dddb3a31-f162-445f-92e3-f8b208fef195",
+  "tracks": [
+   {
+    "file": "bayrok-ts-1.gpx",
+    "name": "Байрок (2285 м)",
+    "credit": "Gorets · tabiatsari.uz",
+    "km": 13.2,
+    "ascent": 1244,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 480,
+    "timeTo": 540
+   }
+  ]
+ },
+ {
+  "slug": "kuduk",
+  "name": "Кудук",
+  "source_name": "Quduq",
+  "category": "waterfall",
+  "region": "Чимган–Чарвак",
+  "lat": 41.726718,
+  "lng": 70.144513,
+  "elevation_m": 1014,
+  "difficulty": "medium",
+  "point_id": "b056ab32-9261-42b1-91a8-c5c48ec854f6",
+  "tracks": [
+   {
+    "file": "kuduk-ts-1.gpx",
+    "name": "Кудук",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 4.0,
+    "ascent": 189,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 60,
+    "timeTo": 120
+   }
+  ]
+ },
+ {
+  "slug": "buritog",
+  "name": "Буритог",
+  "source_name": "Bo'ritog' (1295 m)",
+  "category": "peak",
+  "region": "Чимган–Чарвак",
+  "lat": 41.537572,
+  "lng": 69.828423,
+  "elevation_m": 1295,
+  "difficulty": "easy",
+  "point_id": "df19bad7-66b1-4bc5-a8af-ddc11fd13bea",
+  "tracks": [
+   {
+    "file": "buritog-ts-1.gpx",
+    "name": "Буритог",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 6.7,
+    "ascent": 616,
+    "day": true,
+    "level": "easy",
+    "timeFrom": 180,
+    "timeTo": 240
+   }
+  ]
+ },
+ {
+  "slug": "mozorzhon",
+  "name": "Мозоржон",
+  "source_name": "Mozorjon (2428 m)",
+  "category": "peak",
+  "region": "Ахангаран",
+  "lat": 41.159466,
+  "lng": 70.06489,
+  "elevation_m": 2428,
+  "difficulty": "medium",
+  "point_id": "8a487728-feb2-474f-a313-9a74ab6ba9a2",
+  "tracks": [
+   {
+    "file": "mozorzhon-ts-1.gpx",
+    "name": "Мозоржон (2428м)",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 4.9,
+    "ascent": 1385,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 180,
+    "timeTo": 240
+   }
+  ]
+ },
+ {
+  "slug": "lashkarak-sharsharasi",
+  "name": "Лашкарак шаршараси",
+  "source_name": "Lashkarak sharsharasi (25m)",
+  "category": "waterfall",
+  "region": "Ахангаран",
+  "lat": 40.900507,
+  "lng": 70.263134,
+  "elevation_m": 1822,
+  "difficulty": "easy",
+  "point_id": "135064f0-a9c3-47a2-bf99-029781c763c2",
+  "tracks": [
+   {
+    "file": "lashkarak-sharsharasi-ts-1.gpx",
+    "name": "Лашкарак шаршараси (25м)",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 5.3,
+    "ascent": 865,
+    "day": true,
+    "level": "easy",
+    "timeFrom": 180,
+    "timeTo": 240
+   }
+  ]
+ },
+ {
+  "slug": "oynatosh",
+  "name": "Ойнатош",
+  "source_name": "Oynatosh (2552 m)",
+  "category": "peak",
+  "region": "Чимган–Чарвак",
+  "lat": 41.740524,
+  "lng": 70.220853,
+  "elevation_m": 2551,
+  "difficulty": "medium",
+  "point_id": "0f6cfdf4-d725-489f-8b6b-41c748a526ae",
+  "tracks": [
+   {
+    "file": "oynatosh-ts-1.gpx",
+    "name": "Ойнатош (2552 м)",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 7.6,
+    "ascent": 1627,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 300,
+    "timeTo": 360
+   }
+  ]
+ },
+ {
+  "slug": "kuk-suv",
+  "name": "Кук-сув",
+  "source_name": "Ko'k-suv",
+  "category": "lake",
+  "region": "Чимган–Чарвак",
+  "lat": 41.652678,
+  "lng": 70.256104,
+  "elevation_m": 1188,
+  "difficulty": "hard",
+  "point_id": "5bdfddf7-8938-4a5f-9afe-1570f6195c11",
+  "tracks": [
+   {
+    "file": "kuk-suv-ts-1.gpx",
+    "name": "Кук-сув",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 14.2,
+    "ascent": 523,
+    "day": true,
+    "level": "hard",
+    "timeFrom": 180,
+    "timeTo": 240
+   }
+  ]
+ },
+ {
+  "slug": "obi-kashka",
+  "name": "Оби Кашка",
+  "source_name": "Obi Qashqa (3099 m)",
+  "category": "peak",
+  "region": "Чимган–Чарвак",
+  "lat": 41.510415,
+  "lng": 70.116419,
+  "elevation_m": 3099,
+  "difficulty": "hard",
+  "point_id": "ef5994f8-2eef-4da3-83bb-8928edd6fa3d",
+  "tracks": [
+   {
+    "file": "obi-kashka-ts-1.gpx",
+    "name": "Оби Кашка",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 12.3,
+    "ascent": 2310,
+    "day": true,
+    "level": "extreme",
+    "timeFrom": 1020,
+    "timeTo": 1080
+   }
+  ]
+ },
+ {
+  "slug": "kopirtosh",
+  "name": "Копиртош",
+  "source_name": "Kopirtosh (2508 m)",
+  "category": "peak",
+  "region": "Чимган–Чарвак",
+  "lat": 41.608464,
+  "lng": 70.163076,
+  "elevation_m": 2486,
+  "difficulty": "hard",
+  "point_id": "ce79a6d8-e9df-4ea4-89ac-35928fe7b9b7",
+  "tracks": [
+   {
+    "file": "kopirtosh-ts-1.gpx",
+    "name": "Копиртош (2508 м)",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 10.0,
+    "ascent": 1642,
+    "day": true,
+    "level": "hard",
+    "timeFrom": 660,
+    "timeTo": 720
+   }
+  ]
+ },
+ {
+  "slug": "patandazboshi",
+  "name": "Патандазбоши",
+  "source_name": "Patandazboshi (1877 m)",
+  "category": "peak",
+  "region": "Чимган–Чарвак",
+  "lat": 41.552825,
+  "lng": 70.088616,
+  "elevation_m": 1824,
+  "difficulty": "easy",
+  "point_id": "055d0566-1aa1-46a0-b388-a8f160770962",
+  "tracks": [
+   {
+    "file": "patandazboshi-ts-1.gpx",
+    "name": "Патандазбоши",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 5.2,
+    "ascent": 890,
+    "day": true,
+    "level": "easy",
+    "timeFrom": 120,
+    "timeTo": 180
+   }
+  ]
+ },
+ {
+  "slug": "paltog",
+  "name": "Палтог",
+  "source_name": "Paltog' (2024 m.)",
+  "category": "peak",
+  "region": "Чимган–Чарвак",
+  "lat": 41.555402,
+  "lng": 70.148122,
+  "elevation_m": 1994,
+  "difficulty": "medium",
+  "point_id": "d0883b67-f1e1-469e-9d48-4af47bdf4c3b",
+  "tracks": [
+   {
+    "file": "paltog-ts-1.gpx",
+    "name": "Палтог Шаршараси (38 м.) ва Чуккиси (2024 м.)",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 16.6,
+    "ascent": 1132,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 540,
+    "timeTo": 600
+   }
+  ]
+ },
+ {
+  "slug": "suren-ota",
+  "name": "Сурен Ота",
+  "source_name": "Suren Ota (2042 m)",
+  "category": "peak",
+  "region": "Чимган–Чарвак",
+  "lat": 41.389644,
+  "lng": 69.852676,
+  "elevation_m": 2042,
+  "difficulty": "medium",
+  "point_id": "314b0fb1-ad01-4d0d-adac-e4b7130be271",
+  "tracks": [
+   {
+    "file": "suren-ota-ts-1.gpx",
+    "name": "Сурен Ота Чуккиси ва Оксок Ота Канёни",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 16.6,
+    "ascent": 1302,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 480,
+    "timeTo": 540
+   }
+  ]
+ },
+ {
+  "slug": "kukbet",
+  "name": "Кукбет",
+  "source_name": "Ko'kbet (1945 m)",
+  "category": "peak",
+  "region": "Чимган–Чарвак",
+  "lat": 41.445678,
+  "lng": 69.901496,
+  "elevation_m": 1945,
+  "difficulty": "medium",
+  "point_id": "e7f641ad-ed26-4211-bc37-0f87d42ca90e",
+  "tracks": [
+   {
+    "file": "kukbet-ts-1.gpx",
+    "name": "Кукбет ва Майгашкан чуккилари",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 9.7,
+    "ascent": 1742,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 600,
+    "timeTo": 660
+   }
+  ]
+ },
+ {
+  "slug": "oksok-ota-kaneni",
+  "name": "Оксок Ота Канёни",
+  "source_name": "Oqsoq Ota Kanyoni",
+  "category": "canyon",
+  "region": "Чимган–Чарвак",
+  "lat": 41.432552,
+  "lng": 69.857179,
+  "elevation_m": 1138,
+  "difficulty": "medium",
+  "point_id": "38727e27-a191-4114-8607-1ec59054cf5e",
+  "tracks": [
+   {
+    "file": "oksok-ota-kaneni-ts-1.gpx",
+    "name": "Сурен Ота Чуккиси ва Оксок Ота Канёни",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 16.6,
+    "ascent": 1302,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 480,
+    "timeTo": 540
+   },
+   {
+    "file": "oksok-ota-kaneni-ts-2.gpx",
+    "name": "Оксок Ота канёни",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 2.8,
+    "ascent": 203,
+    "day": true,
+    "level": "easy",
+    "timeFrom": 60,
+    "timeTo": 120
+   }
+  ]
+ },
+ {
+  "slug": "navolisoy",
+  "name": "Наволисой",
+  "source_name": "Navolisoy",
+  "category": "waterfall",
+  "region": "Чимган–Чарвак",
+  "lat": 41.788034,
+  "lng": 70.10775,
+  "elevation_m": 1440,
+  "difficulty": "medium",
+  "point_id": "1bdd222f-fd17-4fa6-9851-566808943783",
+  "tracks": [
+   {
+    "file": "navolisoy-ts-1.gpx",
+    "name": "Наволисой",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 9.6,
+    "ascent": 548,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 420,
+    "timeTo": 480
+   }
+  ]
+ },
+ {
+  "slug": "kichkinkul",
+  "name": "Кичкинкул",
+  "source_name": "Kichkinkul",
+  "category": "lake",
+  "region": "Пскем",
+  "lat": 41.687439,
+  "lng": 70.349308,
+  "elevation_m": 1652,
+  "difficulty": "hard",
+  "point_id": "f47bd1ee-6c29-49c8-8d03-c063e60776e8",
+  "tracks": [
+   {
+    "file": "kichkinkul-ts-1.gpx",
+    "name": "Кичкинкул",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 27.1,
+    "ascent": 1194,
+    "day": true,
+    "level": "hard",
+    "timeFrom": 1140,
+    "timeTo": 1200
+   }
+  ]
+ },
+ {
+  "slug": "arashan-chukkisi",
+  "name": "Арашан чуккиси",
+  "source_name": "Arashan cho'qqisi (3752 m)",
+  "category": "peak",
+  "region": "Чимган–Чарвак",
+  "lat": 41.36486,
+  "lng": 70.474206,
+  "elevation_m": 3752,
+  "difficulty": "hard",
+  "point_id": "c2fd891d-b14b-46c2-b883-3adc5a614395",
+  "tracks": [
+   {
+    "file": "arashan-chukkisi-ts-1.gpx",
+    "name": "Арашан чуккиси ва куллари",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 9.7,
+    "ascent": 1354,
+    "day": true,
+    "level": "hard",
+    "timeFrom": 600,
+    "timeTo": 660
+   }
+  ]
+ },
+ {
+  "slug": "arashan-kuli",
+  "name": "Арашан кули",
+  "source_name": "Arashan ko'li",
+  "category": "lake",
+  "region": "Чимган–Чарвак",
+  "lat": 41.367541,
+  "lng": 70.492194,
+  "elevation_m": 3366,
+  "difficulty": "hard",
+  "point_id": "bf8d07be-97fb-4168-b5cc-9145dd043126",
+  "tracks": [
+   {
+    "file": "arashan-kuli-ts-1.gpx",
+    "name": "Арашан чуккиси ва куллари",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 9.7,
+    "ascent": 1354,
+    "day": true,
+    "level": "hard",
+    "timeFrom": 600,
+    "timeTo": 660
+   }
+  ]
+ },
+ {
+  "slug": "turpolkul",
+  "name": "Турполкул",
+  "source_name": "Turpolko'l",
+  "category": "lake",
+  "region": "Чимган–Чарвак",
+  "lat": 41.360011,
+  "lng": 70.502513,
+  "elevation_m": 2873,
+  "difficulty": "hard",
+  "point_id": "429acae8-fbe3-4576-abb0-108b628c7054",
+  "tracks": [
+   {
+    "file": "turpolkul-ts-1.gpx",
+    "name": "Арашан чуккиси ва куллари",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 9.7,
+    "ascent": 1354,
+    "day": true,
+    "level": "hard",
+    "timeFrom": 600,
+    "timeTo": 660
+   }
+  ]
+ },
+ {
+  "slug": "uzunkul",
+  "name": "Узункул",
+  "source_name": "Uzunko'l",
+  "category": "lake",
+  "region": "Чимган–Чарвак",
+  "lat": 41.363035,
+  "lng": 70.518232,
+  "elevation_m": 2763,
+  "difficulty": "hard",
+  "point_id": "d236fe41-2dd9-4657-96ab-e0d147f8c1e0",
+  "tracks": [
+   {
+    "file": "uzunkul-ts-1.gpx",
+    "name": "Арашан чуккиси ва куллари",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 9.7,
+    "ascent": 1354,
+    "day": true,
+    "level": "hard",
+    "timeFrom": 600,
+    "timeTo": 660
+   }
+  ]
+ },
+ {
+  "slug": "ispay-gori",
+  "name": "Испай Гори",
+  "source_name": "Ispay G'ori",
+  "category": "cave",
+  "region": "Пскем",
+  "lat": 41.75303,
+  "lng": 70.299416,
+  "elevation_m": 1771,
+  "difficulty": "medium",
+  "point_id": "64b4333a-7c58-4b17-b43c-c0bd0d9b1824",
+  "tracks": [
+   {
+    "file": "ispay-gori-ts-1.gpx",
+    "name": "Испай Шаршараси ва Гори",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 9.7,
+    "ascent": 832,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 600,
+    "timeTo": 660
+   }
+  ]
+ },
+ {
+  "slug": "ispay-sharsharasi",
+  "name": "Испай Шаршараси",
+  "source_name": "Ispay Sharsharasi",
+  "category": "waterfall",
+  "region": "Пскем",
+  "lat": 41.755426,
+  "lng": 70.299945,
+  "elevation_m": 1708,
+  "difficulty": "medium",
+  "point_id": "8295c176-1ae9-4f69-953a-545bf2b4cbe2",
+  "tracks": [
+   {
+    "file": "ispay-sharsharasi-ts-1.gpx",
+    "name": "Испай Шаршараси ва Гори",
+    "credit": "Go on Foot · tabiatsari.uz",
+    "km": 9.7,
+    "ascent": 832,
+    "day": true,
+    "level": "moderate",
+    "timeFrom": 600,
+    "timeTo": 660
+   }
+  ]
+ }
+]

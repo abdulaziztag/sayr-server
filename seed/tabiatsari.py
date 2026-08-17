@@ -30,8 +30,18 @@ def _get(url: str, cache_name: str, *, binary: bool = False) -> Any:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     request = urllib.request.Request(url, headers={"User-Agent": _UA})
-    with urllib.request.urlopen(request, timeout=60) as response:
-        data = response.read()
+    # Три попытки с нарастающей паузой: при заливке полусотни мест подряд
+    # их сервер начинает рвать соединения на ровном месте (SSL EOF),
+    # и один обрыв не должен ронять весь импорт
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                data = response.read()
+            break
+        except Exception:
+            if attempt == 2:
+                raise
+            time.sleep(2 ** attempt)
     time.sleep(_PAUSE_SEC)
 
     path.write_bytes(data)
