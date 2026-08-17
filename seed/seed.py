@@ -78,8 +78,16 @@ async def seed() -> None:
                 updated += 1
 
             for field in PLACE_FIELDS:
-                if field in item:
-                    setattr(place, field, item[field])
+                if field not in item:
+                    continue
+                # Пустое значение из файла НЕ затирает заполненное в базе:
+                # длину, время и набор проставляют импорты из tabiatsari
+                # и «Горца», а в places.json у большинства мест там null.
+                # Один прогон сида ради правки соседнего поля сносил бы
+                # всё импортированное разом — так уже случилось с Пулатханом
+                if item[field] is None and getattr(place, field, None) is not None:
+                    continue
+                setattr(place, field, item[field])
 
             await session.flush()
             await _ensure_tracks(session, place, item)
