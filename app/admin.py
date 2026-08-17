@@ -16,6 +16,7 @@ from .db import SessionLocal, engine
 from .models import Place, PlacePhoto, PlaceTrack, Region, Season
 from .services.gpx import track_stats
 from .services.images import make_thumbnail
+from .services.nearby import rebuild_for_track
 
 
 class BasicAuthBackend(AuthenticationBackend):
@@ -117,6 +118,21 @@ class PlaceTrackAdmin(ModelView, model=PlaceTrack):
                 .values(distance_km=stats.distance_km, ascent_m=stats.ascent_m)
             )
             await session.commit()
+
+        # Связи «рядом» держатся на геометрии: заменили файл — прежние соседи
+        # уже не про этот маршрут. Отдельной сессией, чтобы сбой пересчёта
+        # не утянул за собой уже посчитанную статистику
+        async with AsyncSession(engine) as session:
+            track = (
+                await session.execute(select(PlaceTrack).where(PlaceTrack.id == model.id))
+            ).scalar_one_or_none()
+            if track is None:
+                return
+            try:
+                await rebuild_for_track(session, track)
+                await session.commit()
+            except Exception:
+                await session.rollback()
 
 
 class StatsView(BaseView):

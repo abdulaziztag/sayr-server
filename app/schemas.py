@@ -53,6 +53,16 @@ class TrackOut(BaseModel):
     ascent_m: int
 
 
+class NearbyOut(BaseModel):
+    """Соседнее место: то, мимо чего проходит трек одного из двух."""
+
+    slug: str
+    name: str
+    category: PlaceCategory
+    cover_thumb_url: str | None
+    distance_m: int
+
+
 class PlaceDetail(PlaceListItem):
     description_md: str
     how_to_get_md: str
@@ -62,6 +72,7 @@ class PlaceDetail(PlaceListItem):
     # (первого по порядку) трека
     gpx_url: str | None
     gpx_credit: str | None
+    nearby: list[NearbyOut] = []
 
 
 class WeatherDay(BaseModel):
@@ -136,7 +147,18 @@ def track_out(t: PlaceTrack) -> TrackOut:
     )
 
 
-def place_detail(p: Place) -> PlaceDetail:
+def nearby_out(p: Place, distance_m: int) -> NearbyOut:
+    cover = p.photos[0] if p.photos else None
+    return NearbyOut(
+        slug=p.slug,
+        name=p.name,
+        category=p.category,
+        cover_thumb_url=(cover.thumb_url or cover.url) if cover else None,
+        distance_m=distance_m,
+    )
+
+
+def place_detail(p: Place, nearby: list[NearbyOut] | None = None) -> PlaceDetail:
     primary = p.tracks[0] if p.tracks else None
     return PlaceDetail(
         **_base_fields(p),
@@ -146,4 +168,5 @@ def place_detail(p: Place) -> PlaceDetail:
         tracks=[track_out(t) for t in p.tracks],
         gpx_url=primary.gpx_url if primary else None,
         gpx_credit=primary.gpx_credit if primary else None,
+        nearby=nearby or [],
     )

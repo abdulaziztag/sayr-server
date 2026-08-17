@@ -4,9 +4,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from ..db import get_session
-from ..models import Difficulty, Place, PlaceCategory, Season
-from ..schemas import PlaceDetail, PlaceListItem, WeatherOut, place_detail, place_list_item
+from ..models import Difficulty, Place, PlaceCategory, PlaceNeighbor, Season
+from ..schemas import (
+    NearbyOut,
+    PlaceDetail,
+    PlaceListItem,
+    WeatherOut,
+    nearby_out,
+    place_detail,
+    place_list_item,
+)
 from ..services import weather
+from ..services.gpx import haversine_m
 
 router = APIRouter(prefix="/api/v1", tags=["places"])
 
@@ -95,9 +104,34 @@ async def _get_place_or_404(slug: str, session: AsyncSession) -> Place:
     return place
 
 
+async def _nearby(place: Place, session: AsyncSession) -> list[NearbyOut]:
+    """Соседи по треку, ближние первыми.
+
+    Одну пару могут связывать несколько треков — берём по месту одну строку
+    и кратчайший подход. Расстояние показываем между самими местами, а не
+    подход трека: человек спрашивает «далеко ли отсюда до грота», и ответ
+    про геометрию линии ему ничего не скажет.
+    """
+    stmt = (
+        select(Place)
+        .join(PlaceNeighbor, PlaceNeighbor.neighbor_id == Place.id)
+        .options(selectinload(Place.photos))
+        .where(PlaceNeighbor.place_id == place.id, Place.is_published)
+        .group_by(Place.id)
+    )
+    others = (await session.execute(stmt)).unique().scalars().all()
+    pairs = [
+        (other, round(haversine_m(place.lat, place.lng, other.lat, other.lng)))
+        for other in others
+    ]
+    pairs.sort(key=lambda pair: pair[1])
+    return [nearby_out(other, gap) for other, gap in pairs]
+
+
 @router.get("/places/{slug}", response_model=PlaceDetail)
 async def get_place(slug: str, session: AsyncSession = Depends(get_session)):
-    return place_detail(await _get_place_or_404(slug, session))
+    place = await _get_place_or_404(slug, session)
+    return place_detail(place, await _nearby(place, session))
 
 
 @router.get("/places/{slug}/weather", response_model=WeatherOut)

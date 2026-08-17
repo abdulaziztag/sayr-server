@@ -180,6 +180,35 @@ class PlaceTrack(Base):
         return self.name
 
 
+class PlaceNeighbor(Base):
+    """Место, мимо которого проходит трек другого места.
+
+    Связь по треку, а не по расстоянию: рядом на карте могут лежать точки
+    совершенно разных выходов, и близость сама по себе ничего человеку
+    не обещает. А вот «этот маршрут заходит и туда» — обещает, и проверяемо.
+    Поводом стал трек «Водопад Пальтау и грот Оби-Рахмат»: два разных места
+    в 1233 метрах, которые люди проходят за один выход.
+
+    Строки симметричны — на карточке соседа связь видна тоже. Трек в ключе
+    нужен для пересчёта: при перезаливке файла удаляются ровно его связи,
+    остальные не трогаем.
+    """
+
+    __tablename__ = "place_neighbors"
+
+    place_id: Mapped[int] = mapped_column(
+        ForeignKey("places.id", ondelete="CASCADE"), primary_key=True
+    )
+    neighbor_id: Mapped[int] = mapped_column(
+        ForeignKey("places.id", ondelete="CASCADE"), primary_key=True
+    )
+    track_id: Mapped[int] = mapped_column(
+        ForeignKey("place_tracks.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+    # Ближайший подход трека к точке соседа — для отладки и для порога
+    distance_m: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class TripIntent(Base):
     """«Я пойду сюда в этот день». Аккаунтов нет — голос привязан к устройству."""
 

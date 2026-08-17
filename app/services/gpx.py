@@ -64,7 +64,7 @@ def track_stats(data: bytes) -> TrackStats:
     # а после прореживания отрезки длинные, и потеря становится заметной
     anchor: float | None = next((p[2] for p in points if p[2] is not None), None)
     for prev, cur in zip(points, points[1:]):
-        distance += _haversine_m(prev[0], prev[1], cur[0], cur[1])
+        distance += haversine_m(prev[0], prev[1], cur[0], cur[1])
         ele = cur[2]
         if ele is None:
             continue
@@ -144,7 +144,7 @@ def outbound_only(data: bytes) -> bytes | None:
     if _retraced_share(coords) < 0.65:
         return None
 
-    far = max(range(len(coords)), key=lambda i: _haversine_m(*coords[0], *coords[i]))
+    far = max(range(len(coords)), key=lambda i: haversine_m(*coords[0], *coords[i]))
     # Разворот у самого края записи — значит это не «туда-обратно»,
     # а петля, случайно замкнувшаяся рядом со стартом
     if not 0.2 < far / len(coords) < 0.8:
@@ -155,6 +155,35 @@ def outbound_only(data: bytes) -> bytes | None:
     if ns:
         ET.register_namespace("", ns[1:-1])
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def track_coords(data: bytes) -> list[tuple[float, float]]:
+    """Точки всех треков файла — только широта и долгота."""
+    root = ET.fromstring(data)
+    ns = _ns(root)
+    return [(float(p.get("lat")), float(p.get("lon"))) for p in root.iter(f"{ns}trkpt")]
+
+
+def bbox(coords: list[tuple[float, float]]) -> tuple[float, float, float, float]:
+    """Охватывающий прямоугольник: юг, запад, север, восток."""
+    lats = [c[0] for c in coords]
+    lngs = [c[1] for c in coords]
+    return min(lats), min(lngs), max(lats), max(lngs)
+
+
+def distance_to_track_m(coords: list[tuple[float, float]], lat: float, lng: float) -> float:
+    """Насколько близко трек подходит к точке.
+
+    Именно до линии, а не до ближайшей записанной точки: после прореживания
+    на прямом участке соседние точки расходятся на сотни метров, и мерка
+    по точкам сказала бы «далеко» про место, мимо которого тропа проходит
+    вплотную.
+    """
+    if not coords:
+        return math.inf
+    if len(coords) == 1:
+        return haversine_m(*coords[0], lat, lng)
+    return min(_point_to_line_m((lat, lng), a, b) for a, b in zip(coords, coords[1:]))
 
 
 def _retraced_share(coords: list[tuple[float, float]]) -> float:
@@ -181,7 +210,7 @@ def _retraced_share(coords: list[tuple[float, float]]) -> float:
             for dy in (-0.001, 0, 0.001)
             for other in grid.get((round(key[0] + dx, 3), round(key[1] + dy, 3)), [])
         ]
-        if any(_haversine_m(*point, *other) < 40 for other in neighbours):
+        if any(haversine_m(*point, *other) < 40 for other in neighbours):
             hits += 1
     return hits / (len(sample) - half)
 
@@ -228,7 +257,7 @@ def _point_to_line_m(p, a, b) -> float:
     return math.hypot(dx, dy) * 111_320.0
 
 
-def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     r = 6_371_000.0
     p1, p2 = math.radians(lat1), math.radians(lat2)
     dp = math.radians(lat2 - lat1)
