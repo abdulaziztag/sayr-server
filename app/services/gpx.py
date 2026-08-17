@@ -10,7 +10,16 @@ import math
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 
+# Пространство имён GPX 1.1. Но в переписке встречаются и файлы 1.0
+# (их пишут «Советские военные карты»), и вовсе без пространства имён —
+# у них другой тег, и жёстко зашитая версия молча давала нулевую
+# статистику и нетронутый на 4,6 МБ файл
 _NS = "{http://www.topografix.com/GPX/1/1}"
+
+
+def _ns(root: ET.Element) -> str:
+    """Пространство имён этого файла — по корневому тегу."""
+    return root.tag[: root.tag.index("}") + 1] if "}" in root.tag else ""
 
 # Подъёмы короче этого не считаем: сырые записи шумят по высоте,
 # и без порога набор завышается на сотни метров
@@ -36,9 +45,10 @@ class TrackStats:
 def track_stats(data: bytes) -> TrackStats:
     """Длина и набор по точкам всех треков файла. Пустой файл — нули."""
     root = ET.fromstring(data)
+    ns = _ns(root)
     points: list[tuple[float, float, float | None]] = []
-    for trkpt in root.iter(f"{_NS}trkpt"):
-        ele = trkpt.find(f"{_NS}ele")
+    for trkpt in root.iter(f"{ns}trkpt"):
+        ele = trkpt.find(f"{ns}ele")
         points.append((
             float(trkpt.get("lat")),
             float(trkpt.get("lon")),
@@ -84,8 +94,9 @@ def clean(data: bytes, epsilon_m: float = _SIMPLIFY_EPSILON_M) -> bytes:
     весят 12 МБ, и клиент качает файл выбранного маршрута целиком.
     """
     root = ET.fromstring(data)
-    for seg in root.iter(f"{_NS}trkseg"):
-        points = list(seg.findall(f"{_NS}trkpt"))
+    ns = _ns(root)
+    for seg in root.iter(f"{ns}trkseg"):
+        points = list(seg.findall(f"{ns}trkpt"))
         keep = set(_significant(points, epsilon_m))
         for i, pt in enumerate(points):
             if i not in keep:
@@ -98,9 +109,10 @@ def clean(data: bytes, epsilon_m: float = _SIMPLIFY_EPSILON_M) -> bytes:
                     pt.remove(child)
     for node in root.iter():
         for child in list(node):
-            if child.tag == f"{_NS}time":
+            if child.tag == f"{ns}time":
                 node.remove(child)
-    ET.register_namespace("", _NS[1:-1])
+    if ns:
+        ET.register_namespace("", ns[1:-1])
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
@@ -116,10 +128,11 @@ def outbound_only(data: bytes) -> bytes | None:
     и есть вершина.
     """
     root = ET.fromstring(data)
-    seg = root.find(f".//{_NS}trkseg")
+    ns = _ns(root)
+    seg = root.find(f".//{ns}trkseg")
     if seg is None:
         return None
-    points = list(seg.findall(f"{_NS}trkpt"))
+    points = list(seg.findall(f"{ns}trkpt"))
     if len(points) < 20:
         return None
 
@@ -139,7 +152,8 @@ def outbound_only(data: bytes) -> bytes | None:
 
     for point in points[far + 1 :]:
         seg.remove(point)
-    ET.register_namespace("", _NS[1:-1])
+    if ns:
+        ET.register_namespace("", ns[1:-1])
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 

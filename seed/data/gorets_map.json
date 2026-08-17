@@ -1,0 +1,372 @@
+{
+ "obi-rakhmat": [
+  {
+   "file": "obi-rakhmat-gorets-1.gpx",
+   "name": "Пальтау — Оби-Рахмат",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 13.3,
+   "ascent": 1414,
+   "day": true
+  },
+  {
+   "file": "obi-rakhmat-gorets-2.gpx",
+   "name": "Пальтау - Додекатым проверен",
+   "credit": "Ярослав Шеломенцев · «ГОРЕЦ» форум",
+   "km": 21.4,
+   "ascent": 1959,
+   "day": true
+  },
+  {
+   "file": "obi-rakhmat-gorets-3.gpx",
+   "name": "Бричмулла Гребень Каратутбоши проверен",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 10.0,
+   "ascent": 1742,
+   "day": true
+  }
+ ],
+ "kulasya-tesniny": [
+  {
+   "file": "kulasya-tesniny-gorets-1.gpx",
+   "name": "Теснины Куласья",
+   "credit": "Роман · «ГОРЕЦ» форум",
+   "km": 3.4,
+   "ascent": 0,
+   "day": true
+  }
+ ],
+ "shahkurgan-peak": [
+  {
+   "file": "shahkurgan-peak-gorets-1.gpx",
+   "name": "Шахкурган — Акташ",
+   "credit": "Yusuf · «ГОРЕЦ» форум",
+   "km": 17.0,
+   "ascent": 1673,
+   "day": true
+  },
+  {
+   "file": "shahkurgan-peak-gorets-2.gpx",
+   "name": "Грот Сукок Шахкурган",
+   "credit": "Tulqin · «ГОРЕЦ» форум",
+   "km": 15.8,
+   "ascent": 2168,
+   "day": true
+  }
+ ],
+ "maly-chimgan": [
+  {
+   "file": "maly-chimgan-gorets-1.gpx",
+   "name": "Посёлок Чимган — Песочный — Малый Чимган",
+   "credit": "Худойбердиев) · «ГОРЕЦ» форум",
+   "km": 12.7,
+   "ascent": 1070,
+   "day": true
+  }
+ ],
+ "azadbash": [
+  {
+   "file": "azadbash-gorets-1.gpx",
+   "name": "Азадбаш",
+   "credit": "Роман · «ГОРЕЦ» форум",
+   "km": 10.0,
+   "ascent": 596,
+   "day": true
+  }
+ ],
+ "paltau-waterfall": [
+  {
+   "file": "paltau-waterfall-gorets-1.gpx",
+   "name": "Пальтау и Оби-Рахмат",
+   "credit": "Артем · «ГОРЕЦ» форум",
+   "km": 10.4,
+   "ascent": 0,
+   "day": true
+  }
+ ],
+ "badak-lake": [
+  {
+   "file": "badak-lake-gorets-1.gpx",
+   "name": "Бадак ОзероВодопад",
+   "credit": "Ibrohim · «ГОРЕЦ» форум",
+   "km": 16.0,
+   "ascent": 1927,
+   "day": true
+  },
+  {
+   "file": "badak-lake-gorets-2.gpx",
+   "name": "Бадак: от теснин до дороги",
+   "credit": "Tulqin · «ГОРЕЦ» форум",
+   "km": 9.8,
+   "ascent": 331,
+   "day": true
+  },
+  {
+   "file": "badak-lake-gorets-3.gpx",
+   "name": "Теснины Бадака - озеро",
+   "credit": "Ярослав Шеломенцев · «ГОРЕЦ» форум",
+   "km": 4.6,
+   "ascent": 149,
+   "day": true
+  }
+ ],
+ "beldersay": [
+  {
+   "file": "beldersay-gorets-1.gpx",
+   "name": "Бельдерсай - Верховья Нурекаты",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 8.6,
+   "ascent": 647,
+   "day": true
+  }
+ ],
+ "kyzylnura": [
+  {
+   "file": "kyzylnura-gorets-1.gpx",
+   "name": "Кызылнура",
+   "credit": "Роман · «ГОРЕЦ» форум",
+   "km": 15.1,
+   "ascent": 1736,
+   "day": true
+  }
+ ],
+ "aksay-waterfall": [
+  {
+   "file": "aksay-waterfall-gorets-1.gpx",
+   "name": "Черный водопад 14.04.2025",
+   "credit": "PANDA TRAVEL 🐼 · «ГОРЕЦ» форум",
+   "km": 1.3,
+   "ascent": 278,
+   "day": true
+  },
+  {
+   "file": "aksay-waterfall-gorets-2.gpx",
+   "name": "Простая прогулка по Аксаю",
+   "credit": "Ярослав Шеломенцев · «ГОРЕЦ» форум",
+   "km": 1.6,
+   "ascent": 212,
+   "day": true
+  }
+ ],
+ "suvtushar-waterfall": [
+  {
+   "file": "suvtushar-waterfall-gorets-1.gpx",
+   "name": "Водопад Сувтушар",
+   "credit": "PANDA TRAVEL 🐼 · «ГОРЕЦ» форум",
+   "km": 1.1,
+   "ascent": 179,
+   "day": true
+  }
+ ],
+ "fozilmon-lake": [
+  {
+   "file": "fozilmon-lake-gorets-1.gpx",
+   "name": "Вершина Фазильман",
+   "credit": "Muradovich · «ГОРЕЦ» форум",
+   "km": 5.9,
+   "ascent": 669,
+   "day": true
+  }
+ ],
+ "bolshoy-chimgan": [
+  {
+   "file": "bolshoy-chimgan-gorets-1.gpx",
+   "name": "Большой Чимган",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 6.2,
+   "ascent": 22,
+   "day": true
+  }
+ ],
+ "urungach-lakes": [
+  {
+   "file": "urungach-lakes-gorets-1.gpx",
+   "name": "Урунгач пеший",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 4.2,
+   "ascent": 428,
+   "day": true
+  }
+ ],
+ "tashgul-waterfalls": [
+  {
+   "file": "tashgul-waterfalls-gorets-1.gpx",
+   "name": "Таваксай водопады.",
+   "credit": "Денис \"KATRANT\" · «ГОРЕЦ» форум",
+   "km": 18.7,
+   "ascent": 997,
+   "day": true
+  },
+  {
+   "file": "tashgul-waterfalls-gorets-2.gpx",
+   "name": "Таваксай Азадбаш до верхних водопадов",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 10.8,
+   "ascent": 832,
+   "day": true
+  }
+ ],
+ "gulkam-tesniny": [
+  {
+   "file": "gulkam-tesniny-gorets-1.gpx",
+   "name": "Пик Охотничий через Патандезбаши",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 24.1,
+   "ascent": 2641,
+   "day": true
+  },
+  {
+   "file": "gulkam-tesniny-gorets-2.gpx",
+   "name": "Песочный перевал Водопровод Пик Охотничий",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 14.5,
+   "ascent": 1854,
+   "day": true
+  },
+  {
+   "file": "gulkam-tesniny-gorets-3.gpx",
+   "name": "Пер Песочный вдп Гулькам обход теснин Янгикурган",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 6.3,
+   "ascent": 215,
+   "day": true
+  }
+ ],
+ "babaytag": [
+  {
+   "file": "babaytag-gorets-1.gpx",
+   "name": "Спуск с Бабайтага новой дорогой",
+   "credit": "Muradovich · «ГОРЕЦ» форум",
+   "km": 12.5,
+   "ascent": 234,
+   "day": true
+  },
+  {
+   "file": "babaytag-gorets-2.gpx",
+   "name": "Бабайтаг",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 7.8,
+   "ascent": 0,
+   "day": true
+  }
+ ],
+ "ikhnachkul": [
+  {
+   "file": "ikhnachkul-gorets-1.gpx",
+   "name": "Ихначкуль верхняя тропа",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 16.9,
+   "ascent": 1242,
+   "day": true
+  },
+  {
+   "file": "ikhnachkul-gorets-2.gpx",
+   "name": "Вот трек, что-то забегался",
+   "credit": "Vladimir V Dolgiy · «ГОРЕЦ» форум",
+   "km": 12.4,
+   "ascent": 0,
+   "day": true
+  },
+  {
+   "file": "ikhnachkul-gorets-3.gpx",
+   "name": "Низовья Ихначсая верховья Ихначсая",
+   "credit": "Ярослав Шеломенцев · «ГОРЕЦ» форум",
+   "km": 10.4,
+   "ascent": 1079,
+   "day": true
+  }
+ ],
+ "hazrat-daud-cave": [
+  {
+   "file": "hazrat-daud-cave-gorets-1.gpx",
+   "name": "Кумгаза",
+   "credit": "Nikolay Skuba · «ГОРЕЦ» форум",
+   "km": 10.3,
+   "ascent": 1372,
+   "day": true
+  }
+ ],
+ "maygashkan": [
+  {
+   "file": "maygashkan-gorets-1.gpx",
+   "name": "Майгашкан",
+   "credit": "Алексей · «ГОРЕЦ» форум",
+   "km": 9.7,
+   "ascent": 1164,
+   "day": true
+  },
+  {
+   "file": "maygashkan-gorets-2.gpx",
+   "name": "Кокбет и Майгашкан",
+   "credit": "Muzaffar Avtoshkola and hiking · «ГОРЕЦ» форум",
+   "km": 8.6,
+   "ascent": 0,
+   "day": true
+  }
+ ],
+ "kumbel-peak": [
+  {
+   "file": "kumbel-peak-gorets-1.gpx",
+   "name": "Стоянка Бельдерсая - Кумбель",
+   "credit": "Горняшка.uz ( ex. Некоммерческие походы ) · «ГОРЕЦ» форум",
+   "km": 4.1,
+   "ascent": 0,
+   "day": true
+  },
+  {
+   "file": "kumbel-peak-gorets-2.gpx",
+   "name": "Амирсай - г.Кумбель",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 2.8,
+   "ascent": 221,
+   "day": true
+  }
+ ],
+ "achikul-lake": [
+  {
+   "file": "achikul-lake-gorets-1.gpx",
+   "name": "Озеро Ачикуль Туткара1519м Заршох1840 м",
+   "credit": "Lider Hikers · «ГОРЕЦ» форум",
+   "km": 20.7,
+   "ascent": 0,
+   "day": true
+  }
+ ],
+ "mankent-peak": [
+  {
+   "file": "mankent-peak-gorets-1.gpx",
+   "name": "Манкент",
+   "credit": "Роман · «ГОРЕЦ» форум",
+   "km": 5.7,
+   "ascent": 0,
+   "day": true
+  }
+ ],
+ "pulatkhan-plateau": [
+  {
+   "file": "pulatkhan-plateau-gorets-1.gpx",
+   "name": "Нуреката - Пулатхан до родника",
+   "credit": "Ярослав Шеломенцев · «ГОРЕЦ» форум",
+   "km": 34.5,
+   "ascent": 2789,
+   "day": false
+  },
+  {
+   "file": "pulatkhan-plateau-gorets-2.gpx",
+   "name": "Трек Пулатхан",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 32.0,
+   "ascent": 0,
+   "day": false
+  }
+ ],
+ "sukok-waterfall": [
+  {
+   "file": "sukok-waterfall-gorets-1.gpx",
+   "name": "Сукок короткий трек",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 2.6,
+   "ascent": 276,
+   "day": true
+  }
+ ]
+}
