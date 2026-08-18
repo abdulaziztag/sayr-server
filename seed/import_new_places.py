@@ -174,9 +174,9 @@ async def _photos(session, place: Place, point_id: str) -> None:
             PlacePhoto(
                 place_id=place.id,
                 file=StorageFile(name=name, storage=photo_storage),
-                credit=(
-                    f"Фото: {source}, tabiatsari.uz" if source else "Фото: tabiatsari.uz"
-                ),
+                # Автором, без адреса источника: приписывать снимок площадке,
+                # на которой он просто лежал, неверно. Автора нет — подписи нет
+                credit=(f"Фото: {source}" if source else ""),
                 sort_order=order,
             )
         )

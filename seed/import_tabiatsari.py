@@ -38,7 +38,9 @@ from .translit import to_cyrillic
 DATA_DIR = Path(__file__).resolve().parent / "data"
 MAP_FILE = DATA_DIR / "tabiatsari_map.json"
 
-CREDIT_SUFFIX = "tabiatsari.uz"
+# Подписываем автором, без адреса источника: у снимков и треков есть
+# конкретные люди, и в подписи должны стоять они. Автора нет — подписи нет:
+# приписывать работу площадке, на которой она просто лежала, неверно
 
 # Больше десятка снимков одного водопада никто не листает, а стопка полароидов
 # на деталке и не рассчитана на такое: у Бадака их 34, у Чимгана 22
@@ -70,14 +72,13 @@ def _credit(track: dict) -> str:
     """Подпись автора. Автор трека и автор снимков — разные люди:
     у трека «Go on Foot», у фотографий того же места другой человек."""
     source = track.get("source") or {}
-    name = (source.get("name") or "").strip()
-    return f"{name} · {CREDIT_SUFFIX}" if name else CREDIT_SUFFIX
+    return (source.get("name") or "").strip()
 
 
 def _photo_credit(media: dict) -> str:
     source = media.get("source") or {}
     name = (source.get("name") or "").strip()
-    return f"Фото: {name}, {CREDIT_SUFFIX}" if name else f"Фото: {CREDIT_SUFFIX}"
+    return f"Фото: {name}" if name else ""
 
 
 async def run(apply: bool) -> None:
