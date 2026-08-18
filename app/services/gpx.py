@@ -40,10 +40,15 @@ _SIMPLIFY_EPSILON_M = 1.0
 class TrackStats:
     distance_km: float
     ascent_m: int
+    # Первая точка записи — это место, откуда пошли пешком. Именно её человек
+    # вбивает в автонавигатор: координаты самого места — это вершина или
+    # водопад, и машину туда не подадут
+    start_lat: float | None = None
+    start_lng: float | None = None
 
 
 def track_stats(data: bytes) -> TrackStats:
-    """Длина и набор по точкам всех треков файла. Пустой файл — нули."""
+    """Длина, набор и точка старта по точкам всех треков файла."""
     root = ET.fromstring(data)
     ns = _ns(root)
     points: list[tuple[float, float, float | None]] = []
@@ -76,7 +81,13 @@ def track_stats(data: bytes) -> TrackStats:
         elif ele < anchor:
             anchor = ele
 
-    return TrackStats(distance_km=round(distance / 1000, 1), ascent_m=round(ascent))
+    start = points[0] if points else None
+    return TrackStats(
+        distance_km=round(distance / 1000, 1),
+        ascent_m=round(ascent),
+        start_lat=round(start[0], 6) if start else None,
+        start_lng=round(start[1], 6) if start else None,
+    )
 
 
 def clean(data: bytes, epsilon_m: float = _SIMPLIFY_EPSILON_M) -> bytes:

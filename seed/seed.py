@@ -129,6 +129,8 @@ async def _ensure_tracks(session, place: Place, item: dict) -> None:
         track.gpx_credit = spec.get("credit")
         track.distance_km = stats.distance_km
         track.ascent_m = stats.ascent_m
+        track.start_lat = stats.start_lat
+        track.start_lng = stats.start_lng
         track.sort_order = order
 
 

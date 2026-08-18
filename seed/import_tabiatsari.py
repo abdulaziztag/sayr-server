@@ -184,6 +184,8 @@ async def _plan_tracks(
         row.gpx_credit = _credit(track)
         row.distance_km = stats.distance_km
         row.ascent_m = stats.ascent_m
+        row.start_lat = stats.start_lat
+        row.start_lng = stats.start_lng
     return walked
 
 

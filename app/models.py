@@ -167,6 +167,10 @@ class PlaceTrack(Base):
     # только выбранный файл, а статистику видит до скачивания
     distance_km: Mapped[float] = mapped_column(Float, default=0)
     ascent_m: Mapped[int] = mapped_column(Integer, default=0)
+    # Откуда идут пешком — первая точка записи. Координаты самого места
+    # это цель: вершина или водопад, и в автонавигатор их вбивать бесполезно
+    start_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    start_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     place: Mapped[Place] = relationship(back_populates="tracks")

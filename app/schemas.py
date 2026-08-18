@@ -51,6 +51,9 @@ class TrackOut(BaseModel):
     credit: str | None
     distance_km: float
     ascent_m: int
+    # Точка старта маршрута, а не самого места: её человек вбивает в навигатор
+    start_lat: float | None = None
+    start_lng: float | None = None
 
 
 class NearbyOut(BaseModel):
@@ -144,6 +147,8 @@ def track_out(t: PlaceTrack) -> TrackOut:
         credit=t.gpx_credit,
         distance_km=t.distance_km,
         ascent_m=t.ascent_m,
+        start_lat=t.start_lat,
+        start_lng=t.start_lng,
     )
 
 

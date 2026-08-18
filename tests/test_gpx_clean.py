@@ -67,3 +67,20 @@ def test_empty_segment_survives():
         RAW[RAW.index(b"  <trkpt") : RAW.index(b" </trkseg>")], b""
     )
     assert clean(empty).count(b"<trkpt") == 0
+
+
+def test_start_point_is_the_first_recorded_point():
+    """Старт — оттуда, откуда пошли пешком, а не координаты самого места:
+    в автонавигатор вбивают именно его."""
+    stats = track_stats(RAW)
+    assert (stats.start_lat, stats.start_lng) == (41.1000, 70.1000)
+
+
+def test_start_survives_cleaning():
+    """Прореживание не должно съедать первую точку."""
+    assert track_stats(clean(RAW)).start_lat == 41.1000
+
+
+def test_empty_track_has_no_start():
+    empty = b'<?xml version="1.0"?><gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"/>'
+    assert track_stats(empty).start_lat is None

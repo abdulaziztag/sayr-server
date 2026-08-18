@@ -87,7 +87,12 @@ class PlaceTrackAdmin(ModelView, model=PlaceTrack):
         PlaceTrack.sort_order,
     ]
     # Статистика считается из файла, руками её не вводят
-    form_excluded_columns = [PlaceTrack.distance_km, PlaceTrack.ascent_m]
+    form_excluded_columns = [
+        PlaceTrack.distance_km,
+        PlaceTrack.ascent_m,
+        PlaceTrack.start_lat,
+        PlaceTrack.start_lng,
+    ]
 
     async def after_model_change(self, data, model: PlaceTrack, is_created: bool, request) -> None:
         # Длина и набор — из загруженного файла. Имя файла берём ИЗ БАЗЫ,
@@ -115,7 +120,12 @@ class PlaceTrackAdmin(ModelView, model=PlaceTrack):
             await session.execute(
                 update(PlaceTrack)
                 .where(PlaceTrack.id == model.id)
-                .values(distance_km=stats.distance_km, ascent_m=stats.ascent_m)
+                .values(
+                    distance_km=stats.distance_km,
+                    ascent_m=stats.ascent_m,
+                    start_lat=stats.start_lat,
+                    start_lng=stats.start_lng,
+                )
             )
             await session.commit()
 
