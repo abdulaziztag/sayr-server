@@ -19,6 +19,13 @@ from ..services.gpx import haversine_m
 
 router = APIRouter(prefix="/api/v1", tags=["places"])
 
+# Сколько соседей отдаём. В плотном кусте — Чимган, Бостанлык — длинный трек
+# цепляет несколько точек сразу, и у популярного места список уходит за десяток.
+# Клиенты рисуют его целиком и сразу, каждая строка тянет свою миниатюру;
+# да и человеку внизу карточки нужен короткий список «что захвачу заодно»,
+# а не второй каталог
+NEARBY_LIMIT = 6
+
 
 def _distance_km_expr(lat: float, lng: float):
     """Хаверсин на встроенных функциях Postgres — расширения не нужны.
@@ -125,7 +132,7 @@ async def _nearby(place: Place, session: AsyncSession) -> list[NearbyOut]:
         for other in others
     ]
     pairs.sort(key=lambda pair: pair[1])
-    return [nearby_out(other, gap) for other, gap in pairs]
+    return [nearby_out(other, gap) for other, gap in pairs[:NEARBY_LIMIT]]
 
 
 @router.get("/places/{slug}", response_model=PlaceDetail)
