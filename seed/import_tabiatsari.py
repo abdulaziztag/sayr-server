@@ -72,7 +72,10 @@ def _credit(track: dict) -> str:
     """Подпись автора. Автор трека и автор снимков — разные люди:
     у трека «Go on Foot», у фотографий того же места другой человек."""
     source = track.get("source") or {}
-    return (source.get("name") or "").strip()
+    name = (source.get("name") or "").strip()
+    # Источник иногда числит автором сам себя: подпись «Tabiat Sari» — это
+    # не человек, а площадка, и в графе автора ей делать нечего
+    return "" if name.casefold().replace(" ", "") == "tabiatsari" else name
 
 
 def _photo_credit(media: dict) -> str:
