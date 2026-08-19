@@ -105,6 +105,22 @@ class Candidate:
     cut: bool  # запись «туда-обратно» обрезана до пути туда
 
 
+def resolve_export_path(files_dir: Path, name: str) -> Path | None:
+    """Файл выгрузки с поправкой на юникод.
+
+    macOS хранит имена разложенными (NFD), и «ё» с «й» там — буква плюс
+    диакритика. На линуксовом сервере такой файл не находится по составному
+    (NFC) имени из плана. Пробуем обе формы.
+    """
+    import unicodedata
+
+    for form in ("NFC", "NFD"):
+        path = files_dir / unicodedata.normalize(form, name)
+        if path.exists():
+            return path
+    return None
+
+
 def _kml_to_gpx(data: bytes) -> bytes | None:
     """KML → GPX: LineString → trkpt. Точечные Placemark не переносим —
     точки в каталог не идут, их отсеял разбор выгрузки."""
@@ -311,8 +327,8 @@ async def run(apply: bool, credit: str, files_dir: Path) -> None:
             candidates: list[Candidate] = []
             planned_names: set[str] = set()
             for entry in entries:
-                src = files_dir / entry["f"]
-                if not src.exists():
+                src = resolve_export_path(files_dir, entry["f"])
+                if src is None:
                     print(f"  ! нет файла {entry['f']}")
                     continue
                 # Имя в GPX_DIR — из исходного файла, а не из порядка добавления:

@@ -46,6 +46,7 @@ from .import_channel import (
     MAX_TRACK_KM,
     Candidate,
     _load_gpx,
+    resolve_export_path,
 )
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -78,8 +79,8 @@ def _goal(data: bytes) -> tuple[float, float, int | None]:
 
 def _prepare(files_dir: Path, slug: str, spec_file: str) -> Candidate | None:
     """Файл выгрузки → кандидат с очищенным содержимым, как в import_channel."""
-    path = files_dir / spec_file
-    if not path.exists():
+    path = resolve_export_path(files_dir, spec_file)
+    if path is None:
         print(f"  ! файла нет в выгрузке: {spec_file}")
         return None
     raw = _load_gpx(path)
