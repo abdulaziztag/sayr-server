@@ -45,8 +45,13 @@ def _needs(place: Place) -> list[str]:
 
 
 def _window_hours(place: Place) -> float | None:
-    """Сколько часов светового дня нужно на выход целиком."""
-    if place.drive_minutes is None:
+    """Сколько часов светового дня нужно на выход целиком.
+
+    Та же формула, что считает окно выезда в приложении: дорога туда-обратно
+    плюс ход с полуторным запасом. У мест с пометкой ночёвки окно считается
+    иначе — доехать и встать лагерем, — и они сюда не попадают.
+    """
+    if place.drive_minutes is None or place.overnight is not None:
         return None
     walk = place.duration_hours or 0
     return place.drive_minutes * 2 / 60 + walk * 1.5
@@ -99,7 +104,10 @@ async def run() -> None:
     # Места, куда за день не обернуться: приложение обещает окно выезда,
     # которого физически нет
     far = [(p, h) for p in places if (h := _window_hours(p)) and h > DAY_BUDGET_HOURS]
+    overnight = [p for p in places if p.overnight is not None]
     print(f"\n## Не однодневные выходы — {len(far)}\n")
+    print(f"Пометка ночёвки уже стоит у {len(overnight)} мест — они посчитаны верно "
+          "и в список не входят.\n")
     print("Дорога туда-обратно плюс ход не помещаются в световой день. "
           "Приложение считает окно выезда по формуле «закат минус дорога и ход», "
           "и для этих мест оно уходит в минус — окна не будет ни при каком закате. "
