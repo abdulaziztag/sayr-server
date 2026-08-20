@@ -1,5 +1,7 @@
 """Генерация превью и dev-заглушек для фото мест."""
 
+import hashlib
+import io
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
@@ -7,6 +9,11 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 from ..config import DELETED_PHOTOS_DIR, PHOTOS_DIR, THUMBS_DIR
 
 THUMB_SIZE = (640, 400)
+
+# Больше этого в каталоге не нужно: снимки смотрят на телефоне,
+# а восьмимегапиксельный кадр с зеркалки — это мегабайты трафика в горах
+MAX_SIDE = 2560
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
 # Пары цветов градиента по категории — чтобы заглушки различались на глаз
 CATEGORY_COLORS: dict[str, tuple[str, str]] = {
@@ -40,6 +47,27 @@ def make_thumbnail(photo_filename: str) -> Path:
         thumb.thumbnail(THUMB_SIZE, Image.Resampling.LANCZOS)
         thumb.save(dst, "JPEG", quality=82)
     return dst
+
+
+def store_upload(data: bytes, slug: str) -> str:
+    """Кладёт присланный кадр в каталог и делает превью. Отдаёт имя файла.
+
+    Пересобираем в JPEG, а не сохраняем как есть, по трём причинам сразу:
+    битый файл под видом картинки не доедет до каталога, а упадёт здесь;
+    имя получается из содержимого, поэтому повторная заливка того же кадра
+    не плодит копий; и главное — не переносится EXIF, а в нём у снимка
+    с телефона лежат координаты съёмки и серийный номер камеры. Это данные
+    автора, а не места, и в открытый доступ им не надо.
+    """
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise ValueError("файл больше допустимого")
+    name = f"{slug}-{hashlib.sha1(data).hexdigest()[:8]}.jpg"
+    with Image.open(io.BytesIO(data)) as im:
+        im = ImageOps.exif_transpose(im).convert("RGB")
+        im.thumbnail((MAX_SIDE, MAX_SIDE), Image.Resampling.LANCZOS)
+        im.save(PHOTOS_DIR / name, "JPEG", quality=88)
+    make_thumbnail(name)
+    return name
 
 
 def retire_photo(photo_filename: str) -> list[Path]:

@@ -8,14 +8,50 @@
 {{ super() }}
 
 {% set photos = model.photos %}
-<h3 class="mt-4 mb-2">
-  Фотографии <span class="text-secondary fw-normal">{{ photos | length }}</span>
-</h3>
+<div class="d-flex align-items-center gap-3 mt-4 mb-2">
+  <h3 class="m-0">
+    Фотографии <span class="text-secondary fw-normal">{{ photos | length }}</span>
+  </h3>
+  <button class="btn btn-sm btn-primary" type="button"
+          data-bs-toggle="collapse" data-bs-target="#add-photos"
+          aria-expanded="false" aria-controls="add-photos">
+    Добавить фото
+  </button>
+</div>
+
+<div class="collapse mb-3" id="add-photos">
+  <form class="card card-body" method="post" enctype="multipart/form-data"
+        action="{{ url_for('admin:view-place-add_photos') }}">
+    <input type="hidden" name="place_id" value="{{ model.id }}">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-6">
+        <label class="form-label" for="photos-input">Файлы</label>
+        {# multiple: дырки закрывают подборкой из поездки, а не по кадру #}
+        <input class="form-control" id="photos-input" type="file" name="photos"
+               accept="image/*" multiple required>
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label" for="credit-input">Подпись автора</label>
+        <input class="form-control" id="credit-input" type="text" name="credit"
+               placeholder="Фото: Имя Фамилия" maxlength="300">
+      </div>
+      <div class="col-12 col-md-2">
+        <button type="submit" class="btn btn-primary w-100">Загрузить</button>
+      </div>
+    </div>
+    <div class="form-hint mt-2">
+      Подпись одна на всю пачку — поправить отдельный снимок можно в его
+      карточке. Кадры пересобираются в JPEG и ужимаются до 2560 точек
+      по длинной стороне; EXIF не переносится, чтобы координаты съёмки и модель
+      камеры автора не уехали в открытый доступ.
+    </div>
+  </form>
+</div>
 
 {% if not photos %}
 <p class="text-secondary">
-  Ни одного снимка. Такие места в каталоге не показываем — карточка без фото
-  выглядит как ошибка, а не как место, куда стоит съездить.
+  Ни одного снимка. Такие места в каталоге показываются без обложки —
+  карточка выглядит как ошибка, а не как место, куда стоит съездить.
 </p>
 {% else %}
 <p class="text-secondary small mb-3">

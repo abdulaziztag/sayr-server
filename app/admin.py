@@ -1,5 +1,6 @@
 """Админка для кураторского наполнения каталога: /admin."""
 
+import logging
 import secrets
 from pathlib import Path
 
@@ -13,13 +14,21 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 from wtforms import SelectMultipleField
 
+try:  # расположение менялось между версиями пакета
+    from fastapi_storages import StorageFile
+except ImportError:  # pragma: no cover
+    from fastapi_storages.base import StorageFile
+
 from . import stats
 from .config import GPX_DIR, SERVER_DIR, settings
 from .db import SessionLocal, engine
-from .models import Place, PlacePhoto, PlaceTrack, Region, Season
+from .models import Place, PlacePhoto, PlaceTrack, Region, Season, photo_storage
 from .services.gpx import track_stats
-from .services.images import make_thumbnail, retire_photo
+from .services.images import make_thumbnail, retire_photo, store_upload
 from .services.nearby import rebuild_for_track
+
+
+log = logging.getLogger("sayr.admin")
 
 
 class BasicAuthBackend(AuthenticationBackend):
@@ -75,6 +84,71 @@ class PlaceAdmin(ModelView, model=Place):
         # и из автоматической предзагрузки sqladmin — плитке они нужны,
         # иначе шаблон полезет за ними лениво и упадёт на greenlet
         return super().details_query(request).options(selectinload(Place.photos))
+
+    @expose("/photo-add", methods=["POST"])
+    async def add_photos(self, request: Request) -> Response:
+        """Заливает снимки прямо со страницы места.
+
+        Берём пачкой: дырки в каталоге закрывают не по одному кадру, а сразу
+        подборкой из поездки. Подпись автора одна на пачку — снимки обычно
+        из одного источника, а поправить отдельный можно в его карточке.
+
+        Битый или слишком большой файл пропускаем молча и грузим остальные:
+        уронить всю пачку из-за одного кадра — худшее, что тут можно сделать.
+        """
+        form = await request.form()
+        try:
+            place_id = int(str(form.get("place_id", "")))
+        except ValueError:
+            return RedirectResponse(
+                request.url_for("admin:list", identity=self.identity), status_code=303
+            )
+        credit = str(form.get("credit", "")).strip()[:300]
+        uploads = [f for f in form.getlist("photos") if getattr(f, "filename", "")]
+
+        async with AsyncSession(engine) as session:
+            place = await session.get(Place, place_id)
+            if place is None:
+                return RedirectResponse(
+                    request.url_for("admin:list", identity=self.identity), status_code=303
+                )
+            existing = (
+                (
+                    await session.execute(
+                        select(PlacePhoto).where(PlacePhoto.place_id == place_id)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            have = {Path(str(p.file)).name for p in existing if p.file}
+            order = max((p.sort_order for p in existing), default=-1) + 1
+
+            for upload in uploads:
+                try:
+                    name = store_upload(await upload.read(), place.slug)
+                except Exception:  # noqa: BLE001 — не картинка или не влезла
+                    continue
+                # Имя считается из содержимого: тот же кадр второй раз
+                # не заводит вторую строку, только перезаписывает файл собой
+                if name in have:
+                    continue
+                have.add(name)
+                session.add(
+                    PlacePhoto(
+                        place_id=place_id,
+                        file=StorageFile(name=name, storage=photo_storage),
+                        credit=credit,
+                        sort_order=order,
+                    )
+                )
+                order += 1
+            await session.commit()
+
+        return RedirectResponse(
+            request.url_for("admin:details", identity=self.identity, pk=place_id),
+            status_code=303,
+        )
 
     @expose("/photo-cover", methods=["POST"])
     async def make_cover(self, request: Request) -> Response:
@@ -148,11 +222,19 @@ class PlaceAdmin(ModelView, model=Place):
                 await session.delete(photo)
                 await session.commit()
                 if name:
+                    # Пишем в журнал, что именно уехало в корзину: 20 августа
+                    # 167 снимков удалились, а корзина осталась пуста — молчащий
+                    # except не дал понять, почему. Запись уже в любом случае
+                    # удалена, файл подождёт уборки, но знать об этом надо
                     try:
-                        retire_photo(name)
-                    except OSError:
-                        # Запись уже удалена; файл на диске подождёт уборки
-                        pass
+                        moved = retire_photo(name)
+                    except OSError as exc:
+                        log.warning("снимок %s: не убрался файл %s (%s)", photo_id, name, exc)
+                    else:
+                        if moved:
+                            log.info("снимок %s: в корзину %s", photo_id, [m.name for m in moved])
+                        else:
+                            log.warning("снимок %s: файла %s на диске нет", photo_id, name)
 
         return RedirectResponse(
             request.url_for("admin:details", identity=self.identity, pk=place_id),
