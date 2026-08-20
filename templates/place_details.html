@@ -19,27 +19,48 @@
 </p>
 {% else %}
 <p class="text-secondary small mb-3">
-  Первый по порядку — обложка: его рисует список и мини-карта. Порядок меняется
-  полем «sort order» у самого снимка. Удалённые файлы не стираются, а уезжают
-  в <code>deleted-photos</code> на сервере.
+  Обложка — первый снимок: его показывают список, карта и блок «рядом».
+  Остальные идут в том же порядке в просмотрщике. Удалённые файлы
+  не стираются, а уезжают в <code>deleted-photos</code> на сервере.
 </p>
 
 <div class="row row-cols-2 row-cols-md-3 row-cols-xl-4 g-3">
   {% for photo in photos %}
   <div class="col">
     <div class="card h-100">
-      <a href="{{ photo.url }}" target="_blank" rel="noopener"
-         title="Открыть оригинал">
-        <img src="{{ photo.thumb_url }}" alt="" loading="lazy"
-             class="card-img-top"
-             style="aspect-ratio:4/3;object-fit:cover;background:#f1f1f1">
-      </a>
+      <div class="position-relative">
+        <a href="{{ photo.url }}" target="_blank" rel="noopener"
+           title="Открыть оригинал">
+          <img src="{{ photo.thumb_url }}" alt="" loading="lazy"
+               class="card-img-top"
+               style="aspect-ratio:4/3;object-fit:cover;background:#f1f1f1">
+        </a>
+        {% if loop.first %}
+        <span class="badge bg-green position-absolute top-0 start-0 m-2">
+          обложка
+        </span>
+        {% endif %}
+      </div>
       <div class="card-body p-2 d-flex flex-column gap-2">
         <div class="small text-secondary text-truncate"
              title="{{ photo.credit or 'без подписи' }}">
-          {% if loop.first %}<span class="badge bg-green-lt">обложка</span>{% endif %}
           {{ photo.credit or 'без подписи' }}
         </div>
+
+        {# Кнопка стоит и у обложки — отключённой: иначе карточки разной
+           высоты и плитка идёт волной #}
+        {% if loop.first %}
+        <button class="btn btn-sm w-100" disabled>Уже обложка</button>
+        {% else %}
+        <form method="post" action="{{ url_for('admin:view-place-make_cover') }}">
+          <input type="hidden" name="photo_id" value="{{ photo.id }}">
+          <input type="hidden" name="place_id" value="{{ model.id }}">
+          <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+            Сделать обложкой
+          </button>
+        </form>
+        {% endif %}
+
         <div class="d-flex gap-2 align-items-center mt-auto">
           <a class="btn btn-sm btn-outline-secondary flex-fill"
              href="{{ url_for('admin:edit', identity='place-photo', pk=photo.id) }}">

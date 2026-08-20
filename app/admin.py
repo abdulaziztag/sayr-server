@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from sqladmin import Admin, BaseView, ModelView, expose
 from sqladmin.authentication import AuthenticationBackend
-from sqlalchemy import Select
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette.requests import Request
@@ -76,6 +76,54 @@ class PlaceAdmin(ModelView, model=Place):
         # иначе шаблон полезет за ними лениво и упадёт на greenlet
         return super().details_query(request).options(selectinload(Place.photos))
 
+    @expose("/photo-cover", methods=["POST"])
+    async def make_cover(self, request: Request) -> Response:
+        """Двигает снимок на первое место.
+
+        Обложка — это photos[0] по sort_order (schemas._base_fields), так что
+        «сделать обложкой» и «поставить первым» — одно и то же действие.
+        Заодно перенумеровываем остальные подряд: иначе после нескольких
+        перестановок номера расползаются и одинаковый sort_order у двух
+        снимков делает обложку делом случая.
+        """
+        photo_id, place_id = self._photo_form(await request.form())
+        if photo_id is None:
+            return RedirectResponse(
+                request.url_for("admin:list", identity=self.identity), status_code=303
+            )
+
+        async with AsyncSession(engine) as session:
+            photos = list(
+                (
+                    await session.execute(
+                        select(PlacePhoto)
+                        .where(PlacePhoto.place_id == place_id)
+                        .order_by(PlacePhoto.sort_order, PlacePhoto.id)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            chosen = next((p for p in photos if p.id == photo_id), None)
+            if chosen is not None:
+                rest = [p for p in photos if p.id != photo_id]
+                for i, photo in enumerate([chosen, *rest]):
+                    photo.sort_order = i
+                await session.commit()
+
+        return RedirectResponse(
+            request.url_for("admin:details", identity=self.identity, pk=place_id),
+            status_code=303,
+        )
+
+    @staticmethod
+    def _photo_form(form) -> tuple[int | None, int | None]:
+        """id снимка и места из формы. Мусор — не повод отвечать пятисоткой."""
+        try:
+            return int(str(form.get("photo_id", ""))), int(str(form.get("place_id", "")))
+        except ValueError:
+            return None, None
+
     @expose("/photo-delete", methods=["POST"])
     async def delete_photo(self, request: Request) -> Response:
         """Убирает снимок со страницы места.
@@ -83,11 +131,8 @@ class PlaceAdmin(ModelView, model=Place):
         Запись из базы уходит совсем, файлы — в корзину (см. retire_photo):
         отбор фотографий человек делает на глаз и вправе промахнуться.
         """
-        form = await request.form()
-        try:
-            photo_id = int(str(form.get("photo_id", "")))
-            place_id = int(str(form.get("place_id", "")))
-        except ValueError:
+        photo_id, place_id = self._photo_form(await request.form())
+        if photo_id is None:
             return RedirectResponse(
                 request.url_for("admin:list", identity=self.identity), status_code=303
             )
@@ -157,7 +202,7 @@ class PlaceTrackAdmin(ModelView, model=PlaceTrack):
         # дописывает _1, и правду знает только колонка.
         # Битый GPX не должен ронять сохранение: запись уже в базе, 500 после
         # коммита читается как «ничего не сохранилось»
-        from sqlalchemy import select, update
+        from sqlalchemy import update
 
         async with AsyncSession(engine) as session:
             stored = (

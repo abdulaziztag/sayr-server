@@ -136,7 +136,10 @@ class Place(Base):
     photos: Mapped[list["PlacePhoto"]] = relationship(
         back_populates="place",
         cascade="all, delete-orphan",
-        order_by="PlacePhoto.sort_order",
+        # id вторым ключом, как у треков: первый снимок — это обложка
+        # (schemas._base_fields), и при одинаковом sort_order у двух кадров
+        # обложка была бы делом случая и могла меняться между запросами
+        order_by="[PlacePhoto.sort_order, PlacePhoto.id]",
     )
     # Первый по sort_order — основной: его рисует мини-карта, из него
     # заполняются старые поля gpx_url/gpx_credit в API
