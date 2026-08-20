@@ -101,24 +101,38 @@ async def run() -> None:
         n = sum(1 for p in places if ok(p))
         print(f"| {label} | {n} | {len(places) - n} |")
 
-    # Места, куда за день не обернуться: приложение обещает окно выезда,
-    # которого физически нет
+    # За день не обернуться — но причины две разные, и лечатся они по-разному
     far = [(p, h) for p in places if (h := _window_hours(p)) and h > DAY_BUDGET_HOURS]
+    remote = [(p, h) for p, h in far if p.drive_minutes > 240]
+    long_walk = [(p, h) for p, h in far if p.drive_minutes <= 240]
     overnight = [p for p in places if p.overnight is not None]
-    print(f"\n## Не однодневные выходы — {len(far)}\n")
-    print(f"Пометка ночёвки уже стоит у {len(overnight)} мест — они посчитаны верно "
-          "и в список не входят.\n")
-    print("Дорога туда-обратно плюс ход не помещаются в световой день. "
-          "Приложение считает окно выезда по формуле «закат минус дорога и ход», "
-          "и для этих мест оно уходит в минус — окна не будет ни при каком закате. "
-          "Им нужна пометка ночёвки, либо их стоит держать черновиками.\n")
-    print("| Место | Дорога | Ход | Нужно часов | Статус |")
-    print("|---|---:|---:|---:|---|")
-    for p, h in sorted(far, key=lambda x: -x[1]):
-        drive = f"{p.drive_minutes // 60}:{p.drive_minutes % 60:02}"
+
+    print(f"\n## Далеко — нужна пометка ночёвки ({len(remote)})\n")
+    print("Одна дорога дольше четырёх часов, туда-обратно съедает световой день "
+          "целиком. Это поездки с ночёвкой, а не однодневные выходы. Приложение "
+          "считает окно выезда по формуле «закат минус дорога и ход» — для них "
+          "оно уходит в минус, и человек не увидит, когда выезжать.\n")
+    print(f"Пометка ночёвки уже стоит у {len(overnight)} мест: у них окно считается "
+          "иначе — доехать и встать лагерем, — и они сюда не попали.\n")
+    print("| Место | Дорога | Ход | Статус |")
+    print("|---|---:|---:|---|")
+    for p, _ in sorted(remote, key=lambda x: -x[0].drive_minutes):
         walk = f"{p.duration_hours} ч" if p.duration_hours else "—"
-        status = "опубликовано" if p.is_published else "черновик"
-        print(f"| {p.name} | {drive} | {walk} | {h:.0f} | {status} |")
+        print(f"| {p.name} | {p.drive_minutes // 60}:{p.drive_minutes % 60:02} | {walk} | "
+              f"{'опубликовано' if p.is_published else 'черновик'} |")
+
+    print(f"\n## Ход посчитан машиной — проверить глазами ({len(long_walk)})\n")
+    print("Ехать недалеко, но время в пути посчитано формулой Найсмита по длине "
+          "трека: километры делить на четыре плюс набор делить на шестьсот. "
+          "Формула осторожная и на длинных маршрутах завышает — тринадцать часов "
+          "у Деволи Сурх взялись оттуда, а не из чьего-то опыта. Тому, кто ходил, "
+          "стоит поставить своё число.\n")
+    print("| Место | Дорога | Ход по формуле | Статус |")
+    print("|---|---:|---:|---|")
+    for p, _ in sorted(long_walk, key=lambda x: -(x[0].duration_hours or 0)):
+        walk = f"{p.duration_hours} ч" if p.duration_hours else "—"
+        print(f"| {p.name} | {p.drive_minutes // 60}:{p.drive_minutes % 60:02} | {walk} | "
+              f"{'опубликовано' if p.is_published else 'черновик'} |")
 
     print(f"\n## Опубликованные с пропусками\n")
     holes = [(p, _needs(p)) for p in pub if _needs(p)]
