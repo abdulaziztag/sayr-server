@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
-from ..config import PHOTOS_DIR, THUMBS_DIR
+from ..config import DELETED_PHOTOS_DIR, PHOTOS_DIR, THUMBS_DIR
 
 THUMB_SIZE = (640, 400)
 
@@ -40,6 +40,33 @@ def make_thumbnail(photo_filename: str) -> Path:
         thumb.thumbnail(THUMB_SIZE, Image.Resampling.LANCZOS)
         thumb.save(dst, "JPEG", quality=82)
     return dst
+
+
+def retire_photo(photo_filename: str) -> list[Path]:
+    """Убирает снимок и его миниатюру из выдачи, не стирая их.
+
+    Файлы уезжают в DELETED_PHOTOS_DIR — вне media_dir, поэтому по прямой
+    ссылке они сразу перестают открываться. Совсем не удаляем: промах по
+    кнопке в админке стоил бы кадра, который искали руками по выгрузке
+    форума, а лишний файл на диске не стоит ничего.
+
+    Имена в корзине не перетираем: два места легко держат снимки
+    с одинаковым именем, и второй бы затёр первый.
+    """
+    DELETED_PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
+    stem = Path(photo_filename).stem
+    moved = []
+    for src in (PHOTOS_DIR / photo_filename, THUMBS_DIR / f"{stem}_thumb.jpg"):
+        if not src.exists():
+            continue
+        dst = DELETED_PHOTOS_DIR / src.name
+        n = 1
+        while dst.exists():
+            dst = DELETED_PHOTOS_DIR / f"{src.stem}-{n}{src.suffix}"
+            n += 1
+        src.rename(dst)
+        moved.append(dst)
+    return moved
 
 
 def _fonts():

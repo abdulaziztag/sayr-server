@@ -6,16 +6,19 @@ from pathlib import Path
 from fastapi import FastAPI
 from sqladmin import Admin, BaseView, ModelView, expose
 from sqladmin.authentication import AuthenticationBackend
+from sqlalchemy import Select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from starlette.requests import Request
-from starlette.responses import HTMLResponse
+from starlette.responses import HTMLResponse, RedirectResponse, Response
 from wtforms import SelectMultipleField
 
 from . import stats
-from .config import GPX_DIR, settings
+from .config import GPX_DIR, SERVER_DIR, settings
 from .db import SessionLocal, engine
 from .models import Place, PlacePhoto, PlaceTrack, Region, Season
 from .services.gpx import track_stats
-from .services.images import make_thumbnail
+from .services.images import make_thumbnail, retire_photo
 from .services.nearby import rebuild_for_track
 
 
@@ -58,6 +61,58 @@ class PlaceAdmin(ModelView, model=Place):
             "coerce": str,
         }
     }
+    # Своя страница места: под таблицей полей — плитка снимков.
+    # Без неё, чтобы увидеть фотографии места, надо уйти в «Фото мест»
+    # и отфильтровать список по имени, а чтобы убрать неудачный кадр —
+    # опознать его там по номеру строки
+    details_template = "place_details.html"
+    # В таблице полей photos рисовались как строка путей к файлам во всю
+    # ширину экрана. Плитка ниже показывает то же самое и по-человечески
+    column_details_exclude_list = [Place.photos]
+
+    def details_query(self, request: Request) -> Select:
+        # photos убраны из таблицы полей, а вместе с этим пропали
+        # и из автоматической предзагрузки sqladmin — плитке они нужны,
+        # иначе шаблон полезет за ними лениво и упадёт на greenlet
+        return super().details_query(request).options(selectinload(Place.photos))
+
+    @expose("/photo-delete", methods=["POST"])
+    async def delete_photo(self, request: Request) -> Response:
+        """Убирает снимок со страницы места.
+
+        Запись из базы уходит совсем, файлы — в корзину (см. retire_photo):
+        отбор фотографий человек делает на глаз и вправе промахнуться.
+        """
+        form = await request.form()
+        try:
+            photo_id = int(str(form.get("photo_id", "")))
+            place_id = int(str(form.get("place_id", "")))
+        except ValueError:
+            return RedirectResponse(
+                request.url_for("admin:list", identity=self.identity), status_code=303
+            )
+
+        async with AsyncSession(engine) as session:
+            photo = await session.get(PlacePhoto, photo_id)
+            # Чужой place_id в форме не должен удалять снимок другого места
+            if photo is not None and photo.place_id == place_id:
+                # str(file), а НЕ file.name: свойство .name прогоняет имя через
+                # санитайзер хранилища, который вырезает кириллицу — «фото.jpg»
+                # превращалось в «.jpg», и с диска не убиралось ничего
+                name = Path(str(photo.file)).name if photo.file else None
+                await session.delete(photo)
+                await session.commit()
+                if name:
+                    try:
+                        retire_photo(name)
+                    except OSError:
+                        # Запись уже удалена; файл на диске подождёт уборки
+                        pass
+
+        return RedirectResponse(
+            request.url_for("admin:details", identity=self.identity, pk=place_id),
+            status_code=303,
+        )
 
 
 class PlacePhotoAdmin(ModelView, model=PlacePhoto):
@@ -103,7 +158,6 @@ class PlaceTrackAdmin(ModelView, model=PlaceTrack):
         # Битый GPX не должен ронять сохранение: запись уже в базе, 500 после
         # коммита читается как «ничего не сохранилось»
         from sqlalchemy import select, update
-        from sqlalchemy.ext.asyncio import AsyncSession
 
         async with AsyncSession(engine) as session:
             stored = (
@@ -273,6 +327,10 @@ def mount_admin(app: FastAPI) -> Admin:
         app,
         engine,
         title="Sayr Admin",
+        # Абсолютный путь, а не "templates": по умолчанию sqladmin ищет папку
+        # относительно рабочего каталога, и своя страница места находилась бы
+        # только при запуске из server/
+        templates_dir=str(SERVER_DIR / "templates"),
         # session_kwargs уходят в SessionMiddleware: по умолчанию он ставит
         # cookie без Secure и с same_site=lax — на публичном сервере это
         # сессия админа открытым текстом

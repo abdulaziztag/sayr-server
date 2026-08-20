@@ -1,0 +1,65 @@
+{# Страница места в админке: под таблицей полей — плитка снимков.
+
+   Отбор фотографий делается на глаз, а без превью это работа вслепую:
+   в общем списке «Фото мест» кадры различимы только по номеру строки. #}
+{% extends "sqladmin/details.html" %}
+
+{% block details_table %}
+{{ super() }}
+
+{% set photos = model.photos %}
+<h3 class="mt-4 mb-2">
+  Фотографии <span class="text-secondary fw-normal">{{ photos | length }}</span>
+</h3>
+
+{% if not photos %}
+<p class="text-secondary">
+  Ни одного снимка. Такие места в каталоге не показываем — карточка без фото
+  выглядит как ошибка, а не как место, куда стоит съездить.
+</p>
+{% else %}
+<p class="text-secondary small mb-3">
+  Первый по порядку — обложка: его рисует список и мини-карта. Порядок меняется
+  полем «sort order» у самого снимка. Удалённые файлы не стираются, а уезжают
+  в <code>deleted-photos</code> на сервере.
+</p>
+
+<div class="row row-cols-2 row-cols-md-3 row-cols-xl-4 g-3">
+  {% for photo in photos %}
+  <div class="col">
+    <div class="card h-100">
+      <a href="{{ photo.url }}" target="_blank" rel="noopener"
+         title="Открыть оригинал">
+        <img src="{{ photo.thumb_url }}" alt="" loading="lazy"
+             class="card-img-top"
+             style="aspect-ratio:4/3;object-fit:cover;background:#f1f1f1">
+      </a>
+      <div class="card-body p-2 d-flex flex-column gap-2">
+        <div class="small text-secondary text-truncate"
+             title="{{ photo.credit or 'без подписи' }}">
+          {% if loop.first %}<span class="badge bg-green-lt">обложка</span>{% endif %}
+          {{ photo.credit or 'без подписи' }}
+        </div>
+        <div class="d-flex gap-2 align-items-center mt-auto">
+          <a class="btn btn-sm btn-outline-secondary flex-fill"
+             href="{{ url_for('admin:edit', identity='place-photo', pk=photo.id) }}">
+            Правка
+          </a>
+          {# Удаление — только POST: ссылку GET браузер или ускоритель
+             может дёрнуть сам, и снимок пропадёт без участия человека #}
+          <form method="post"
+                action="{{ url_for('admin:view-place-delete_photo') }}"
+                onsubmit="return confirm('Убрать этот снимок у места «{{ model.name }}»?')">
+            <input type="hidden" name="photo_id" value="{{ photo.id }}">
+            <input type="hidden" name="place_id" value="{{ model.id }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger"
+                    title="Убрать снимок">Удалить</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

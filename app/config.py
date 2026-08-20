@@ -41,6 +41,15 @@ PHOTOS_DIR = settings.media_dir / "photos"
 THUMBS_DIR = settings.media_dir / "thumbs"
 GPX_DIR = settings.media_dir / "gpx"
 
+# Куда уезжают снимки, удалённые из админки. Намеренно вне media_dir:
+# по /media отдаётся всё содержимое, и корзина внутри означала бы, что
+# «удалённое» фото по-прежнему открывается по прямой ссылке.
+#
+# Не удаляем совсем, потому что цена ошибки несимметрична: лишний файл
+# на диске — ничто, а промах по кнопке стоит снимка, который искали
+# вручную по выгрузке форума и второй раз можем не найти.
+DELETED_PHOTOS_DIR = SERVER_DIR / "deleted-photos"
+
 # StaticFiles и FileSystemStorage требуют существующих директорий уже на импорте
 for _d in (PHOTOS_DIR, THUMBS_DIR, GPX_DIR):
     _d.mkdir(parents=True, exist_ok=True)

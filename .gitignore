@@ -16,3 +16,4 @@ media/
 # Кэш ответов и файлов tabiatsari.uz: чужие данные, восстанавливаются
 # запуском импорта. Гигабайты GPX в репозитории не нужны
 seed/data/tabiatsari/
+deleted-photos/
