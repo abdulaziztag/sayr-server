@@ -47,29 +47,36 @@ class TrackStats:
     start_lng: float | None = None
 
 
-def track_stats(data: bytes) -> TrackStats:
-    """Длина, набор и точка старта по точкам всех треков файла."""
+def _points_with_ele(data: bytes) -> list[tuple[float, float, float | None]]:
+    """Точки всех треков файла вместе с высотой, где она есть."""
     root = ET.fromstring(data)
     ns = _ns(root)
-    points: list[tuple[float, float, float | None]] = []
+    out = []
     for trkpt in root.iter(f"{ns}trkpt"):
         ele = trkpt.find(f"{ns}ele")
-        points.append((
+        out.append((
             float(trkpt.get("lat")),
             float(trkpt.get("lon")),
             float(ele.text) if ele is not None and ele.text else None,
         ))
+    return out
 
-    distance = 0.0
+
+def _ascent(points: list[tuple[float, float, float | None]]) -> float:
+    """Набор высоты в порядке точек.
+
+    Копим от «якоря»: подъём засчитывается, только когда высота ушла от него
+    вверх дальше порога, — так дрожание записи не суммируется. Якорь берём
+    с ПЕРВОЙ точки, а не со второй: иначе подъём на стартовом отрезке
+    пропадал. На сырых записях с шагом в метр это терялось в шуме, а после
+    прореживания отрезки длинные, и потеря становится заметной.
+
+    Вынесено отдельно, чтобы прогонять и по перевёрнутому списку: набор
+    несимметричен, и разница двух прогонов — это перепад между концами.
+    """
     ascent = 0.0
-    # Набор копим от «якоря»: подъём засчитывается, только когда высота
-    # ушла от него вверх дальше порога, — так дрожание записи не суммируется
-    # Якорь берём с ПЕРВОЙ точки, а не со второй: иначе подъём на стартовом
-    # отрезке пропадал. На сырых записях с шагом в метр это терялось в шуме,
-    # а после прореживания отрезки длинные, и потеря становится заметной
     anchor: float | None = next((p[2] for p in points if p[2] is not None), None)
-    for prev, cur in zip(points, points[1:]):
-        distance += haversine_m(prev[0], prev[1], cur[0], cur[1])
+    for cur in points[1:]:
         ele = cur[2]
         if ele is None:
             continue
@@ -80,7 +87,16 @@ def track_stats(data: bytes) -> TrackStats:
             anchor = ele
         elif ele < anchor:
             anchor = ele
+    return ascent
 
+
+def track_stats(data: bytes) -> TrackStats:
+    """Длина, набор и точка старта по точкам всех треков файла."""
+    points = _points_with_ele(data)
+    distance = sum(
+        haversine_m(a[0], a[1], b[0], b[1]) for a, b in zip(points, points[1:])
+    )
+    ascent = _ascent(points)
     start = points[0] if points else None
     return TrackStats(
         distance_km=round(distance / 1000, 1),
@@ -88,6 +104,94 @@ def track_stats(data: bytes) -> TrackStats:
         start_lat=round(start[0], 6) if start else None,
         start_lng=round(start[1], 6) if start else None,
     )
+
+
+def closest_approach_pos(coords: list[tuple[float, float]], lat: float, lng: float) -> float:
+    """Где по длине трека он ближе всего подходит к точке: доля от 0 до 1.
+
+    Мерка направления, устойчивая к вранью координат. Сравнивать расстояния
+    от концов до цели нельзя: координаты мест взяты из OSM и промахиваются
+    на сотни метров поперёк тропы, и тогда «ближний конец» определяется
+    ошибкой, а не маршрутом. Доля же от поперечного сноса не двигается вовсе.
+
+    Заодно это единственная мерка, которая видит случай «цель в середине
+    маршрута» — там оба конца далеко, и сравнение концов молчит.
+    """
+    if len(coords) < 2:
+        return 0.0
+    legs = [haversine_m(a[0], a[1], b[0], b[1]) for a, b in zip(coords, coords[1:])]
+    total = sum(legs)
+    if total <= 0:
+        return 0.0
+    best_i = min(
+        range(len(legs)),
+        key=lambda i: _point_to_line_m((lat, lng), coords[i], coords[i + 1]),
+    )
+    return sum(legs[:best_i]) / total
+
+
+def recorded_from_target(data: bytes, lat: float, lng: float) -> bool:
+    """Записан ли трек ОТ цели вниз, а не к ней.
+
+    Такие записи ломают сразу две вещи: точкой старта становится сама цель
+    (и человек вбивает в автонавигатор вершину вместо парковки), а набор
+    считается в направлении спуска — у Большого Чимгана выходило 22 метра
+    вместо полутора тысяч.
+
+    Три условия разом, и каждое закрывает свой промах:
+
+    - ближайший подход к цели лежит в первых 15 % длины — то есть запись
+      начинается у цели, а не приходит к ней;
+    - концы разнесены: у кольца оба конца у дороги, переворачивать нечего;
+    - идти к цели — значит набирать хотя бы сотню метров.
+
+    Последнее считаем разницей двух прогонов накопителя, а НЕ высотами
+    концов. У первой точки трека Большого Чимгана нет тега ele вовсе —
+    единственная такая точка на весь каталог, — и проверка по высотам концов
+    пропустила бы ровно тот случай, ради которого всё затевалось.
+    """
+    coords = track_coords(data)
+    if len(coords) < 2:
+        return False
+    legs = [haversine_m(a[0], a[1], b[0], b[1]) for a, b in zip(coords, coords[1:])]
+    length = sum(legs)
+    if length < 200:
+        return False
+    if haversine_m(*coords[0], *coords[-1]) < max(200.0, 0.05 * length):
+        return False
+    if closest_approach_pos(coords, lat, lng) > 0.15:
+        return False
+
+    points = _points_with_ele(data)
+    return _ascent(points[::-1]) - _ascent(points) >= 100
+
+
+def reverse_track(data: bytes) -> bytes:
+    """Развернуть запись: точки в каждом сегменте и порядок сегментов.
+
+    Имя файла при этом не меняется намеренно. Клиенты считают набор сами
+    по скачанному файлу и ставят флаг «Старт» на его первую точку, поэтому
+    чинить надо сам файл; а переименование увело бы в никуда ссылки
+    в уже скачанных офлайн-комплектах.
+    """
+    root = ET.fromstring(data)
+    ns = _ns(root)
+    for seg in root.iter(f"{ns}trkseg"):
+        points = list(seg.findall(f"{ns}trkpt"))
+        for point in points:
+            seg.remove(point)
+        for point in reversed(points):
+            seg.append(point)
+    for trk in root.iter(f"{ns}trk"):
+        segs = list(trk.findall(f"{ns}trkseg"))
+        if len(segs) > 1:
+            for seg in segs:
+                trk.remove(seg)
+            for seg in reversed(segs):
+                trk.append(seg)
+    if ns:
+        ET.register_namespace("", ns[1:-1])
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
 def clean(data: bytes, epsilon_m: float = _SIMPLIFY_EPSILON_M) -> bytes:

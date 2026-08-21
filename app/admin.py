@@ -23,7 +23,7 @@ from . import stats
 from .config import GPX_DIR, SERVER_DIR, settings
 from .db import SessionLocal, engine
 from .models import Place, PlacePhoto, PlaceTrack, Region, Season, photo_storage
-from .services.gpx import track_stats
+from .services.gpx import recorded_from_target, reverse_track, track_stats
 from .services.images import make_thumbnail, retire_photo, store_upload
 from .services.nearby import rebuild_for_track
 
@@ -287,15 +287,29 @@ class PlaceTrackAdmin(ModelView, model=PlaceTrack):
         from sqlalchemy import update
 
         async with AsyncSession(engine) as session:
-            stored = (
+            row = (
                 await session.execute(
-                    select(PlaceTrack.gpx_file).where(PlaceTrack.id == model.id)
+                    select(PlaceTrack.gpx_file, Place.lat, Place.lng)
+                    .join(Place, Place.id == PlaceTrack.place_id)
+                    .where(PlaceTrack.id == model.id)
                 )
-            ).scalar_one_or_none()
-            if not stored:
+            ).first()
+            if row is None or not row[0]:
                 return
+            stored, place_lat, place_lng = row
+            path = GPX_DIR / Path(str(stored)).name
             try:
-                stats = track_stats((GPX_DIR / Path(str(stored)).name).read_bytes())
+                data = path.read_bytes()
+                # Запись, сделанная НА СПУСКЕ, начинается у самой цели. Такую
+                # разворачиваем сразу и переписываем файл: иначе в автонавигатор
+                # уедет вершина вместо парковки, а набор посчитается в сторону
+                # спуска — у Большого Чимгана так вышло 22 метра вместо 1566.
+                # Правим файл, а не только колонки: клиенты считают набор сами
+                # по скачанному GPX и ставят флаг «Старт» на его первую точку
+                if recorded_from_target(data, place_lat, place_lng):
+                    data = reverse_track(data)
+                    path.write_bytes(data)
+                stats = track_stats(data)
             except Exception:
                 return
             await session.execute(
