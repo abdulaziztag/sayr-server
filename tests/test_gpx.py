@@ -1,8 +1,13 @@
-"""Направление записи: разворот треков, снятых на спуске."""
+"""Направление и полнота записи: развороты и «сколько на самом деле идти»."""
 
 import math
 
-from app.services.gpx import recorded_from_target, reverse_track, track_stats
+from app.services.gpx import (
+    records_full_trip,
+    recorded_from_target,
+    reverse_track,
+    track_stats,
+)
 
 
 def _gpx(points: list[tuple[float, float, float]]) -> bytes:
@@ -56,3 +61,67 @@ def test_closed_loop_is_not_flipped():
         a = 2 * math.pi * i / 60
         pts.append((41.71 + 0.01 * math.sin(a), 70.08 + 0.01 * math.cos(a), 1000 + 300 * math.sin(a)))
     assert recorded_from_target(_gpx(pts), *target) is False
+
+
+# MARK: - Полнота записи
+#
+# Время в карточке — ход ТУДА И ОБРАТНО, а из 174 треков каталога 76
+# обрываются на цели. Пока это не различалось, каталог обещал половину:
+# Амир Темур стоял с 2,5 часа на 29,5 км и наборе 3458 м.
+
+
+def test_record_stopping_at_target_is_not_full_trip():
+    """Запись, оборванная на вершине: концы врозь, возврата по своим следам нет."""
+    pts = [
+        (41.70 + 0.02 * (i / 40), 70.10 - 0.03 * (i / 40), 1000 + 600 * (i / 40))
+        for i in range(41)
+    ]
+    assert records_full_trip(_gpx(pts)) is False
+
+
+def test_loop_is_full_trip():
+    """Кольцо: концы сошлись, удваивать нечего."""
+    pts = []
+    for i in range(61):
+        a = 2 * math.pi * i / 60
+        pts.append(
+            (41.71 + 0.01 * math.sin(a), 70.08 + 0.01 * math.cos(a), 1000 + 300 * math.sin(a))
+        )
+    assert records_full_trip(_gpx(pts)) is True
+
+
+def test_retraced_return_is_full_trip_even_with_open_ends():
+    """Вернулись той же тропой, но выключили запись, не дойдя до машины.
+
+    Концы разнесены, а путь пройден весь — удвоение обещало бы двойной день.
+    """
+    up = [
+        (41.70 + 0.02 * (i / 40), 70.10 - 0.03 * (i / 40), 1000 + 600 * (i / 40))
+        for i in range(41)
+    ]
+    # Возврат по своим следам, но останавливаемся на четверти пути от старта
+    down = list(reversed(up))[: int(len(up) * 0.75)]
+    assert records_full_trip(_gpx(up + down)) is True
+
+
+def test_near_loop_with_parted_ends_is_full_trip():
+    """Полвонакская тройка: кольцо, у которого концы разошлись на 11 % длины.
+
+    По пятипроцентному порогу проверки направления это ушло бы в «одну
+    сторону», и время удвоилось бы с пяти с половиной часов до восьми
+    с половиной. Порог здесь свой, пятнадцать процентов, — ровно из-за
+    таких записей.
+    """
+    pts = []
+    for i in range(55):  # неполное кольцо: не доходим до старта
+        a = 2 * math.pi * i / 60
+        pts.append(
+            (41.71 + 0.01 * math.sin(a), 70.08 + 0.01 * math.cos(a), 1000 + 300 * math.sin(a))
+        )
+    assert records_full_trip(_gpx(pts)) is True
+
+
+def test_too_short_to_judge_is_left_alone():
+    """На огрызке записи гадать не о чем — удвоение не выдумываем."""
+    pts = [(41.70 + 0.0001 * i, 70.10, 1000 + i) for i in range(5)]
+    assert records_full_trip(_gpx(pts)) is True
