@@ -19,7 +19,7 @@ CACHE_DIR = Path(__file__).resolve().parent / "data" / "tabiatsari"
 
 # Представляемся честно: у владельца сайта должна быть возможность понять,
 # кто ходит, и связаться, если что-то не так
-_UA = "Sayr/0.1 (hiking guide for Uzbekistan; +https://sayr.duckdns.org)"
+_UA = "Sayr/0.1 (hiking guide for Uzbekistan; +https://sayr.info)"
 _PAUSE_SEC = 0.25
 
 
