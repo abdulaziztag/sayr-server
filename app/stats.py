@@ -7,6 +7,8 @@ X-Device-Id со своим случайным идентификатором.
 
 import asyncio
 import logging
+from urllib.parse import parse_qs
+
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import Date, cast, delete, distinct, func, select
@@ -29,6 +31,8 @@ ROUTES = {
     "/api/v1/places": "catalog",
     "/api/v1/places/{slug}": "place",
     "/p/{slug}": "share",
+    "/": "landing",
+    "/uz": "landing",
 }
 
 
@@ -47,6 +51,14 @@ def _kind_and_slug(scope: Scope) -> tuple[str, str | None] | None:
     kind = ROUTES.get(getattr(route, "path", None))
     if kind is None:
         return None
+    if kind == "landing":
+        # Метка канала вместо слага: ссылку в каждый канал даём со своей
+        # (/?from=gorets), и тогда видно не «пришло двести человек»,
+        # а откуда именно. Чужое в параметре не пускаем дальше 32 знаков
+        # безобидного алфавита — это значение попадает в базу
+        query = scope.get("query_string", b"").decode("latin-1", "ignore")
+        mark = parse_qs(query).get("from", [""])[0][:32]
+        return kind, "".join(c for c in mark if c.isalnum() or c in "-_") or None
     return kind, scope.get("path_params", {}).get("slug")
 
 

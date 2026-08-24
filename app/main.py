@@ -8,8 +8,8 @@ from sqlalchemy import text
 from starlette.staticfiles import StaticFiles
 
 from .admin import mount_admin
-from .api import intents, legal, places, regions, share
-from .config import settings
+from .api import intents, landing, legal, places, regions, share
+from .config import SERVER_DIR, settings
 from .db import engine
 from .stats import StatsMiddleware, rotate_forever
 
@@ -53,11 +53,16 @@ async def media_cache_headers(request, call_next):
 app.add_middleware(StatsMiddleware)
 
 app.mount("/media", StaticFiles(directory=settings.media_dir), name="media")
+# Шрифты и картинки лендинга. Отдельно от media: то — пользовательский
+# контент, это — часть страницы, и живёт вместе с кодом
+app.mount("/static", StaticFiles(directory=SERVER_DIR / "static"), name="static")
 app.include_router(places.router)
 app.include_router(regions.router)
 app.include_router(intents.router)
 app.include_router(share.router)
 app.include_router(legal.router)
+# Лендинг последним: его "/" не должен перехватывать ничего выше
+app.include_router(landing.router)
 mount_admin(app)
 
 
