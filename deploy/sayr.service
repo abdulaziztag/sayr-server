@@ -1,6 +1,12 @@
 # /etc/systemd/system/sayr.service
-# Запуск API без контейнеров. Пути под установку в /opt/sayr.
-
+#
+# СНИМОК боевого юнита (сверен 24 августа 2026). Раньше здесь лежала
+# заготовка под установку в /opt/sayr от пользователя sayr, а на сервере
+# всё вышло иначе — и файл вводил в заблуждение при каждом взгляде.
+#
+# Sayr API. Код лежит в /root/Projects/sayr-server, как и остальные проекты
+# на этом сервере, поэтому служба идёт от root: каталог /root закрыт (0700)
+# и отдельный пользователь его бы не прочитал.
 [Unit]
 Description=Sayr API
 After=network-online.target postgresql.service
@@ -8,27 +14,24 @@ Wants=network-online.target
 
 [Service]
 Type=exec
-User=sayr
-Group=sayr
-WorkingDirectory=/opt/sayr
-
-# .env читает само приложение (pydantic-settings), systemd его не парсит.
-# Файл должен быть доступен пользователю sayr и закрыт от остальных: chmod 600
+WorkingDirectory=/root/Projects/sayr-server
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
-
-# Воркеров — по числу ядер, но на маленьком VPS двух достаточно
-ExecStart=/opt/sayr/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
-
+# .env читает само приложение (pydantic-settings), systemd его не разбирает
+#
+# Два воркера — не деталь: каждый крутит свой цикл ротации статистики,
+# и они лезут в одни и те же строки daily_stats. Вставка агрегата поэтому
+# on_conflict_do_nothing, а чистка сырья вынесена в отдельную транзакцию
+# (см. app/stats.py). Меняя число воркеров, помните об этом.
+ExecStart=/root/Projects/sayr-server/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
 Restart=on-failure
 RestartSec=3
 
-# Сервису нужен на запись только каталог с загруженными фото
+# На запись нужен только каталог с фото, залитыми через админку
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/opt/sayr/media
+ReadWritePaths=/root/Projects/sayr-server/media
 
 [Install]
 WantedBy=multi-user.target

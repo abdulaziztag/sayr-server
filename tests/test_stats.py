@@ -1,10 +1,11 @@
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
 from app import stats
+from app.config import settings
 from app.db import SessionLocal
-from app.models import ApiEvent, DailyStat, Device
+from app.models import ApiEvent, DailyStat, Device, Place, TripIntent
 
 
 async def _events(**where):
@@ -20,6 +21,7 @@ async def _clear():
         await session.execute(delete(ApiEvent))
         await session.execute(delete(DailyStat))
         await session.execute(delete(Device))
+        await session.execute(delete(TripIntent))
         await session.commit()
 
 
@@ -114,6 +116,150 @@ async def test_rotation_aggregates_and_prunes():
 
 def _at(day: date) -> datetime:
     return datetime.combine(day, datetime.min.time()).astimezone() + timedelta(hours=12)
+
+
+# MARK: - Обещания политики конфиденциальности
+#
+# Тексту в api/legal.py верить нельзя, пока он ничем не подпёрт: до этих
+# тестов таблица devices не чистилась вообще, а обещание «не дольше 30 дней»
+# в политике уже стояло.
+
+
+async def test_device_id_does_not_outlive_retention():
+    """Номер устройства стирается вместе с его событиями.
+
+    legal.py обещает, что дальше срока остаются «только общие числа по дням,
+    без привязки к устройствам». Строка в devices — это и есть привязка.
+    """
+    await _clear()
+    today = date.today()
+    stale = today - timedelta(days=settings.stats_retention_days + 10)
+
+    async with SessionLocal() as session:
+        session.add_all(
+            [
+                Device(device="old-device", first_seen=stale),
+                Device(device="live-device", first_seen=today - timedelta(days=1)),
+                ApiEvent(kind="catalog", device="old-device", ts=_at(stale)),
+                ApiEvent(kind="catalog", device="live-device", ts=_at(today)),
+            ]
+        )
+        await session.commit()
+
+        await stats.purge(session, today=today)
+
+        left = (await session.execute(select(Device.device))).scalars().all()
+    assert left == ["live-device"]
+
+
+async def test_device_seen_recently_survives_old_first_seen():
+    """Давний, но живой пользователь не теряется.
+
+    Условие на first_seen одно ничего не решает: человек мог поставить
+    приложение полгода назад и открыть его сегодня.
+    """
+    await _clear()
+    today = date.today()
+    long_ago = today - timedelta(days=200)
+
+    async with SessionLocal() as session:
+        session.add_all(
+            [
+                Device(device="loyal", first_seen=long_ago),
+                ApiEvent(kind="catalog", device="loyal", ts=_at(today)),
+            ]
+        )
+        await session.commit()
+
+        await stats.purge(session, today=today)
+
+        left = (await session.execute(select(Device.device))).scalars().all()
+    assert left == ["loyal"]
+
+
+async def test_past_intents_are_purged():
+    """Прошедшие отметки «пойду» не живут вечно.
+
+    Снять их человек не может: приложение отдаёт только будущие даты,
+    а добавить прошедшую запрещает. Значит удалять должен сервер.
+    """
+    await _clear()
+    today = date.today()
+    async with SessionLocal() as session:
+        place = (await session.execute(select(Place).limit(1))).scalar_one()
+        session.add_all(
+            [
+                TripIntent(
+                    place_id=place.id,
+                    day=today - timedelta(days=settings.stats_retention_days + 5),
+                    device_id="d-old",
+                ),
+                TripIntent(
+                    place_id=place.id, day=today + timedelta(days=3), device_id="d-new"
+                ),
+            ]
+        )
+        await session.commit()
+
+        await stats.purge(session, today=today)
+
+        left = (await session.execute(select(TripIntent.device_id))).scalars().all()
+    assert left == ["d-new"]
+
+
+async def test_devices_ever_survives_purge():
+    """«Всего устройств» не проседает, когда строки устройств вычищены.
+
+    Число складывается из дневных new_devices — они обезличены и живут
+    вечно, поэтому история не теряется вместе с идентификаторами.
+    """
+    await _clear()
+    today = date.today()
+    async with SessionLocal() as session:
+        session.add_all(
+            [
+                DailyStat(day=today - timedelta(days=40), new_devices=7),
+                DailyStat(day=today - timedelta(days=2), new_devices=3),
+                # Появилось после последнего досчитанного дня — ещё не в агрегатах
+                Device(device="fresh", first_seen=today),
+            ]
+        )
+        await session.commit()
+
+        assert await stats._devices_ever(session) == 11
+
+
+async def test_rotation_prunes_even_when_aggregate_already_exists():
+    """Чистка не срывается из-за гонки двух воркеров.
+
+    Юнит поднимает uvicorn с двумя воркерами, и каждый крутит свою ротацию.
+    Раньше проигравший ронял транзакцию на daily_stats_pkey и утаскивал
+    за собой удаление сырья — ровно это и случилось на бою 19 августа.
+    """
+    await _clear()
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    stale = datetime.now().astimezone() - timedelta(
+        days=settings.stats_retention_days + 5
+    )
+
+    async with SessionLocal() as session:
+        # Агрегат за вчера уже записан — как если бы соседний воркер успел первым
+        session.add(DailyStat(day=yesterday, active_devices=1))
+        session.add_all(
+            [
+                ApiEvent(kind="catalog", device="d", ts=_at(yesterday)),
+                ApiEvent(kind="catalog", device="d", ts=stale),
+            ]
+        )
+        await session.commit()
+
+        await stats.rotate(session, today=today)
+
+        left = (
+            await session.execute(select(func.count()).select_from(ApiEvent))
+        ).scalar_one()
+    assert left == 1
 
 
 async def test_dashboard_survives_empty_tables():

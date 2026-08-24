@@ -127,7 +127,14 @@ async def _record(kind: str, slug: str | None, device: str | None) -> None:
 
 
 async def rotate(session: AsyncSession, today: date | None = None) -> None:
-    """Досчитать агрегаты за закрытые дни и стереть сырьё старше срока."""
+    """Досчитать агрегаты за закрытые дни и стереть сырьё старше срока.
+
+    Две транзакции, а не одна. Раньше удаление стояло следом за вставками
+    в общей транзакции, и когда второй воркер проигрывал гонку за строку
+    daily_stats, откатывалась вместе с ней и чистка сырья — то есть падал
+    ровно тот шаг, ради которого всё и затевалось. На бою это случилось
+    19 августа: UniqueViolation по daily_stats_pkey.
+    """
     today = today or date.today()
 
     done = set(
@@ -147,12 +154,50 @@ async def rotate(session: AsyncSession, today: date | None = None) -> None:
         .all()
     )
     for day in sorted(set(days) - done):
-        await session.execute(insert(DailyStat).values(**await _totals(session, day)))
+        # on_conflict_do_nothing: юнит поднимает uvicorn с двумя воркерами,
+        # и каждый крутит свою ротацию. Проигравший молча проходит мимо
+        # вместо того, чтобы уронить транзакцию
+        await session.execute(
+            insert(DailyStat)
+            .values(**await _totals(session, day))
+            .on_conflict_do_nothing(index_elements=[DailyStat.day])
+        )
+    await session.commit()
 
+    await purge(session, today)
+
+
+async def purge(session: AsyncSession, today: date | None = None) -> None:
+    """Стереть всё, что политика обещает не хранить дольше срока.
+
+    Политика (api/legal.py) обещает три вещи: записи статистики живут
+    не дольше 30 дней, дальше остаются «только общие числа по дням, без
+    привязки к устройствам», и записи, привязанные к случайному номеру
+    устройства, стираются сами. Значит чистить надо не только события,
+    но и сам номер устройства, и прошедшие отметки «пойду» — их человек
+    снять уже не может, приложение показывает только будущие даты.
+    """
+    today = today or date.today()
+    cutoff_day = today - timedelta(days=settings.stats_retention_days)
+    cutoff_ts = datetime.now().astimezone() - timedelta(days=settings.stats_retention_days)
+
+    await session.execute(delete(ApiEvent).where(ApiEvent.ts < cutoff_ts))
+
+    # Прошедшие отметки. Порог тот же, а не «всё прошедшее»: колонка votes
+    # в топе мест считает голоса за последние 7 и 30 дней, и рубить их
+    # раньше срока значило бы обеднить дашборд без выигрыша для приватности
+    await session.execute(delete(TripIntent).where(TripIntent.day < cutoff_day))
+
+    # Номер устройства. Удаляем только те, которых уже нет в оставшихся
+    # событиях: строка нужна, пока по ней считается «новое устройство»
+    # за день. Порядок важен — события чистятся выше, поэтому здесь
+    # остаются ровно те, кто заходил за последние 30 дней
     await session.execute(
-        delete(ApiEvent).where(
-            ApiEvent.ts < datetime.now().astimezone()
-            - timedelta(days=settings.stats_retention_days)
+        delete(Device).where(
+            Device.first_seen < cutoff_day,
+            ~select(ApiEvent.device)
+            .where(ApiEvent.device == Device.device)
+            .exists(),
         )
     )
     await session.commit()
@@ -190,15 +235,29 @@ async def _totals(session: AsyncSession, day: date) -> dict:
     }
 
 
+#: Как часто просыпаться. Час, а не сутки: раньше цикл спал 24 часа и
+#: отсчёт обнулялся при каждом рестарте — за 19 дней сервис перезапускали
+#: 37 раз, то есть чистка не выполнялась почти никогда. Работы у неё нет,
+#: пока нечего чистить, так что ежечасный холостой проход ничего не стоит,
+#: а рестарт стоит теперь час задержки вместо суток
+ROTATE_EVERY = timedelta(hours=1)
+
+
 async def rotate_forever() -> None:
-    """Суточный цикл. Сначала спит, потом работает.
+    """Цикл ротации. Сначала спит, потом работает.
 
     Порядок важен: тестовая фикстура клиента прогоняет lifespan на каждом
-    тесте, и проход «сразу на старте» молча писал бы агрегаты десятки раз
-    за прогон. Заодно старт приложения не ждёт работы с базой.
+    тесте, и проход «сразу на старте» ходил бы в базу на каждом тесте.
+    Заодно старт приложения не ждёт работы с базой.
+
+    Надёжнее было бы вынести это в systemd-таймер, дёргающий отдельную
+    команду: тогда чистка не зависит от процесса вообще. Но таймер живёт
+    на сервере, где стоят чужие боевые сайты, и ставить его — отдельное
+    решение; ежечасный цикл чинит наблюдавшуюся поломку целиком и едет
+    обычным деплоем.
     """
     while True:
-        await asyncio.sleep(24 * 60 * 60)
+        await asyncio.sleep(ROTATE_EVERY.total_seconds())
         try:
             async with SessionLocal() as session:
                 await rotate(session)
@@ -241,9 +300,7 @@ async def dashboard(session: AsyncSession) -> dict:
             )
         ).scalar_one()
 
-    total_devices = (
-        await session.execute(select(func.count()).select_from(Device))
-    ).scalar_one()
+    total_devices = await _devices_ever(session)
     new_week = (
         await session.execute(
             select(func.count())
@@ -266,6 +323,27 @@ async def dashboard(session: AsyncSession) -> dict:
         "upcoming": await _upcoming(session, today),
         "shares": await _shares(session, today),
     }
+
+
+async def _devices_ever(session: AsyncSession) -> int:
+    """Сколько устройств видели за всю историю.
+
+    Считать строки в devices больше нельзя: purge() чистит их вместе
+    с остальным сырьём, и число превратилось бы в «за последние 30 дней».
+    Складываем вместо этого дневные new_devices — они обезличены, живут
+    вечно и политике не противоречат, — а сверху добавляем тех, кто
+    появился после последнего досчитанного дня.
+    """
+    historic = (
+        await session.execute(select(func.coalesce(func.sum(DailyStat.new_devices), 0)))
+    ).scalar_one()
+    last_day = (await session.execute(select(func.max(DailyStat.day)))).scalar_one()
+    # Ещё не было ни одного закрытого дня — тогда вся правда в devices
+    where = () if last_day is None else (Device.first_seen > last_day,)
+    fresh = (
+        await session.execute(select(func.count()).select_from(Device).where(*where))
+    ).scalar_one()
+    return historic + fresh
 
 
 async def _recent_days(session: AsyncSession, today: date) -> list[dict]:
