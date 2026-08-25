@@ -24,7 +24,7 @@ SUPPORT_EMAIL = "mannopov481@gmail.com"
 
 RU = {
     "lang": "ru",
-    "other": ("/uz", "O‘zbekcha"),
+    "other": ("/uz", "Oʻzbekcha"),
     "title": "Sayr — куда сходить в горы Узбекистана",
     "tagline": "Куда сходить<br>в эти выходные",
     "lede": "Больше сотни мест рядом с Ташкентом: водопады, вершины, ущелья, "
@@ -59,35 +59,35 @@ RU = {
 UZ = {
     "lang": "uz",
     "other": ("/", "Русский"),
-    "title": "Sayr — O‘zbekiston tog‘lariga qayerga borish",
+    "title": "Sayr — Oʻzbekiston togʻlariga qayerga borish",
     "tagline": "Bu dam olish kunlari<br>qayerga borish mumkin",
-    "lede": "Toshkent yaqinida yuzdan ortiq joy: sharsharalar, cho‘qqilar, daralar, "
-            "g‘orlar va ko‘llar. Treklar, suratlar va qachon yo‘lga chiqish kerakligi bilan.",
-    "install": "O‘rnatish",
-    "soon": "Tez orada App Store va Google Play’da",
-    "soon_note": "Ilova do‘konlarda tekshiruvdan o‘tmoqda. Bir necha kundan keyin qarang.",
+    "lede": "Toshkent yaqinida yuzdan ortiq joy: sharsharalar, choʻqqilar, daralar, "
+            "gʻorlar va koʻllar. Treklar, suratlar va qachon yoʻlga chiqish kerakligi bilan.",
+    "install": "Oʻrnatish",
+    "soon": "Tez orada App Store va Google Playʼda",
+    "soon_note": "Ilova doʻkonlarda tekshiruvdan oʻtmoqda. Bir necha kundan keyin qarang.",
     "ios": "iPhone uchun",
     "android": "Android uchun",
     "blocks": [
-        ("Qachon yo‘lga chiqish",
-         "Ilova joyning koordinatalari bo‘yicha quyoshning botishini oladi va "
-         "yo‘l, yurish vaqti hamda zaxirani ayiradi. Shundan keyin chiqish "
+        ("Qachon yoʻlga chiqish",
+         "Ilova joyning koordinatalari boʻyicha quyoshning botishini oladi va "
+         "yoʻl, yurish vaqti hamda zaxirani ayiradi. Shundan keyin chiqish "
          "tavsiya etilmaydigan vaqt kelib chiqadi."),
         ("Haqiqiy treklar",
          "Chizilgan chiziqlar emas, odamlar yurgan GPS yozuvlari. Bir teginishda "
          "navigatoringizda ochiladi. Alohida — mashinada yetib borish uchun "
-         "so‘qmoq boshining koordinatalari."),
+         "soʻqmoq boshining koordinatalari."),
         ("Aloqasiz ishlaydi",
          "Chiqishni belgilasangiz, tavsif, trek, suratlar va xarita oldindan "
-         "yuklab olinadi. Aloqa yo‘q darada ham hammasi ochilaveradi."),
-        ("Reklamasiz va ro‘yxatdan o‘tmasdan",
-         "Akkaunt yo‘q, reklama yo‘q, kuzatuv yo‘q. Joylashuv umuman so‘ralmaydi. "
+         "yuklab olinadi. Aloqa yoʻq darada ham hammasi ochilaveradi."),
+        ("Reklamasiz va roʻyxatdan oʻtmasdan",
+         "Akkaunt yoʻq, reklama yoʻq, kuzatuv yoʻq. Joylashuv umuman soʻralmaydi. "
          "Saralanganlar va rejalar telefoningizda qoladi."),
     ],
     "honest": "Ilova interfeysi hozircha faqat rus tilida.",
     "privacy": "Maxfiylik",
     "support": "Yordam",
-    "made": "Katalog qo‘lda yig‘ilgan. Xatolik topsangiz — yozing, tuzatamiz.",
+    "made": "Katalog qoʻlda yigʻilgan. Xatolik topsangiz — yozing, tuzatamiz.",
 }
 
 _PAGE = """<!doctype html>

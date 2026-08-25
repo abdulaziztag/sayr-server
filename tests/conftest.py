@@ -30,6 +30,13 @@ FIXTURES = [
         best_seasons=["spring", "summer"],
         kid_friendly=True,
         short_desc="Красивый водопад для теста",
+        # Переведено полностью, кроме «как добраться» — на нём проверяем,
+        # что фолбэк работает по каждому полю отдельно, а не по месту целиком
+        name_uz="Test sharsharasi",
+        short_desc_uz="Test uchun chiroyli sharshara",
+        description_md="Русское описание водопада",
+        description_md_uz="Sharsharaning oʻzbekcha tavsifi",
+        how_to_get_md="Ехать на маршрутке",
     ),
     dict(
         slug="test-peak",
@@ -54,6 +61,8 @@ FIXTURES = [
         best_seasons=["summer"],
         kid_friendly=True,
         short_desc="Озеро недалеко от города",
+        name_uz="Test koʻli",
+        short_desc_uz="Shahardan uzoq boʻlmagan koʻl",
     ),
     dict(
         slug="test-far-plateau",
@@ -79,7 +88,7 @@ async def prepare_db():
     from app.db import SessionLocal
 
     async with SessionLocal() as session:
-        region = Region(name="Тестовый регион", sort_order=0)
+        region = Region(name="Тестовый регион", name_uz="Test viloyati", sort_order=0)
         session.add(region)
         await session.flush()
         for data in FIXTURES:

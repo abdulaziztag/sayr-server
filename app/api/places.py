@@ -6,6 +6,8 @@ from sqlalchemy.orm import joinedload, selectinload
 from ..db import get_session
 from ..models import Difficulty, Place, PlaceCategory, PlaceNeighbor, Season
 from ..schemas import (
+    DEFAULT_LANG,
+    Lang,
     NearbyOut,
     PlaceDetail,
     PlaceListItem,
@@ -54,6 +56,7 @@ async def list_places(
     radius_km: float = Query(150, gt=0, le=1000),
     limit: int = Query(100, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    lang: Lang = Query(DEFAULT_LANG, description="язык текстов; без него — русский"),
 ):
     stmt = (
         select(Place)
@@ -78,7 +81,16 @@ async def list_places(
         stmt = stmt.where(Place.kid_friendly == kid_friendly)
     if q:
         pattern = f"%{q.strip()}%"
-        stmt = stmt.where(or_(Place.name.ilike(pattern), Place.short_desc.ilike(pattern)))
+        # Ищем по обоим языкам независимо от lang: человек с узбекским
+        # интерфейсом помнит место по русскому названию не реже, чем наоборот
+        stmt = stmt.where(
+            or_(
+                Place.name.ilike(pattern),
+                Place.name_uz.ilike(pattern),
+                Place.short_desc.ilike(pattern),
+                Place.short_desc_uz.ilike(pattern),
+            )
+        )
 
     if near:
         try:
@@ -89,10 +101,15 @@ async def list_places(
         distance_km = _distance_km_expr(lat, lng)
         stmt = stmt.where(distance_km <= radius_km).order_by(distance_km)
     else:
+        # Всегда по русскому имени, даже при lang=uz. База создана
+        # с COLLATE C — сравнение побайтовое, и при неполном переводе
+        # список развалился бы на два блока: сначала латиница, потом
+        # кириллица. Порядок внутри каталога человек не запоминает,
+        # а разрыв заметил бы сразу
         stmt = stmt.order_by(Place.name)
 
     places = (await session.execute(stmt)).unique().scalars().all()
-    return [place_list_item(p) for p in places]
+    return [place_list_item(p, lang) for p in places]
 
 
 async def _get_place_or_404(slug: str, session: AsyncSession) -> Place:
@@ -111,7 +128,9 @@ async def _get_place_or_404(slug: str, session: AsyncSession) -> Place:
     return place
 
 
-async def _nearby(place: Place, session: AsyncSession) -> list[NearbyOut]:
+async def _nearby(
+    place: Place, session: AsyncSession, lang: Lang = DEFAULT_LANG
+) -> list[NearbyOut]:
     """Соседи по треку, ближние первыми.
 
     Одну пару могут связывать несколько треков — берём по месту одну строку
@@ -132,13 +151,17 @@ async def _nearby(place: Place, session: AsyncSession) -> list[NearbyOut]:
         for other in others
     ]
     pairs.sort(key=lambda pair: pair[1])
-    return [nearby_out(other, gap) for other, gap in pairs[:NEARBY_LIMIT]]
+    return [nearby_out(other, gap, lang) for other, gap in pairs[:NEARBY_LIMIT]]
 
 
 @router.get("/places/{slug}", response_model=PlaceDetail)
-async def get_place(slug: str, session: AsyncSession = Depends(get_session)):
+async def get_place(
+    slug: str,
+    session: AsyncSession = Depends(get_session),
+    lang: Lang = Query(DEFAULT_LANG, description="язык текстов; без него — русский"),
+):
     place = await _get_place_or_404(slug, session)
-    return place_detail(place, await _nearby(place, session))
+    return place_detail(place, await _nearby(place, session, lang), lang)
 
 
 @router.get("/places/{slug}/weather", response_model=WeatherOut)

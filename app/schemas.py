@@ -1,8 +1,30 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
 from .models import Difficulty, OvernightType, Place, PlaceCategory, PlacePhoto, PlaceTrack
+
+# Язык ответа. Список закрытый и совпадает с тем, что зашито в клиентах
+# (AppLanguage на обеих платформах); «как в системе» там нет, и здесь тоже
+Lang = Literal["ru", "uz"]
+DEFAULT_LANG: Lang = "ru"
+
+
+def pick(ru: str, uz: str | None, lang: Lang) -> str:
+    """Перевод, если он есть; иначе оригинал.
+
+    Пустая строка в `uz` считается отсутствием перевода наравне с NULL:
+    сохранить в админке пустое поле — обычный способ сказать «не переведено»,
+    и заставлять человека помнить разницу между NULL и '' незачем.
+
+    Фолбэк молчаливый: перевод каталога наливается порциями, и место
+    с готовым названием, но ещё не переведённым описанием, должно
+    показываться целиком, а не наполовину.
+    """
+    if lang == "uz" and uz:
+        return uz
+    return ru
 
 
 class RegionOut(BaseModel):
@@ -105,16 +127,16 @@ def photo_out(p: PlacePhoto) -> PhotoOut:
     return PhotoOut(url=p.url or "", thumb_url=p.thumb_url or p.url or "", credit=p.credit)
 
 
-def _base_fields(p: Place) -> dict:
+def _base_fields(p: Place, lang: Lang = DEFAULT_LANG) -> dict:
     cover = p.photos[0] if p.photos else None
     return dict(
         id=p.id,
         slug=p.slug,
-        name=p.name,
+        name=pick(p.name, p.name_uz, lang),
         category=p.category,
         difficulty=p.difficulty,
         region_id=p.region_id,
-        region_name=p.region.name,
+        region_name=pick(p.region.name, p.region.name_uz, lang),
         lat=p.lat,
         lng=p.lng,
         elevation_m=p.elevation_m,
@@ -128,21 +150,21 @@ def _base_fields(p: Place) -> dict:
         overnight=p.overnight,
         best_seasons=list(p.best_seasons or []),
         kid_friendly=p.kid_friendly,
-        short_desc=p.short_desc,
+        short_desc=pick(p.short_desc, p.short_desc_uz, lang),
         cover_url=cover.url if cover else None,
         cover_thumb_url=(cover.thumb_url or cover.url) if cover else None,
         has_gpx=bool(p.tracks),
     )
 
 
-def place_list_item(p: Place) -> PlaceListItem:
-    return PlaceListItem(**_base_fields(p))
+def place_list_item(p: Place, lang: Lang = DEFAULT_LANG) -> PlaceListItem:
+    return PlaceListItem(**_base_fields(p, lang))
 
 
-def track_out(t: PlaceTrack) -> TrackOut:
+def track_out(t: PlaceTrack, lang: Lang = DEFAULT_LANG) -> TrackOut:
     return TrackOut(
         id=t.id,
-        name=t.name,
+        name=pick(t.name, t.name_uz, lang),
         gpx_url=t.gpx_url or "",
         credit=t.gpx_credit,
         distance_km=t.distance_km,
@@ -152,25 +174,27 @@ def track_out(t: PlaceTrack) -> TrackOut:
     )
 
 
-def nearby_out(p: Place, distance_m: int) -> NearbyOut:
+def nearby_out(p: Place, distance_m: int, lang: Lang = DEFAULT_LANG) -> NearbyOut:
     cover = p.photos[0] if p.photos else None
     return NearbyOut(
         slug=p.slug,
-        name=p.name,
+        name=pick(p.name, p.name_uz, lang),
         category=p.category,
         cover_thumb_url=(cover.thumb_url or cover.url) if cover else None,
         distance_m=distance_m,
     )
 
 
-def place_detail(p: Place, nearby: list[NearbyOut] | None = None) -> PlaceDetail:
+def place_detail(
+    p: Place, nearby: list[NearbyOut] | None = None, lang: Lang = DEFAULT_LANG
+) -> PlaceDetail:
     primary = p.tracks[0] if p.tracks else None
     return PlaceDetail(
-        **_base_fields(p),
-        description_md=p.description_md,
-        how_to_get_md=p.how_to_get_md,
+        **_base_fields(p, lang),
+        description_md=pick(p.description_md, p.description_md_uz, lang),
+        how_to_get_md=pick(p.how_to_get_md, p.how_to_get_md_uz, lang),
         photos=[photo_out(ph) for ph in p.photos],
-        tracks=[track_out(t) for t in p.tracks],
+        tracks=[track_out(t, lang) for t in p.tracks],
         gpx_url=primary.gpx_url if primary else None,
         gpx_credit=primary.gpx_credit if primary else None,
         nearby=nearby or [],

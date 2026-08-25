@@ -8,7 +8,7 @@
 
 from html import escape
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,11 +16,12 @@ from sqlalchemy.orm import selectinload
 
 from ..db import get_session
 from ..models import Place
+from ..schemas import DEFAULT_LANG, Lang, pick
 
 router = APIRouter(tags=["share"])
 
 _PAGE = """<!doctype html>
-<html lang="ru">
+<html lang="{lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -49,8 +50,8 @@ _PAGE = """<!doctype html>
   <h1>{name}</h1>
   <div class="meta">{meta}</div>
   <p>{desc}</p>
-  <a class="open" href="sayr://place/{slug}">Открыть в приложении</a>
-  <div class="hint">Работает, если приложение Sayr установлено</div>
+  <a class="open" href="sayr://place/{slug}">{open_label}</a>
+  <div class="hint">{hint}</div>
 </div>
 </body>
 </html>"""
@@ -62,9 +63,33 @@ _CATEGORY_RU = {
     "other": "место",
 }
 
+# Те же слова, что в приложениях (common_category_* в values-uz): страница
+# и клиент — одна витрина, и называть категорию по-разному им незачем
+_CATEGORY_UZ = {
+    "waterfall": "sharshara", "peak": "choʻqqi", "gorge": "dara", "cave": "gʻor",
+    "lake": "koʻl", "canyon": "kanyon", "spring": "buloq", "plateau": "plato",
+    "petroglyphs": "petrogliflar", "reserve": "milliy bogʻ", "desert": "choʻl",
+    "other": "joy",
+}
+
+_CATEGORY = {"ru": _CATEGORY_RU, "uz": _CATEGORY_UZ}
+
+# Подписи самой страницы. Их две, отдельный файл переводов ради них
+# заводить не за чем
+_OPEN_LABEL = {"ru": "Открыть в приложении", "uz": "Ilovada ochish"}
+_HINT = {
+    "ru": "Работает, если приложение Sayr установлено",
+    "uz": "Sayr ilovasi oʻrnatilgan boʻlsa ishlaydi",
+}
+_ELEVATION = {"ru": "м", "uz": "m"}
+
 
 @router.get("/p/{slug}", response_class=HTMLResponse)
-async def share_page(slug: str, session: AsyncSession = Depends(get_session)) -> str:
+async def share_page(
+    slug: str,
+    session: AsyncSession = Depends(get_session),
+    lang: Lang = Query(DEFAULT_LANG, description="язык страницы; без него — русский"),
+) -> str:
     stmt = (
         select(Place)
         .where(Place.slug == slug, Place.is_published)
@@ -79,17 +104,20 @@ async def share_page(slug: str, session: AsyncSession = Depends(get_session)) ->
     cover = f'<img class="cover" src="{photo_url}" alt="">' if photo_url else ""
     og_image = f'<meta property="og:image" content="{photo_url}">' if photo_url else ""
 
-    meta_parts = [_CATEGORY_RU.get(place.category.value, place.category.value)]
+    meta_parts = [_CATEGORY[lang].get(place.category.value, place.category.value)]
     if place.region:
-        meta_parts.append(place.region.name)
+        meta_parts.append(pick(place.region.name, place.region.name_uz, lang))
     if place.elevation_m:
-        meta_parts.append(f"{place.elevation_m} м")
+        meta_parts.append(f"{place.elevation_m} {_ELEVATION[lang]}")
 
     return _PAGE.format(
-        name=escape(place.name),
-        desc=escape(place.short_desc or ""),
+        lang=lang,
+        name=escape(pick(place.name, place.name_uz, lang)),
+        desc=escape(pick(place.short_desc or "", place.short_desc_uz, lang)),
         slug=escape(place.slug),
         meta=escape(" · ".join(meta_parts)),
         cover=cover,
         og_image=og_image,
+        open_label=_OPEN_LABEL[lang],
+        hint=_HINT[lang],
     )

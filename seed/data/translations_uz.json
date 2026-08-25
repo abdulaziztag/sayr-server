@@ -1,0 +1,773 @@
+{
+  "_": "Узбекские переводы каталога. Ключ мест — slug. Пустая строка = снять перевод (NULL). Заливается seed/apply_translations.py",
+  "regions": {
+    "Чимган–Чарвак": "Chimyon–Chorvoq",
+    "Пскем": "Pskom",
+    "Угам-Чаткал": "Ugom-Chotqol",
+    "Ахангаран": "Ohangaron",
+    "Заамин/Джизак": "Zomin/Jizzax",
+    "Нурата": "Nurota",
+    "Навои": "Navoiy",
+    "Самарканд": "Samarqand",
+    "Кашкадарья": "Qashqadaryo",
+    "Сурхандарья": "Surxondaryo"
+  },
+  "places": {
+    "achikul-lake": {
+      "name_uz": "Achiqoʻl",
+      "short_desc_uz": "Parkent tumanidagi buloq suvidan toʻyinadigan shoʻr togʻ koʻli",
+      "description_md_uz": "Achiqoʻl (u yana Achchiqoʻl, Xoʻjaqoʻl, Jamqoʻl deb ham ataladi) — Parkent tumanidagi buloq suvidan toʻyinadigan ikkita shoʻr togʻ koʻlidan iborat tizim. Achisoy shu koʻllardan boshlanadi.\n\nSuv tarkibida oltingugurt oksidi va boshqa birikmalar bor, bu yerdan olinadigan oltingugurtli loy esa shifobaxsh hisoblanadi va loy bilan davolashda ishlatiladi.\n\n**Muhim:** suv shoʻr va ichishga yaroqsiz — butun suv zaxirasini oʻzingiz bilan olib boring.",
+      "how_to_get_md_uz": "Toshkentdan Parkent orqali togʻlarga. Oxirgi qism — tuproq yoʻl."
+    },
+    "adelunga-peak": {
+      "name_uz": "Adelunga choʻqqisi",
+      "short_desc_uz": "Pskom tizmasining eng baland nuqtasi — Qirgʻiziston chegarasida, 4301 m",
+      "description_md_uz": "Adelunga choʻqqisi — Pskom tizmasining shimoli-sharqiy qismida, Oʻzbekiston va Qirgʻiziston chegarasida joylashgan choʻqqi, dengiz sathidan 4301 m balandlikda. Tizmaning eng baland nuqtasi, qoʻshni Beshtordan 2 m baland.\n\n**Muhim:** yuqori murakkablikdagi alpinizm marshruti. Choʻqqi davlat chegarasida turadi — chegara tartibi va ruxsatnomalarni oldindan aniqlang. Tajribasiz, jihozsiz va guruhsiz bu yerga borishmaydi.",
+      "how_to_get_md_uz": "Pskomning yuqori oqimiga mashinada borishadi, keyin — koʻp kunlik yondashuv. Chegara tartibini kelishib olish talab qilinadi."
+    },
+    "afgon-chukkisi": {
+      "name_uz": "Afgʻon choʻqqisi",
+      "short_desc_uz": "Bogʻiston yaqinida, Mazorsoy darasi ustidagi kam boriladigan choʻqqi",
+      "description_md_uz": "Mazorsoy darasi ustidagi 2427 m balandlikdagi choʻqqi. Joy kam maʼlum va kam boriladi, tabiat yovvoyi: soʻqmoqlar aniq emas, marshrutda ehtiyotkorlik talab qiladigan qoyali uchastkalar bor.\n\nGuruhlar Toshkentdan ertalab soat beshlarda yoʻlga chiqishadi va soat yettiga borib koʻtarilishni boshlashadi — marshrut toʻliq kunga moʻljallangan.",
+      "how_to_get_md_uz": "Toshkentdan Bogʻiston qishlogʻi tomonga borishadi, Mazorsoy darasiga kirish shu yerdan boshlanadi."
+    },
+    "akhsarsoy": {
+      "name_uz": "Axsarsoy sharsharasi",
+      "short_desc_uz": "Nanay qishlogʻi yonidagi yengil sharshara marshruti — soʻqmoq deyarli koʻtarilishsiz",
+      "description_md_uz": "Nanay qishlogʻi yonidagi sharshara, taxminan 1500 m balandlikda. Soʻqmoq deyarli koʻtarilishsiz boradi, shuning uchun bu hududdagi eng oson marshrutlardan biri hisoblanadi.\n\nBu yerga yil boʻyi borishadi, jumladan qish oxirida ham. Bahor va yozda soʻqmoq yonida mahalliy UAZlar navbatchilik qiladi — xohlasangiz yoʻlning bir qismini mashinada oʻtish mumkin, mashinalar deyarli sharsharaning oʻzigacha olib boradi.",
+      "how_to_get_md_uz": "Start — Nanay qishlogʻida. Kirishda ekologik yigʻim olinadi (2025-yil bahorida 18 750 soʻm). Bahor va yozda qishloqda sharsharagacha olib boradigan UAZ haydovchilari bilan kelishish mumkin."
+    },
+    "aksay-waterfall": {
+      "name_uz": "Oqsoy sharsharasi",
+      "short_desc_uz": "Chimyon ustidagi Oqsoyning yuqori oqimidagi sharshara, yoʻldan qisqa koʻtarilish",
+      "description_md_uz": "Oqsoyning yuqori oqimidagi sharshara — bu daradan Katta Chimyonga gʻarbiy qirra boʻylab klassik koʻtarilish boshlanadi. Soʻqmoq boshidan suvgacha taxminan 1,5 km va qariyb 270 m koʻtarilish: Toshkentdan borish yoʻli bilan birga yarim kunga sigʻadigan qisqa chiqish.\n\nSuv taxminan 2000 m balandlikda, qor bu yerda pastdagi Chimyonga qaraganda kechroq eriydi. Marshrut kartochkasidagi trek aprel oʻrtasida yozib olingan — unda hali qor maydonlari bor edi.\n\n**Muhim:** soylarda suv may–iyunda, qor eriganda koʻtariladi. Shunda oʻzandagi toshlar sirpanchiq boʻladi, yuqori oqimdagi kechuvlar esa xavfli.",
+      "how_to_get_md_uz": "Toshkentdan Gʻazalkent orqali Chimyon tomonga. Mashinani Oqsoy darasida, soʻqmoq boshida qoldirishadi — start koordinatalari marshrut kartochkasida bor. Keyin soy boʻylab piyoda yuqoriga."
+    },
+    "aktash-peak": {
+      "name_uz": "Oqtosh",
+      "short_desc_uz": "Soʻqoq darasi ustidagi 2510 m choʻqqi",
+      "description_md_uz": "Chotqol tizmasining tarmoqlarida joylashgan 2510 m choʻqqi, Parkent tumanidagi Soʻqoq darasi ustida koʻtarilib turadi.\n\nQisqa marshrutlarda yurib koʻrgan va kuchini oshirmoqchi boʻlganlar uchun qulay maqsad: koʻtarilish sharsharaga boradigan yoʻldan uzunroq va tikroq, lekin texnika talab qilmaydi.\n\n**Muhim:** oʻrmon chegarasidan yuqorida soya umuman yoʻq. Yozda bosh kiyim va suv zaxirasi kerak.",
+      "how_to_get_md_uz": "Toshkentdan Parkent orqali Soʻqoq darasiga, koʻtarilish daraning yuqori qismidan boshlanadi."
+    },
+    "aktash-waterfalls": {
+      "name_uz": "Oqtosh sharsharalari (Soʻqoq)",
+      "short_desc_uz": "Soʻqoq qishlogʻi ustida, qaragʻayzorlar orasidagi sharsharalar kaskadi",
+      "description_md_uz": "Parkent tumanidagi Soʻqoq qishlogʻi ustidagi soyning yuqori oqimida joylashgan kichik sharsharalar (6–8 m gacha) kaskadi. Qishloq chekkasidan radial marshrut — borib-qaytib ~7 km, ~300 m koʻtarilish bilan, bahorda oqim sezilarli darajada kuchliroq.\r\n\r\nAtrofda — oʻrmon xoʻjaligining qaragʻayzorlari, yuqorida — Chotqol qoʻriqxonasi chegarasidagi Shoxqoʻrgʻon (2025 m) va Oqtosh (2510 m) choʻqqilari. Shahardan uzoq boʻlmagan yaxshi «yarim kunlik chiqish».",
+      "how_to_get_md_uz": "Toshkentdan Parkent orqali Soʻqoqqacha ~60 km (taxminan bir soat). Keyin qishloqning yuqori chekkasidan soy boʻylab piyoda yuqoriga."
+    },
+    "altynkul": {
+      "name_uz": "Oltinkoʻl (Chodak)",
+      "short_desc_uz": "Chodak yaqinida, Qurama tizmasidagi koʻl; «21 MIRAJ» dasturi nuqtalaridan biri",
+      "description_md_uz": "Chodak yaqinidagi Qurama tizmasida joylashgan togʻ koʻli. 2023-yil may oyida forumda uni balandligi taxminan 2650 m boʻlgan Pop tumani koʻli sifatida qayd etishgan, oʻsha yilning avgustida esa qirgʻoqqa «21 MIRAJ» dasturi taxtachasi oʻrnatilgan.\n\nKoʻlgacha taxminan 8 km yoʻl va qariyb 900 m koʻtarilish: bir tomonga yarim kun. Ayrim guruhlar suv yonida tunab qolishadi va chiqishni ikki kunga choʻzishadi.",
+      "how_to_get_md_uz": ""
+    },
+    "amankutan": {
+      "name_uz": "Omonqoʻton",
+      "short_desc_uz": "Samarqand yaqinidagi oʻrmonli togʻ darasi, ibtidoiy odam makoni bilan",
+      "description_md_uz": "Omonqoʻton — Samarqand viloyati Urgut tumanidagi togʻ vodiysi, undan Omonqoʻtonsoy oqib oʻtadi. Joy XIX asrdan beri maʼlum: bu yerda oʻlkadagi dastlabki sunʼiy oʻrmonzorlardan biri barpo etilgan, bugun yonbagʻirlar oʻrmon bilan qoplangan — bu kengliklar uchun kamdan-kam holat.\n\nVodiyda Omonqoʻton makoni bor — muste davriga oid ibtidoiy odam makoni. Yonida Omonqoʻton buyurtmaxonasi joylashgan.\n\nSamarqandga yaqinligi va yumshoq relyefi Omonqoʻtonni murakkab boʻlmagan bir kunlik chiqish uchun qulay maqsadga aylantiradi.\n\n**Muhim:** vodiyning bir qismi buyurtmaxonaga kiradi — soʻqmoqdan chiqmang va jihozlangan joylardan tashqarida olov yoqmang.",
+      "how_to_get_md_uz": "Samarqanddan janubga, Urgut orqali Taxtaqoracha dovoni tomonga, taxminan 50 km."
+    },
+    "amir-temur-chukkisi": {
+      "name_uz": "Amir Temur choʻqqisi",
+      "short_desc_uz": "Pskom tizmasi ichkarisidagi 3766 m choʻqqi — juda uzun bir kunlik marshrut",
+      "description_md_uz": "Pskom tizmasidagi choʻqqi, 3766 m. Katalogdagi marshrut unga bir kunda chiqadi, lekin bu yerda masofa ham, koʻtarilish ham klassik bir kunlik chiqishlardagidan sezilarli darajada katta — erta start va kunduz yorugʻligi zaxirasi kerak.",
+      "how_to_get_md_uz": ""
+    },
+    "amir-temur-gori-gissar": {
+      "name_uz": "Amir Temur gʻori (Hisor)",
+      "short_desc_uz": "Qalasoy kanyonidagi gʻor, 100 metrlik devorlar ostida; rivoyatga koʻra bu yerda Amir Temur yashiringan",
+      "description_md_uz": "Hisordagi gʻor, Qalasoy kanyonida: unga tushish yoʻli balandligi yuz metrga yaqin devorlar ostidan oʻtadi. Forumda soʻzlab beriladigan rivoyatga koʻra, Qalai Sheron mavzesidagi gʻorlarda Amir Temurning oʻzi yashiringan. Yaqin atrofda, Xoʻja Axcha Burun tomon boradigan yoʻlda Chilsim gʻori joylashgan — «21 PODZEMELYE» dasturi taxtachalari ularga birga oʻrnatilgan.\n\nMashina yetib boradigan nuqtadan kirish joyigacha 1 km dan kam, deyarli koʻtarilishsiz. Murakkablik gʻorning oʻzida emas, balki umuman shu yergacha yetib kelishda: forumda uni Hisor gʻorlari orasida eng qulayi va eng chiroylisi deb atashadi, shu bilan birga safar arzonga tushmasligini ham aytib oʻtishadi.\n\n**Kirish:** gʻorga boradigan yoʻlni Qalasoy daryosi toʻsib turadi. 2024-yil noyabr oyida guruh kirish joyigacha yetib bormadi — daryoda suv juda koʻp edi. — 2024-yil 9-noyabr",
+      "how_to_get_md_uz": "Qizilgʻaza platosi orqali, Qalasoy kanyoniga tushish bilan. Odatda gʻorni Qashqadaryo boʻylab uzoq mashina safarida Suvtushar, Qizildaryo va Buqa burni sharsharasi bilan birga koʻrishadi."
+    },
+    "arashan-chukkisi": {
+      "name_uz": "Arashan choʻqqisi",
+      "short_desc_uz": "Arashan koʻllari ustidagi 3752 m choʻqqi, hisobotlarda — Bezimyanniy choʻqqisi",
+      "description_md_uz": "Arashan koʻllari guruhi ustidagi 3752 m choʻqqi; ruscha hisobotlarda uni odatda Bezimyanniy choʻqqisi (3750 m) deb atashadi. Koʻllardan koʻtarilish toshloq va toʻkilma toshli uchastkalardan oʻtadi — klublar bu choʻqqini 3800 m dan yuqori balandliklarga tayyorgarlik dasturlariga kiritishadi.\n\nOdatda koʻllar yonida tunash bilan borishadi: bu yerda iyulda ham kechasi harorat noldan past boʻladi va tashqarida qoldirilgan narsalar muzlaydi, buning evaziga quyosh chiqqach bir soatda havoni 25 gradusga isitadi. Koʻllarga boradigan yoʻlda — suvi taxminan 37 °C boʻlgan Arashan issiq bulogʻi.\n\nYoʻnalish ommabop: yozda Arashanlarga ikki kunlik guruhlarda joy boʻlmasligi mumkin.",
+      "how_to_get_md_uz": "Start nuqtasi — Kamchiq trassasidan burilish yonidagi Ertosh (Ertoshsoy) qishlogʻi. Keyin guruhlar «Niva»ga oʻtirishadi: buzilgan toshloq tuproq yoʻldan (taxminan 56 km) Arashan bulogʻigacha 2,5 soatdan koʻproq vaqt ketadi. 2023-yilda «Niva» ijarasi bir kunga 700 ming soʻm turgan."
+    },
+    "arashan-kuli": {
+      "name_uz": "Arashan koʻli",
+      "short_desc_uz": "Arashan koʻllarining eng yuqorisi, 3366 m — deyarli choʻqqi tagida joylashgan",
+      "description_md_uz": "3366 m balandlikdagi baland togʻ koʻli — Arashan koʻllari guruhidagi eng yuqorisi, deyarli Arashan (Bezimyanniy) choʻqqisi tagida joylashgan. Quyi koʻllardan unga boradigan soʻqmoq toshloq va toʻkilma toshli relyefdan oʻtadi.\n\nTunash yozning qoq oʻrtasida ham sovuq boʻladi: iyulda koʻllar yonida harorat noldan past boʻlgan va tashqaridagi narsalar muzlagan, quyosh chiqqach esa bir soatda havoni 25 gradusga isitadi — kunduzi koʻlda choʻmilishadi. Yoʻlning quyi qismida — suvi taxminan 37 °C boʻlgan Arashan issiq bulogʻi.",
+      "how_to_get_md_uz": "Barcha Arashan koʻllariga borgani kabi: Kamchiq trassasi yonidagi Ertosh (Ertoshsoy) qishlogʻidan «Niva»da — toshloq tuproq yoʻldan Arashan bulogʻigacha 2,5 soatdan koʻproq, keyin piyoda koʻllarga. 2023-yilda «Niva» bir kunga 700 ming soʻm turgan."
+    },
+    "aydarkul-dunes": {
+      "name_uz": "Aydarkoʻl barxanlari",
+      "short_desc_uz": "Qizilqum barxanlarida quyosh botishi, tuyalar va koʻl yonida oʻtovda tunash",
+      "description_md_uz": "Qizilqum chekkasida, Yangiqozgʻon qishlogʻi yonida oʻtov lagerlari ishlaydi (~20 ta oʻtovga moʻljallangan «Sputnik-Navoi», Yangikazgan Yurt, yonginasida — Aidar va Kyzylkum Safari). Klassik dastur: tuyalarda sayr, barxanlarda quyosh botishi, gulxan yonida baxshi qoʻshiqlari bilan kechki ovqat va oʻtovda tunash; kunduzi lagerdan Aydarkoʻlga choʻmilish va baliq ovlashga olib borishadi.\n\nAydarkoʻlning oʻzi — uzunligi ~250 km boʻlgan sunʼiy koʻl, 1969-yilda Sirdaryoning toshqin suvlari Arnasoy botigʻiga tashlangandan keyin paydo boʻlgan.\n\nLagerlar taxminan martdan oktabrgacha ishlaydi; eng yaxshi vaqt — aprel–may (choʻldagi lolalar va lolaqizgʻaldoqlar) va sentabr–oktabr. Yozda jazirama +45 °C gacha yetadi.",
+      "how_to_get_md_uz": "Nurotadan shimolga ~70 km (taxminan bir yarim soat) mashinada Yangiqozgʻon qishlogʻigacha, keyin lagerlargacha choʻl boʻylab bir necha kilometr tuproq yoʻl. Odatda Samarqand/Nurota bilan Buxoro orasidagi yoʻlda kirib oʻtishadi; oʻtovda tunashni oldindan bron qilish kerak."
+    },
+    "azadbash": {
+      "name_uz": "Ozodbosh",
+      "short_desc_uz": "Vodiy manzarasi ochiladigan, baland boʻlmagan 1278 m choʻqqi — qisqa chiqish",
+      "description_md_uz": "Chorvoqdan gʻarbdagi togʻ etaklarida, Ozodbosh vodiysi yonida joylashgan 1278 m choʻqqi. Balandligi katta emas, koʻtarilish qisqa — bu bir kunlik emas, bir necha soatlik chiqish.\n\nTepada hali qor yotadigan mavsum boshi uchun ham, birinchi marta togʻga chiqayotganlar uchun ham yaxshi mos keladi.\n\n**Muhim:** yozda bu yerda issiq — togʻ etaklari Chimyonga qaraganda kuchliroq qiziydi. Eng yaxshi vaqt — bahor va kuz.",
+      "how_to_get_md_uz": "Toshkentdan Gʻazalkent orqali Chorvoqdan gʻarbdagi Ozodbosh vodiysiga."
+    },
+    "babaytag": {
+      "name_uz": "Boboytogʻ",
+      "short_desc_uz": "Yangiobod yonida, Chotqol tizmasining gʻarbiy tarmogʻidagi 3555 m massiv",
+      "description_md_uz": "Boboytogʻ — Chotqol tizmasining gʻarbiy tarmogʻidagi balandligi 3555 m boʻlgan choʻqqi va togʻ massivi, Angren va Yangiobod atrofida. Ohangaron vodiysidan yaxshi koʻrinadi, Ohangaron suv ombori yonida joylashgan.\n\nYuqori qismida relyef alp tipida. Yonbagʻirlarni Ohangaron havzasining jilgʻalari kuchli kesib oʻtgan, eng yiriklari — Jakindek va Yertosh. Daralar chuqur va tor, tubi koʻpincha kurum (yirik tosh uyumlari) bilan toʻlgan. Buloqlar tez-tez uchraydi. Tarmoqlarning 1200–1600 m dagi quyi qismi aralash oʻrmon bilan qoplangan, yuqorida yozgi yaylovlar boshlanadi.\n\n**Muhim:** massivda bir nechta soxta choʻqqi bor — xaritasiz notoʻgʻri joyga chiqib qolish oson. Kurum har bir qadamga eʼtibor talab qiladi.",
+      "how_to_get_md_uz": "Toshkentdan Angren va Yangiobod tomonga. Yondashuvlar — Ohangaron vodiysidan."
+    },
+    "badak-lake": {
+      "name_uz": "Bodoq koʻli",
+      "short_desc_uz": "Pskom tizmasidagi togʻ koʻli, yoʻllardan uzoqda",
+      "description_md_uz": "Bodoq koʻli Pskom tizmasining baland joyida, bosilgan marshrutlardan chetda joylashgan. Bu yergacha yoʻl uzoq, bir kunda borib-qaytish qiyin.\n\nHudud Ugom-Chotqol milliy tabiat bogʻiga kiradi — joylar yovvoyi, odam kam.\n\n**Muhim:** vodiyda aloqa yoʻq. Marshrutni tunash bilan rejalashtirgan maʼqul va marshrut chizigʻini yaqinlaringizga albatta qoldiring.",
+      "how_to_get_md_uz": "Toshkentdan Pskom vodiysiga (~150 km), keyin piyoda. Yetib borish kunning katta qismini oladi."
+    },
+    "bayrok": {
+      "name_uz": "Bayroq",
+      "short_desc_uz": "2285 m choʻqqi, marshrut chidamlilar uchun; eng yaxshi vaqt — aprel va may",
+      "description_md_uz": "Balandligi 2285 m boʻlgan choʻqqi. Marshrut uzun, uni «chidamlilar uchun» deb taʼriflashadi; qishda qor boʻylab ham oʻtishadi. Eng yaxshi vaqt deb aprel–mayni aytishadi.\n\nChoʻqqida axborot taxtachasi oʻrnatilgan — «GORETS» forumining loyihasi, Lider Hikers klubi koʻmagida. Uzoqroq travers varianti ham bor: 2026-yil may oyida guruh Angren — Saritepa — Toshtepa — Bayroq yoʻnalishini bosib oʻtdi.",
+      "how_to_get_md_uz": "Har qanday mashinada yetib borish mumkin, oxirgi 2–3 km — asfaltsiz. Mashinani koʻprik yonida qoldirishadi (41°5'40\" sh.k., 70°1'47\" sh.u.): koʻprikdan keyin darrov chapda soʻqmoq boshlanadi, qaytishda ham shu soʻqmoqdan yurishadi. Yoʻlning davomida harbiy qism joylashgan."
+    },
+    "baysun-kema": {
+      "name_uz": "Kema qoya (Boysun)",
+      "short_desc_uz": "Boysun yaqinidagi alohida qoya; yoʻldan 1 km dan kam piyoda yurish",
+      "description_md_uz": "Boysun atrofidagi, «Kema qoya» nomi bilan tanilgan qoya.\n\nBu — yarim soatlik nuqta: 1 km dan kam piyoda yurish va taxminan 80 m koʻtarilish. «GORETS» forumida bu joyni muhokama qilishmaydi — yozishmalarda na hisobot bor, na yondashuv tavsifi, shuning uchun oʻz trekingizga tayanishga toʻgʻri keladi.",
+      "how_to_get_md_uz": ""
+    },
+    "beldersay": {
+      "name_uz": "Marmarsoy sharsharasi",
+      "short_desc_uz": "Marmar oʻzanli soydagi 15–20 m sharshara — Beldarsoydagi eng oson «suv»",
+      "description_md_uz": "Marmar soyning quyi katta sharsharasi 15–20 m balandlikdan tushadi, suvi eng koʻp boʻladigan vaqt — aprel–iyun. Oʻzan marmar chiqishlaridan iborat: suv kaskadlar va tiniq suvli «vannachalar» oʻyib chiqqan, qirgʻoqlar boʻylab esa qadimgi dengizning toshga aylangan chigʻanoqlari uchraydi.\n\nQisqa variant — Beldarsoy osma yoʻli yonidagi yoʻl ayrigʻidan oʻzan boʻylab yuqoriga sayr, borib-qaytib ~5 km, 150 m koʻtarilish bilan: bolalarning ham kuchi yetadi. Jiddiyroq klassika — Oʻrtaqumbel dovoni (1830 m) orqali halqa marshrut, butun soy boʻylab tushish bilan, taxminan 10 km va ~4 soat.",
+      "how_to_get_md_uz": "Toshkentdan ~85 km, Chimyon tomonga ketadigan trassa boʻylab. Mashinani Beldarsoy osma yoʻliga burilish yonida (yoki «Marmar soy» dam olish maskani yonida) qoldiring va oʻzan boʻylab yuqoriga yuring. Halqa variant osma yoʻlning quyi stansiyasidan Oʻrtaqumbel orqali boshlanadi."
+    },
+    "beshtor-peak": {
+      "name_uz": "Beshtor choʻqqisi",
+      "short_desc_uz": "Oʻzbekistonning eng baland choʻqqilaridan biri — Pskom tizmasida 4299 m",
+      "description_md_uz": "Beshtor choʻqqisi — Oʻzbekistonning shimoli-sharqidagi Pskom tizmasi choʻqqilaridan biri, dengiz sathidan 4299 m balandlikda. Undan shimoli-sharqda Adelunga choʻqqisi turadi, u roppa-rosa 2 m baland.\n\n**Muhim:** bu alpinistik marshrut, yurish emas. Jihozlar, akklimatizatsiya, qor va muz ustida yurish tajribasi hamda tayyorgarlik koʻrgan guruh kerak. Bu yerga yolgʻiz va tayyorgarliksiz chiqishmaydi.",
+      "how_to_get_md_uz": "Pskomning yuqori oqimiga yetib borish, keyin tunash bilan koʻp kunlik yondashuv."
+    },
+    "bolshoy-chimgan": {
+      "name_uz": "Katta Chimyon",
+      "short_desc_uz": "Toshkent togʻlarining asosiy choʻqqisi — 3309 m, jiddiy bir kunlik marshrut",
+      "description_md_uz": "Chimyon massivining eng baland nuqtasi va Toshkent yaqinidagi eng mashhur choʻqqi. Klassika — Oqsoy mavzesidan gʻarbiy qirra boʻylab 1B marshrut: bir tomonga taxminan 7,5 km, qariyb 1600 m koʻtarilish bilan. Yoʻlda — 2600 m balandlikdagi Katta grot va «Jandarm» qoyali uchastkasi, choʻqqi yonida esa qor maydonlari yil boʻyi yotadi.\n\nKoʻtarilish 6–7 soat oladi, tushish yana 5–6 soat, shuning uchun tong saharda chiqish kerak. Choʻqqiga birinchi hujjatlashtirilgan chiqish — 1865-yil. Choʻqqida — xatcha solingan tosh belgi (tur); asosiy nuqtadan sal pastda triangulyatsiya belgisi (3275 m) turadi.\n\n**Muhim:** bu sayr emas — trekking botinkalari, suv zaxirasi, shamoldan himoya kiyimi va kunduz yorugʻligi zaxirasi kerak. Mavsumlararo davrda qirrada muz va qor boʻladi.",
+      "how_to_get_md_uz": "Toshkentdan ~90 km (1,5–2 soat): Gʻazalkent orqali Chimyon tomonga, start — dam olish maskani oldidagi burilish yonidagi Oqsoy mavzesi. Yozda dam olish kunlari uyushtirilgan guruhlar chiqishadi — birinchi marta ular bilan borgan maʼqul."
+    },
+    "buritog": {
+      "name_uz": "Boʻritogʻ",
+      "short_desc_uz": "Gʻazalkent yonidagi bodomzorli tepaliklar orasidagi choʻqqi — butun oila uchun yengil sayr",
+      "description_md_uz": "Toshkentdan 55–60 km uzoqlikda, Gʻazalkent yonidagi unchalik baland boʻlmagan choʻqqi (1295 m). Soʻqmoq yashil tepaliklar va aralash oʻrmon boʻylab boradi, yoʻlning yarmi — asfalt, undan yengil mashinalar oʻtib turadi. Yoʻlda — bodomzor va tashlandiq uylar.\n\nEng yaxshi vaqt — bodom gullaydigan mart oxiri. Choʻqqidan atrofdagi togʻlarning qorli choʻqqilari koʻrinadi. Marshrut oddiy, bu yerga bolalari bilan oilaviy kelishadi va bodomzorda piknik qilishadi; mahalliy klublar baʼzan bu yerda treylranning oʻtkazishadi.",
+      "how_to_get_md_uz": "Toshkentdan taxminan 55–60 km, Gʻazalkent hududi. Marshrutning yarmi — asfalt yoʻl: yengil mashinada yaqinroq borib, piyoda qismini qisqartirish mumkin."
+    },
+    "charvak": {
+      "name_uz": "Chorvoq suv ombori",
+      "short_desc_uz": "Feruza rangli «Toshkent dengizi»: plajlar, yozda +25 °C suv va 94 km qirgʻoq chizigʻi",
+      "description_md_uz": "Chirchiq daryosidagi suv ombori, 1970-yilda toʻldirilgan: togʻlar halqasida, ~860 m balandlikda ~37–40 km² suv oynasi. Uni Pskom, Chotqol va Ugom oziqlantiradi, bularning barchasini esa Chorvoq GESining 168 m balandlikdagi toshtashlama toʻgʻoni ushlab turadi.\n\nQirgʻoq chizigʻi — taxminan 94 km plajlar va dam olish maskanlari (Yusufxona, Burchmulla, Sijjak). Choʻmilish mavsumi — maydan sentabrgacha, suv +25 °C gacha isiydi. Suv sathi mavsumlar boʻyicha sezilarli oʻzgarib turadi: bahorda suv ombori toʻladi, kuzga borib sarflanadi va plajlar «oʻsadi».\n\nTabiat qoʻynidagi yengil kun uchun yoki togʻ marshrutining yakuni uchun ideal nuqta.",
+      "how_to_get_md_uz": "Toshkentdan ~70–80 km (1,5 soat), Gʻazalkent orqali. Yoʻl butun suv omborini halqa boʻlib aylanib oʻtadi — bir-ikki soatda atrofini aylanib chiqib, plaj tanlash mumkin."
+    },
+    "chashma-gori": {
+      "name_uz": "Chashma gʻori (Soʻqoq)",
+      "short_desc_uz": "U yana Kuylovchi deb ham ataladi; u bilan birga oʻrikzor yonidagi Soʻqoq grotini koʻrishadi",
+      "description_md_uz": "Soʻqoq qishlogʻi ustidagi, Shoxqoʻrgʻon tizmasidagi gʻor. Forumda uni Chashma ham, Kuylovchi ham deb atashadi, yonida esa suv chiqib turadi. «21 PODZEMELYE» dasturida uni dastlab Soʻqoq groti bilan birga hisobga olishgan: tashkilotchilar ikki joyni bitta lokatsiyaga birlashtirgan, chunki ular yonma-yon, grotga esa gʻorning oʻziga qaraganda koʻproq borishadi.\n\nGrotni topish osonroq: u oʻrikzordan bir necha yuz metr narida, u yergacha yetib borish esa, forumda yozishlaricha, har kimning qoʻlidan keladi. Gʻorgacha — taxminan 2,6 km va qariyb 280 m koʻtarilish.",
+      "how_to_get_md_uz": "Soʻqoq qishlogʻining ortida. Yoʻldagi moʻljal — oʻrikzor: undan grotgacha bir necha yuz metr."
+    },
+    "chukurak": {
+      "name_uz": "Chuquraqsuv sharsharasi (Kelin koʻylagi)",
+      "short_desc_uz": "Chotqol irmogʻidagi 27 m «Kelin koʻylagi» sharsharasi — deyarli mashina yonidan boshlanadi",
+      "description_md_uz": "Burchmulladan naridagi Chotqol irmogʻida 27 m balandlikdagi sharshara; xalq orasidagi nomi — «Kelin koʻylagi». Hududdagi eng oson marshrutlardan biri: mashina deyarli sharsharaning oʻziga qadar boradi, bolalar bilan ham yurish mumkin. Bu yerdan Qirgʻiziston chegarasigacha bor-yoʻgʻi bir necha kilometr.\n\nQattiq sovuqlarda sharshara muzlaydi — qishda uni odatda Paltogʻ bilan birga koʻrishadi.\n\n---\n**Kirish:** 2024-yil dekabr — chegara hududi: Chotqol ustidagi koʻprik yonida qatʼiy nazoratli chegara posti bor, hujjatlar tekshiriladi (guruh ularni gid orqali topshirgan)\n**Kirish:** 2025-yil fevral — chegara postida roʻyxatdan oʻtish, oʻrmon xoʻjaligi hududiga kirish pullik",
+      "how_to_get_md_uz": "Burchmulla tomonga boring, soʻng Chotqol ustidagi koʻprikdan oʻting; koʻprikdan keyin darhol hujjatlarni tekshiradigan chegara posti bor — pasport shart. Mashina yetib boradigan joydan sharsharagacha taxminan 500 m piyoda qoladi."
+    },
+    "chulbair": {
+      "name_uz": "Chulbayir",
+      "short_desc_uz": "Boysun tepasidagi 3812 m choʻqqi; chiqishni togʻga mashinada olib borish bilan bir necha kunga rejalashtirishadi",
+      "description_md_uz": "Surxondaryoda joylashgan, balandligi 3812 m boʻlgan choʻqqi — «21 GORIZONT» dasturining taxtachasi unda 2022-yil kuzidan beri turadi. Choʻqqidan ochiladigan manzarani forumda bir marta haftaning eng yaxshi videosi deb tanlashgan; quyosh botishi kadrlarini ishtirokchilar hali yondashuvda, 2956 m belgisi atrofida suratga olishadi.\n\n2000 m dan ortiq koʻtarilish bilan 11 km — bu toʻliq yurish kuni, dam olish kunlariga hammasini sigʻdirib boʻlmaydi: chiqish bir necha kunga rejalashtiriladi.",
+      "how_to_get_md_uz": "Poyezd yoki taksida Boysungacha, u yerdan togʻga «Niva» yoki UAZda olib borishadi. Safarga 3–4 kun ajratiladi."
+    },
+    "devoli-surkh": {
+      "name_uz": "Devoli Surx",
+      "short_desc_uz": "Zamok va Qoʻytogʻ yonida, 3550 m balandlikdagi choʻqqi: qorli sirk va arqonlar bilan ishlash",
+      "description_md_uz": "Pskom hududidagi balandligi 3550 m choʻqqi, Zamok va Qoʻytogʻ bilan bitta togʻ tugunida joylashgan — kuchli guruhlar uchchalasini bir uzun kunda oʻtishadi: qorli sirk, arqonlar bilan ishlash, tik koʻtarilishlar va texnik tushishlar.\n\nHudud bilan tanishish uchun tajribali ishtirokchilar avval Matematikov dovoni orqali Qoʻytogʻga koʻtarilib, travers bilan Toshkent — Devoli Surx dovoniga yetib borishni maslahat berishadi.\n\n**Muhim:** qor erishi mavsumida sirkdagi qor kuniga 10 sm dan kamayadi, yonbagʻirlardan toshlar tushadi — ularni arxarlar ham qoʻzgʻatib yuboradi, tunda esa morenalardan kuluarlar boʻylab yirik harsangtoshlar qulaydi. Sirkdagi qor iflos va filtrlarni tez tiqib qoʻyadi, suvni qoyalardan oqadigan jilgʻalardan izlashadi. Hududda ayiq yuradi, yangi izlari uchrab turadi.",
+      "how_to_get_md_uz": ""
+    },
+    "devsharshara": {
+      "name_uz": "Devsharshara",
+      "short_desc_uz": "Samarqand yaqinidagi Ogʻaliq togʻlarida joylashgan sharshara; Kemqoʻton choʻqqisi bilan birga borishadi",
+      "description_md_uz": "Samarqand yaqinidagi past tizma — Ogʻaliq togʻlaridagi sharshara. Odatda uni Kemqoʻton choʻqqisi bilan bir chiqishda koʻrishadi.\n\nMarshrut uzun, ammo yotiq: taxminan 17 km, 600 m dan kam koʻtarilish bilan. Ogʻaliq qishlogʻidan sharsharagacha forum ishtirokchilari bir tomonga 11–12 km deb sanashgan; agar mashinada yoʻl boʻylab qishloqdan nariga oʻtib ketilsa, piyoda yurish kamroq qoladi.\n\n**Kirish:** yoʻlda suvdan yagona oʻtish joyi bor — 2022-yil noyabr oyida kechuv taxminan tizzagacha edi. — 2022-yil 21-noyabr",
+      "how_to_get_md_uz": "Ogʻaliq qishlogʻi orqali. Mashina qishloqdan naridagi, xaritada yoʻq kichik qishloqchagacha bemalol boradi — oʻsha yerdan piyoda. Ogʻaliqning oʻzidan sharsharagacha bir tomonga 11–12 km."
+    },
+    "ettikiz-amat-gor": {
+      "name_uz": "Yettiqiz va Amat gʻorlari",
+      "short_desc_uz": "Ikkita qoʻshni gʻor; forumda ularning treklarini bir-biri bilan chalkashtirib yuborishadi",
+      "description_md_uz": "Deyarli doim birga tilga olinadigan ikkita gʻor. Shu qadar birga tilga olinadiki, ularni chalkashtirib ham yuborishadi: 2023-yil iyul oyida forum ishtirokchisi joylangan trek Yettiqizga olib boradimi yoki baribir Amat gʻoriga, deb qayta soʻragan. «21 PODZEMELYE» dasturi taxtachalari kirish joylariga 2024-yil iyun oyida oʻrnatilgan.\n\nBu yerda piyoda yurish 2 km dan kam, yarim soat — bu toʻxtash, marshrut emas. Dasturning oʻzida lokatsiyalarni qayta aralashtirishgan: 2023-yil oktabr oyida Amat gʻorini Qirqtogʻ platosidagi Kiyevskaya gʻori bilan almashtirishgan, ammo taxtachalarni kirish joyiga keyin ham oʻrnataverishgan.",
+      "how_to_get_md_uz": ""
+    },
+    "fozilmon-lake": {
+      "name_uz": "Fozilmon koʻli",
+      "short_desc_uz": "Nurota togʻlaridagi togʻ koʻli, u yana Sentobkoʻl deb ham ataladi",
+      "description_md_uz": "Fozilmon — Navoiy viloyati Nurota tumanidagi togʻ koʻli, u yana Sentobkoʻl deb ham ataladi. Manzarali koʻrinishlari tufayli turizm obyekti boʻlib xizmat qiladi.\n\nKoʻl Nurota togʻlarida — mehmon uylari bor Sentob va Hayot qishloqlari turgan oʻsha togʻlarda joylashgan. Nurota togʻlari boʻylab oʻtadigan marshrutga yaxshi qoʻshiladi.\n\n**Muhim:** yozda Nurota togʻlarida jazirama juda kuchli, soya kam. Eng yaxshi vaqt — hamma yer yashil boʻladigan bahor va kuz.",
+      "how_to_get_md_uz": "Samarqand yoki Navoiydan Nurota tumaniga, Sentob va Hayot qishloqlariga. Oxirgi qism — togʻdagi tuproq yoʻl."
+    },
+    "gazak": {
+      "name_uz": "Gazak sharsharasi va Qarishoto tor darasi",
+      "short_desc_uz": "Boysun togʻlaridagi karst sharsharasi; yonida devorlari 300 m dan baland tor dara",
+      "description_md_uz": "Gazak — karst sharsharasi: suv toʻgʻridan-toʻgʻri daraning qoyali devoridan chiqadi. Yonginasida Qarishoto tor darasi joylashgan, uni forumda Oʻzbekistondagi eng balandlaridan biri deb atashadi — devorlarning balandligi ayrim joylarda 300 m dan oshadi va karst sharsharalari toʻgʻridan-toʻgʻri ulardan oqadi.\n\nChiqish qisqa, ammo tik: taxminan 5 km, qariyb 740 m koʻtarilish bilan — soʻqmoq deyarli butun yoʻl boʻyi yuqoriga koʻtariladi. «21 KASKAD» dasturi taxtachasi sharshara etagida 2025-yil bahorida oʻrnatilgan.\n\n**Muhim:** suvi doimiy emas. 2022-yil sentabr oyi boshida forumda Gazak suvga toʻla boʻlgan video umuman bormi, deb soʻrashgan va suv sifatidan shikoyat qilishgan — yoz oxiriga borib bu yerda koʻradigan narsa qolmasligi mumkin. — 2022-yil 6-sentabr",
+      "how_to_get_md_uz": ""
+    },
+    "gulkam-tesniny": {
+      "name_uz": "Gʻulkam tor darasi",
+      "short_desc_uz": "Kechuvlari va harsangtoshlarga tirmashishi bor tor kanyon — Chimyon yonidagi eng «sarguzashtli» marshrut",
+      "description_md_uz": "Katta Chimyonning shimoli-sharqiy yonbagʻridagi Gʻulkam soyining kanyoni. Devorlar ayrim joylarda 5–6 m gacha yaqinlashadi, ichkarida — 5–6 m gacha boʻlgan bir nechta kichik sharshara, kechuvlar va silliq harsangtoshlarga tirmashish. Yozda suv — marshrutning asosiy zavqi: tor darada jazirama sezilmaydi.\n\nKlassik marshrut — Chimyon qishlogʻidan Pesochniy dovoni orqali, jami borib-qaytib taxminan 11 km, ~650 m koʻtarilish bilan.\n\n**Muhim:** yomgʻirlardan keyin tor daraga borish mumkin emas — suv koʻtarilishi va sel xavfi. Hoʻl boʻlsa achinmaydigan poyabzal kerak.",
+      "how_to_get_md_uz": "Toshkentdan Chimyon qishlogʻigacha ~85 km. Keyin piyoda — Pesochniy dovoni orqali Gʻulkam vodiysiga tushiladi. Guruh bilan borgan maʼqul: tor daraning oʻzida ryukzak yoki qoʻl bilan tayanch berish kerak boʻladigan bir-ikki joy bor."
+    },
+    "hazrat-daud-cave": {
+      "name_uz": "Hazrati Dovud gʻori",
+      "short_desc_uz": "Samarqand yaqinidagi togʻlarda joylashgan ziyoratgoh-gʻorga 1303 ta zina",
+      "description_md_uz": "Samarqanddan ~70 km uzoqlikda, Oqsoy va Mehnatkash qishloqlari yonida, ~1250 m balandlikdagi ziyoratgoh-gʻor. Kirish joyiga 1303 ta zinadan iborat zinapoya olib boradi (zinapoya boʻylab — choyxonalar va savdo rastalari), ichkariga esa yana ~200 ta zina pastga tushadi.\n\nGʻorning oʻzi — uzunligi ~60 m boʻlgan tor yoʻlak, gumbazlarining balandligi 15 m gacha. Dovud paygʻambar bilan bogʻliq ziyorat joyi, shuning uchun dam olish kunlari odam koʻp boʻladi.\n\nKoʻtarilish — Zarafshon tizmasi manzaralari ochiladigan ajoyib «kardio-sayr».",
+      "how_to_get_md_uz": "Samarqanddan Nurobod tomonga ~70 km (taxminan bir soat). Avtoturargoh zinapoya etagida; yuqoriga — faqat piyoda, ish kunlari dam olish kunlariga qaraganda tinchroq."
+    },
+    "hisar-reserve": {
+      "name_uz": "Hisor qoʻriqxonasi",
+      "short_desc_uz": "Gʻarbiy Hisorning togʻ-archazor qoʻriqxonasi — qor qoploni, burgut, archa",
+      "description_md_uz": "Qashqadaryo viloyatidagi Hisor davlat togʻ-archazor qoʻriqxonasi Qizilsuv togʻ-archazor qoʻriqxonasi bilan Miraki qoʻriqxonasini birlashtirish natijasida tashkil etilgan. Gʻarbiy Hisorning yuqori mintaqalaridagi butun tabiiy majmuani va yuqori Qashqadaryo havzasining asosiy suv yigʻish maydonini oʻz ichiga oladi.\n\nBu yerda qor qoploni, Turkiston silovsini, oq tirnoqli ayiq, Eron qunduzi, Oʻrta Osiyo kobrasi, qushlardan esa — soqolli burgut, burgut, itolgʻi, oq bosh tasqara, qoraqush va kumay muhofaza qilinadi.\n\nQoʻriqxona hududida Suvtushar sharsharasi ham joylashgan.\n\n**Muhim:** qoʻriqxona rejimi. Erkin tashrif yoʻq — marshrut va muddatlar maʼmuriyat bilan oldindan kelishiladi.",
+      "how_to_get_md_uz": "Shahrisabzdan yoki Qarshidan Qashqadaryo viloyatining togʻli qismiga. Tashrif — faqat kelishilgan holda."
+    },
+    "ikhnachkul": {
+      "name_uz": "Ixnachkoʻl",
+      "short_desc_uz": "Pskom tizmasidagi baland togʻ koʻllari kaskadi — tunash bilan oʻtiladigan marshrut",
+      "description_md_uz": "Ixnachkoʻl — Pskom tizmasidagi baland togʻ koʻllari guruhi: Katta Ixnachkoʻl va vodiy boʻylab quyiroqdagi koʻllar. Toshkent viloyatining eng chiroyli va borish qiyin boʻlgan joylaridan biri.\n\nMarshrutni chodirda tunash bilan oʻtishadi: yondashuvga toʻliq bir kun ketadi.\n\n**Muhim:** balandlik, aloqa yoʻqligi va hatto iyulda ham tungi sovuq. Manfiy haroratga moʻljallangan uyqu qopi, portativ plita va avtonom chiqishlar tajribasi kerak.",
+      "how_to_get_md_uz": "Toshkentdan Pskom vodiysiga, keyin piyoda yondashuv — soy boʻylab yuqoriga. Marshrut kamida ikki kunga."
+    },
+    "imetey": {
+      "name_uz": "Imetey",
+      "short_desc_uz": "Oqsoqota, Nurakata va Surenota daralari orasidagi 2731 m choʻqqi — archazor, odam kam",
+      "description_md_uz": "Oqsoqotasoyning yuqori oqimidagi choʻqqi. Forumda uni Oqsoqota, Nurakata va Surenota daralari orasida yashiringan uchta choʻqqidan biri — Toshgʻaza va Oqkoʻl bilan birga — deb taʼriflashadi; choʻqqidagi taxtachada 2731 m koʻrsatilgan. 2000 m dan pastda oʻrmon orasidan yurasiz, yuqorida — archazor: kuzda oʻt va butalar allaqachon sargʻaygan, archa va qaragʻaylar esa yashilligini saqlaydi.\n\nKoʻtarilishning boshi — eng yoqimsiz qismi: birinchi 200 m vertikalda soʻqmoq deyarli yoʻq va yonbagʻirdan tirmashib chiqishga toʻgʻri keladi, keyin soʻqmoq aniq bilinadi va tekisroq boradi. Koʻpincha Imeteyni Oqkoʻl choʻqqisi (2886 m) bilan birga olishadi — u holda kun 21 km va taxminan 1700 m koʻtarilishdan iborat boʻladi. 2025-yil noyabr oyida marshrut eʼlonida qor va nolga yaqin harorat koʻrsatilgan edi.\n\n**Kirish:** start nuqtasiga Kumushkon qishlogʻidan togʻ yoʻli orqali borishadi — toshlar, shagʻal va quyuq chang, ikki-uch joyda soydan oʻtishga toʻgʻri keladi. Yoʻltanlamassiz u yerga bormagan maʼqul. — 2024-yil 9-sentabr",
+      "how_to_get_md_uz": "Toshkentdan Kumushkon qishlogʻi orqali Oqsoqotasoyga — bu togʻ yoʻli Chirchiq orqali oʻtadigan eski asfalt yoʻldan qisqaroq. Soydan oʻtgach — yana taxminan 8 km; mashinani taxminan 1600 m balandlikda qoldirishadi, keyin piyoda."
+    },
+    "ispay-gori": {
+      "name_uz": "Ispay gʻori",
+      "short_desc_uz": "Ispaysoy darasida, Ispay sharsharasi ustidagi gʻor",
+      "description_md_uz": "Pskomdagi Ispaysoy darasida, 1771 m balandlikdagi gʻor, Ispay sharsharasidan sal yuqorida — odatda ularni bir marshrutda koʻrishadi.\n\nDaraning oʻzi ham yurishga arziydi: soyali yongʻoqzor va qayinzorlar, asrlik chinorlar, toshloq relyef va shovqinli soy. Gʻorning oʻziga oid alohida taʼriflar hisobotlarda hozircha yoʻq.",
+      "how_to_get_md_uz": ""
+    },
+    "ispay-sharsharasi": {
+      "name_uz": "Ispay sharsharasi",
+      "short_desc_uz": "Ispaysoy ichkarisidagi katta sharshara — yoʻl shiddatli soy boʻylab, daraxtzorlar orasidan oʻtadi",
+      "description_md_uz": "Katta Ispay sharsharasi Pskomdagi Ispaysoy darasining ichkarisida, taxminan 1700 m balandlikda joylashgan. Soʻqmoq soyni koʻpriklar orqali ikki marta kesib oʻtadi, soyali yongʻoqzor va qayinzorlar orasidan, asrlik chinorlar yonidan boradi; ikkinchi koʻprik yonida yana bitta kichik sharshara bor.\n\nSharsharadan yuqorida soy yer ostiga kirib ketadi va taxminan 3 km oʻzan tagidan oqadi, yaxshi soʻqmoq esa tikanli chakalakzor va toshloq uchastkalarga almashadi. Marshrutni klublar oʻrtacha murakkablikdagi dam olish kunlari yurishi sifatida muntazam olib borishadi.",
+      "how_to_get_md_uz": ""
+    },
+    "ispay-sokhibzhamoli": {
+      "name_uz": "Ispay Sohibjamoli",
+      "short_desc_uz": "Ispaysoy vodiysi ustidagi 2533 m choʻqqi — yondashuvda yongʻoqzorlar, chinorlar va sharshara",
+      "description_md_uz": "Pskom togʻlarida, Ispaysoy vodiysi ustidagi choʻqqi. Koʻtarilish soy boʻylab boradi: pastda soyali yongʻoqzor va qayinzorlar, asrlik chinorlar va shiddatli suv, yuqorida — toshloq relyef va tikanli buta uchastkalari.\n\nYondashuvda — taxminan 1700 m balandlikdagi Katta Ispay sharsharasi; undan yuqorida soy toshlar ostiga kirib, bir necha kilometr yer ostidan oqadi. Hudud alpinistik tarixga ega: 1952-yildayoq Chimyon alpiniadasi ekspeditsiyasi Ispay qishlogʻi va Pskom daryosi ustidagi piyoda koʻprik orqali Kaptarkumush darasiga joʻnagan.",
+      "how_to_get_md_uz": ""
+    },
+    "kamar-farmon": {
+      "name_uz": "Kamar-Farmon gʻori",
+      "short_desc_uz": "Hisor togʻlaridagi gʻor; 2025-yil noyabridan u faqat Gut groti bilan birga hisobga olinadi",
+      "description_md_uz": "Qashqadaryodagi gʻor, «21 PODZEMELYE» dasturi nuqtalaridan biri — kiraverishdagi taxtacha 2023-yil avgust oyida oʻrnatilgan.\n\nYondashuv qisqa: 3 km dan kam va taxminan 190 m koʻtarilish. Unga boradigan trekni forumda ikki qismga boʻlib joylashadi, alohida yoʻl va alohida soʻqmoq: yoʻlning bir qismini mashinada oʻtishadi, keyin piyoda yurishadi.\n\n**Muhim:** 2025-yil noyabridan Kamar-Farmon dasturda faqat qoʻshni Gut groti bilan birga hisobga olinadi — ular bitta lokatsiya deb qaraladi. — 2025-yil 5-noyabr",
+      "how_to_get_md_uz": ""
+    },
+    "kaptarkhona": {
+      "name_uz": "Kaptarxona gʻori",
+      "short_desc_uz": "Yovvoyi kaptarlar uya qurgan kanyondagi karst gʻori — nomi ham shundan",
+      "description_md_uz": "Darband darasi yonidagi Kaptarxona kanyonidagi gʻor. Kanyonga nomni shu yerda uya qurgan yovvoyi kaptarlar bergan: bir vaqtlar bu joy butunlay yovvoyi boʻlgan. Yonginasida — Darband darasining oʻzi va Xojimoy Ota ziyoratgohi, shuning uchun odatda ularni bir chiqishda koʻrishadi.\n\nBu yerda yurish taxminan 1 km, koʻtarilish deyarli yoʻq: bu marshrut emas, yarim soatlik toʻxtash.\n\n**Muhim:** bu karst gʻori, forumda esa uning ichida qulamalar doimo yuz berib turishidan ogohlantirishadi, — ehtiyotkorlik bilan kirish kerak. — 2022-yil 21-oktabr",
+      "how_to_get_md_uz": "Darband tomondan: Kaptarxona kanyoni Darband darasiga tutashib ketadi."
+    },
+    "kashkasuv": {
+      "name_uz": "Qashqasuv sharsharasi",
+      "short_desc_uz": "15 ta kechuv ortidagi kam boriladigan 25 metrlik sharshara; yoʻlda — tabiiy vannalar",
+      "description_md_uz": "Chotqol tizmasidagi taxminan 25 m balandlikdagi sharshara. Qashqasuv daryosi — Oqsoqotasoyning yirik chap irmogʻi; sharshara asosiy oʻzandan emas, unga quyiladigan jilgʻadan tushadi — asosiy daradan 300 m naridagi tor darada. U Qizilnavr togʻlarining qorlaridan toʻyinadi, shuning uchun suvi eng koʻp boʻladigan vaqt — bahor oxiri va yoz boshi; noyabr oxiriga borib oqim atrofidagi suv muzlaydi, soylarda esa suv kamayadi.\n\nSoʻqmoq toshloq, daryo boʻylab boradi va uni qayta-qayta kechib oʻtadi — suv koʻtarilganda kechuvlar soni taxminan 15 taga yetadi. Yoʻlda choʻmilish mumkin boʻlgan koʻplab tabiiy vannalar bor. Bu joyga kam borishadi.\n\nNomini «Obikashka» — «oq belgili suv» soʻzidan keltirib chiqarishadi.",
+      "how_to_get_md_uz": "Parkent tumanidagi Kumushkon qishlogʻidan start olishadi: Oqsoqotasoy boʻylab Qashqasuv quyiladigan joygacha, soʻng daryo boʻylab yuqoriga taxminan 5 km — sharshara joylashgan tor daraga burilishgacha. Yoʻl boshida Oqsoqotasoyni kechib oʻtmaslik uchun togʻ soʻqmogʻidan koʻtarilib, Qashqasuvning quyilish joyiga chiqish mumkin. Mashinada borish — Surenota tomonga ketadigan buzuq tuproq yoʻllar boʻylab; ayrim guruhlar ofroud-tur formatida borishadi."
+    },
+    "kattakul": {
+      "name_uz": "Kattakoʻl (Kamangaron)",
+      "short_desc_uz": "Urgut ustidagi Qirqtogʻ platosidagi koʻl; yonida Kiyevskaya gʻoriga kirish joyi",
+      "description_md_uz": "Karstli Qirqtogʻ platosidagi koʻl — Urgutdan yuqoriga, Kemqoʻtondan balandroqda. Plato eng avvalo gʻorlari bilan mashhur: koʻl yonida Kiyevskaya gʻoriga kirish joyi bor, «21 MIRAJ» va «21 PODZEMELYE» dasturlarining taxtachalarini bu yerga bir chiqishda oʻrnatishgan — koʻl qirgʻogʻida va gʻor kiraverishida.\n\nKoʻtarilish sezilarli: 11 km, 1300 m dan ortiq koʻtarilish bilan, yaʼni yoʻlning deyarli hammasi yuqoriga boradi. Bu — toʻliq kunlik chiqish.",
+      "how_to_get_md_uz": "Urgutdan yuqoriga, Qirqtogʻ platosiga."
+    },
+    "khavla": {
+      "name_uz": "Havla",
+      "short_desc_uz": "Parkentsoy ustidagi 2752 m choʻqqi: Kumushkondan soʻqmoq boʻylab uzoq, ammo yotiq yondashuv",
+      "description_md_uz": "Parkentsoyning yuqori oqimi ustidagi choʻqqi, 2752 m. Klassik yondashuvlar uchta — Soʻqoq, Sanginak va Kumushkondan; Soʻqoq yoki Sanginak orqali yoʻl-yoʻlakay Oqtosh choʻqqisini (2510 m) ham olish mumkin. Kumushkon varianti uzunroq, buning evaziga soʻqmoq boʻylab tik koʻtarilishlarsiz boradi. Havla tunash bilan oʻtiladigan uzun Kumushkon — Havla — Qizilnavr halqa marshrutiga ham kiradi.\n\nMay oʻrtalarida marshrut hali qishki: choʻqqi oldidagi soʻnggi kilometrlarni chuqur qor bosib turishi mumkin, qirra bulutlar ichida yashirinadi, koʻrinish masofasi 10 metrcha boʻladi. Choʻqqining oʻzida kontrast — quyoshli tomonda allaqachon bahor, soya tomonda esa ikki-uch metrlik qor uyumlari yotadi.",
+      "how_to_get_md_uz": "Soʻqoq, Sanginak yoki Kumushkondan start olishadi. Kumushkon tomondan yondashuvni qisqartirish uchun Parkentsoy boʻylab yuqoriga mashinada koʻtarilishadi, lekin bahorda soyning suvi koʻp boʻladi — mashinani kechuv yonida qoldirib, keyin piyoda yurishadi."
+    },
+    "khazrat-bashir": {
+      "name_uz": "Shayx gʻori (Hazrati Bashir)",
+      "short_desc_uz": "Shayx gʻori va kanyoni; chekkasida jarlik — pastga 200 metrcha",
+      "description_md_uz": "Shayx gʻori Hazrat Bashir mavzesida joylashgan. U «21 PODZEMELYE» dasturiga 2023-yil oktabr oyida, Xoʻjaikon oʻrniga kirgan; kirish oldidagi taxtachalar 2024-yil yozida — qoʻshni Yettiqiz gʻoridagilar bilan bir chiqishda — oʻrnatilgan. Gʻor yonida — kanyon.\n\nYondashuv uzun emas: 2 km dan kam, taxminan 250 m koʻtarilish bilan.\n\n**Muhim:** gʻor va kanyon yonida baland jarlik bor. Forum ishtirokchisi koordinatalarni eʼlon qilar ekan, ogohlantirgan: «200 metrcha uchib tushasiz». — 2023-yil 5-oktabr",
+      "how_to_get_md_uz": ""
+    },
+    "khoja-buz-barak": {
+      "name_uz": "Xoʻja Buz Barak",
+      "short_desc_uz": "Boysun togʻlaridagi qariyb 3900 m choʻqqi; koʻpincha Xoʻja Gur Gur Ota bilan birga chiqishadi",
+      "description_md_uz": "Boysun togʻlaridagi choʻqqi, Xoʻja Gur Gur Ota yonida. Odatda ikkalasiga bir chiqishda koʻtarilishadi — yo lager bilan toʻrt kunda, yo, kuch yetsa, bitta juda uzun kunda.\n\nBunday kun qanday oʻtishini forum ishtirokchilari 2026-yil iyun oyida tasvirlab berishgan: soat 6:30 da yoʻlga chiqishgan, Buz-Barakka 12:30 ga koʻtarilishgan, keyin qor erib boʻtqa boʻlib qolgan yonbagʻir boʻylab Gur-Gur Otaga yurishgan, suv kechqurun soat beshga borib tugagan, ikkinchi choʻqqiga 19:30 da yetib borishgan va yarim tungacha lagerga suvsizlanib qaytishgan. Eʼlon qilingan treklar baʼzan qor ustidan olingan boʻladi va yozgi soʻqmoqlarga toʻgʻri kelmaydi.\n\n**Kirish:** kunduzi mintaqada juda issiq, shuning uchun kechasi yoʻlga chiqishadi. Tashkilotchilar marshrutni juda murakkab deb atashadi va faqat ikki-uchta uch minglik choʻqqi tajribasi boʻlgan ishtirokchilarni olishadi. — 2026-yil 18-iyul",
+      "how_to_get_md_uz": "Toshkentdan Surxondaryoga, Boysun tumaniga; kunduzgi jazirama ostida yurmaslik uchun kechasi yoʻlga chiqishadi."
+    },
+    "khoja-gur-gur-ata": {
+      "name_uz": "Xoʻja Gur Gur Ota",
+      "short_desc_uz": "Boysun ustidagi 3720 m choʻqqi; ostidagi platoga yoʻltanlamasda olib borishadi",
+      "description_md_uz": "Boysun togʻlaridagi 3720 metr balandlikdagi choʻqqi — unda «21 GORIZONT» dasturining taxtachasi turadi. Choʻqqiga 2015-yil yozida razvedka chiqishida topilgan marshrut boʻylab koʻtarilishadi: togʻ ostidagi platoga mashinada olib borishadi, keyin piyoda.\n\nQishda bu jiddiy togʻ. 2022-yil dekabr oyida forum ishtirokchisi uni yolgʻiz oʻzi oʻtgan: lager 2850 metrda, choʻqqiga hujum tungi soat ikkida boshlangan, 3100 metrgacha qor bardosh bergan va muz tirnoqlari yetarli boʻlgan, 3100 va 3500 metr orasida qor yarim metrcha boʻlgan va harakat nihoyatda qiyinlashgan, 3500 metrdan yuqorida — kuchli shamol va qor buluti, buning evaziga yurish osonlashgan, chunki qorni shamol uchirib ketgan. Choʻqqi — ertalab soat toʻqqizda, qishloqqacha tushish — kechqurun soat oltiga. Yozda ham marshrutdagi qor uzoq turadi: qor ustidan olingan treklar yozgi soʻqmoqlarga toʻgʻri kelmaydi.\n\n**Kirish:** platoga olib borish Machay qishlogʻi orqali, daryodan kechuv bilan boʻladi. 2015-yilgi razvedka haqidagi hikoyada «Niva» toʻppa-toʻgʻri daryo oʻrtasida oʻchib qolgan, odamlarni yuki bilan UAZ tashigan. — 2026-yil 25-fevral",
+      "how_to_get_md_uz": "Boysun va Machay qishlogʻi orqali: togʻ ostidagi platoga yoʻltanlamasda olib borishadi, yoʻlda daryodan kechuv bor. Qizilnavr qishlogʻi tomonidan ham kirish bor — 2022-yil dekabr oyida u yerdan qoʻshni qirradagi 2350 m gacha mashinada borishgan."
+    },
+    "khoja-siddik": {
+      "name_uz": "Xoʻja Siddiq sharsharasi",
+      "short_desc_uz": "Toʻpalang havzasidagi sharshara; nomini mahalliy yeger aytib bergan",
+      "description_md_uz": "Toʻpalangdagi sharshara, Hisor tizmasining gʻarbiy tarmoqlarida. Nomi darrov tarqalmagan: 2025-yil iyul oyida forum ishtirokchilari «Xoʻja Siddiq» nomini ularga mahalliy yeger aytganini yozishgan.\n\nYondashuv qisqa — 4 km dan sal koʻproq, lekin 500 m dan ortiq koʻtarilish bilan, shuning uchun soʻqmoq tik koʻtariladi. 2025-yil avgustdan sharshara Qizildaryo oʻrniga «21 KASKAD» dasturiga kiradi va odatda uni Surxondaryoning boshqa nuqtalari — Xoʻja Zarin gʻori va Sangardak sharsharasi bilan bir chiqishda koʻrishadi.",
+      "how_to_get_md_uz": ""
+    },
+    "khoja-zarin": {
+      "name_uz": "Xoʻja Zarin gʻori",
+      "short_desc_uz": "Toʻpalang havzasidagi gʻor, u yana Masjid deb ham ataladi",
+      "description_md_uz": "Toʻpalang havzasidagi gʻor. Forumda uni Xoʻjazaring deb ham, Masjid deb ham atashadi — 2024-yilda Oʻzbekistonda yilning eng yaxshi speleologik ekspeditsiyasi deb tan olingan ekspeditsiya shu nomlar bilan oʻtgan. «21 PODZEMELYE» dasturiga gʻor 2024-yil avgustda, Omonqoʻton oʻrniga kirgan; kirish oldidagi taxtacha 2025-yil yozida oʻrnatilgan.\n\nYondashuv qisqa: 5 km va taxminan 340 m koʻtarilish. Odatda uni Surxondaryoning boshqa nuqtalari — Xoʻja Siddiq va Sangardak sharsharalari bilan bir chiqishda koʻrishadi.",
+      "how_to_get_md_uz": ""
+    },
+    "kichkinkul": {
+      "name_uz": "Kichkinkoʻl",
+      "short_desc_uz": "Koʻksuv darasining yuqori oqimidagi koʻl, u yana Moviy koʻl deb ham ataladi; yoʻl — uzun yurish kuni",
+      "description_md_uz": "Koʻksuv daryosi darasida, 1652 m balandlikda joylashgan koʻl; hisobotlarda «Kichkenkul» va «Moviy koʻl» degan variantlar uchraydi. Yoʻlning oʻzi ham taassurotlarning sezilarli qismi: Koʻksuv darasi boʻylab yurishni xaykerlar manzaralari uchun maqtashadi.\n\nMasofa jiddiy, shuning uchun koʻpincha tunash bilan borishadi — yurish oʻrtacha murakkablikdagi deb baholanadi. Bu yerga velosipedda ham kelishadi, 2024-yil mayda esa yuguruvchilar koʻlgacha 56 km lik bir kunlik ultramarafon uyushtirishgan.\n\n---\n**Kirish:** forum xabarlariga koʻra — yurish tashkilotchilari ishtirokchilardan Boʻstonliq tumani ruxsatnomasi boʻlishini soʻrashgan\n\n**Kirish:** forum xabarlariga koʻra — 11 kishilik guruhni Koʻksuv boʻylab koʻlgacha ruxsatnomasiz va roʻyxatdan oʻtkazmasdan oʻtkazishgan; joyida taqiq yoʻqligini tasdiqlashgan",
+      "how_to_get_md_uz": "Koʻksuv darasi tomonidan kirishadi (hisobotlardagi start nuqtalari — Koʻksuv, Ayriq), keyin yoʻl daryo boʻylab koʻlgacha boradi. Rasman bu hudud uchun Boʻstonliq tumani ruxsatnomasi soʻraladi, lekin soʻnggi hisobotlarga koʻra dara kirishida uni tekshirishmagan."
+    },
+    "kopirtosh": {
+      "name_uz": "Kopirtosh",
+      "short_desc_uz": "Koʻksuv vodiysi ustidagi 2508 m choʻqqi — uzun va murakkab bir kunlik chiqish",
+      "description_md_uz": "Qulosiyosoy hududidagi 2508 m choʻqqi, Koʻksuv daryosi vodiysi ustida. Atrofdagi panoramalarning doimiy moʻljali: Kopirtoshni Patandozboshi, Tyulpanovaya togʻi va Zelyoniy dovonidan ochiladigan manzaralar orasida tilga olishadi, togʻ ostidagi yoʻldan esa Ohotnichiy choʻqqisi va deyarli butun Chorvoq koʻrinadi.\n\nKlublar bu yerga bir kunlik chiqishlar uyushtiradi: Toshkentdan ertalab soat beshlarda yoʻlga chiqib, kechga qaytishadi; eʼlonlarda murakkablik — oʻrtachadan yuqorigacha, majburiy roʻyxatda — peshona fonari, trekking tayoqchalari va 2 litrdan boshlab suv zaxirasi. Yonida Qulosiyoning yuqori tor daralari bor: ularni oʻtish qiyin deb hisoblashadi va odatda chetlab oʻtishadi — choʻqqiga, Desyati dovoniga yoki undan narida Koʻksuvga ketishadi.",
+      "how_to_get_md_uz": "Hisobotlarda — Toshkentdan klublarning bir kunlik chiqishlari, yigʻilish ertalab soat 5 atrofida. Togʻ Koʻksuv daryosi boʻylab Yakkatut qishlogʻiga tushadigan yoʻl ustida turadi."
+    },
+    "korakanish": {
+      "name_uz": "Qoraqanish koʻli",
+      "short_desc_uz": "Temirtosh bilan qoʻshni daradagi koʻl — deyarli soʻqmoqsiz, Koʻksuvdan kechuv bilan",
+      "description_md_uz": "Oygaing vodiysida (Pskom), Temirtosh bilan qoʻshni darada, 2465 m balandlikdagi koʻl. Temirtoshdan farqli oʻlaroq, bu yerga soʻqmoq deyarli yoʻq: yoʻl Koʻksuvning chap qirgʻogʻi boʻylab boradi va daraga burilishgacha daryodan bir marta kechib oʻtiladi. Burilishdan taxminan 2 km oldin oʻzanni muzlik toʻsib qoʻygan — agar u ishonchli holatda boʻlsa, uning ustidan oʻng qirgʻoqqa oʻtib olish va kechuvdan voz kechish mumkin.\n\nOdatda Qoraqanishni Temirtosh bilan qoʻshib, vodiyda lager bilan ikki kunlik yurish qilishadi: ikkinchi kuni Koʻksuv boʻylab mayda feruza koʻllar yonidan oʻtishadi, keyin dovon orqali qoʻshni daraga, koʻlga oshib oʻtishadi. Koʻllarning tartibi ahamiyatga ega emas.\n\n---\n**Kirish:** 2024-yil sentabr — Pskom qishlogʻi yonida nazorat posti bor, roʻyxatdan oʻtishadi",
+      "how_to_get_md_uz": "Toshkentdan kechasi, soat 3:00 larda yoʻlga chiqishadi: soat 6:00 ga — Pskom qishlogʻi yonidagi nazorat posti, u yerda roʻyxatdan oʻtishadi. Keyin — Oygaing vodiysiga uzoq togʻ yoʻli; post ortidagi qism taʼmiri boshlangandan keyin olib borish avvalgi 10–12 soat oʻrniga 7–8 soat oladi, lekin yoʻl texnikasini oʻtkazib yuborishga toʻgʻri keladi. Tunash bilan va vodiydagi bazaviy lager bilan borishadi; piyoda qismi — Koʻksuvning chap qirgʻogʻi boʻylab bitta kechuv bilan yoki burilishdan 2 km oldin muzlik ustidan oʻtish bilan."
+    },
+    "korakiya-petrogliflari": {
+      "name_uz": "Qoraqiya petrogliflari",
+      "short_desc_uz": "Qorjontogʻ tizmasida, Qoraqiyasoy ustidagi qoyatosh rasmlari; yoʻlda — sharsharalar",
+      "description_md_uz": "Qoraqiyasoyning yuqori oqimida, taxminan 2245 m balandlikdagi petrogliflar. Qoraqiyasoy — Qorjontogʻ tizmasidagi dara, Qozogʻiston chegarasidan uzoq emas. Soy atrofdagi qoyalarning qora rangi tufayli «Qoraqiya» deb atalgan. Qorjontogʻning qoʻshni soylaridagi kabi, bu yerda sharsharalar koʻp va marshrutlarda ularni odatda petrogliflar bilan qoʻshib koʻrishadi — sharsharalarda choʻmilishadi.\n\nPetrogliflarga koʻtarilish sharsharalarga sayrdan sezilarli darajada ogʻirroq: klublar ishtirokchilarni ikki guruhga boʻlishadi — «faqat sharsharalar» (yengil/oʻrtacha daraja) va «sharsharalar va petrogliflar» (oʻrtachadan yuqori). Bahorda yoʻldagi tepaliklar lolalar bilan qoplanadi, pastroqda qalin archazor oʻsadi.",
+      "how_to_get_md_uz": "Kirishlardan biri — Oqtoshdan halqa marshrut: start rassomlarning tashlandiq dala hovlisidan, qalin oʻrmon orqali koʻtarilish va Qoraqiyasoy darasiga oʻtish."
+    },
+    "korakiya-sharsharasi": {
+      "name_uz": "Qoraqiya sharsharalari",
+      "short_desc_uz": "Qorjontogʻning qora qoyalaridagi sharsharalar kaskadi; uzun variantda — petrogliflar ham",
+      "description_md_uz": "Qoraqiyasoy Qozogʻiston chegarasiga yaqin joyda Qorjontogʻ tizmasidan oqib tushadi; soy oʻz nomini atrofdagi qoyalarning qora rangidan olgan. Undagi sharsharalar bir nechta boʻlib, odatda bir chiqishda ularning barchasini ketma-ket koʻrishadi.\n\nMarshrutni ikki variantda yurishadi: qisqasi — faqat sharsharalargacha, uzuni — petrogliflarga koʻtarilish bilan. Bahorda dara ustidagi yonbagʻirlarni lola qoplab ketadi, sharsharalarda choʻmilishadi; guruhlar bu yerga kech kuzda ham borishadi.",
+      "how_to_get_md_uz": "Yondashuvlardan biri — Oqtoshdan halqa marshrut: u rassomlarning tashlandiq dala hovlisidan boshlanadi, oʻrmon orqali koʻtariladi va Qoraqiyasoy darasiga oshib tushadi."
+    },
+    "korakush": {
+      "name_uz": "Qoraqush",
+      "short_desc_uz": "Ohangaron togʻlaridagi 3864 m choʻqqi: tungi start, toshloq qirralar va toʻkilmalar",
+      "description_md_uz": "Ohangaron togʻlarining eng baland nuqtalaridan biri — 3864 m. Koʻtarilish toshloq va toʻkilma toshli uchastkalardan oʻtadi, shuning uchun klublar Qoraqushni 3800 dan oshadigan choʻqqilarga tayyorgarlik sifatida dasturlarga kiritishadi.\n\nKoʻtarilish katta boʻlgani uchun qorongʻida yoʻlga chiqishadi: guruhlar Toshkentdan tunda soat ikkilarda chiqib, tongga borib Qizilchasoy meteostansiyasidan koʻtarila boshlashadi — keyin toshloq qoyalar va quruq oʻzanlar. Hatto iyulda ham choʻqqi oldidagi dovonda shamol kuchli, harorat 3–4 °C gacha tushadi; ob-havo keskin buziladi — guruhlar choʻqqiga yetmay orqaga qaytgan holatlar maʼlum.\n\nYoʻlda konchilar 1991-yilda qurgan tashlandiq ikki qavatli «Magazin» uyi turadi — ichida oʻtin pechkasi bor; yomon ob-havoda uni boshpana sifatida ishlatishadi.",
+      "how_to_get_md_uz": "Toshkentdan tunda yoʻlga chiqishadi, ertalab soat beshlarga borib Qizilchasoy meteostansiyasiga yetib borishadi — piyoda koʻtarilish oʻsha yerdan boshlanadi. Yondashuvning bir qismini mashinada bosib oʻtishadi: guruhlardan biri taxminan 2500 m gacha mashinada olib borishni rejalashtirgan."
+    },
+    "korangur": {
+      "name_uz": "Qorangur",
+      "short_desc_uz": "Poʻlatxon platosiga boradigan yoʻldagi 2941 m choʻqqi — klassik marshrutning asosiy toʻsigʻi",
+      "description_md_uz": "Poʻlatxon platosiga Oqsoqotasoy tomondan boradigan yondashuvlardagi choʻqqi. Platoga boradigan klassik yoʻl toʻgʻridan-toʻgʻri Qorangur orqali oʻtadi va marshrutning asosiy koʻtarilishi ham shu yerga toʻgʻri keladi: Axtaxta dovonidan choʻqqigacha taxminan 2,5 soat koʻtarilish, keyin soʻqmoq sezilarli darajada osonlashadi va Poʻlatxonning «darvozasi»ga olib chiqadi.\n\nBu yerga har xil borishadi: Axtaxtagacha mashinada olib borish bilan bir kunda, platoda tunash bilan, Gijaldan boshlanadigan uzun traverslar tarkibida; hatto velosipedda chiqishlar ham uchraydi. Oqsoqotasoy boʻylab yoʻl taʼmirlanmoqda va kengaytirilmoqda, koʻp sonli kechuvlarga beton quvurlar oʻrnatilgan — 2024-yil kuzida mashinada 2100 m belgisigacha koʻtarila olishgan.",
+      "how_to_get_md_uz": "Ikkita asosiy yondashuv bor. Birinchisi — Kumushkon orqali Oqsoqotasoyga va keyin soy boʻylab yoʻldan yuqoriga: kechuvlar koʻp, mashinani yoʻl holatiga qarab qoldirishadi (2024-yil kuzida 2100 m gacha yetib borishgan). Ikkinchisi — Axtaxta platosidan, u yerga togʻ yoʻli boradi; oʻsha yerdan eski geologik yoʻl deyarli togʻning tagigacha olib boradi. Uzun piyoda variantlar Gijal qishlogʻidan boshlanadi."
+    },
+    "kuduk": {
+      "name_uz": "Quduq sharsharasi",
+      "short_desc_uz": "Nanay yonidagi sharsharalar kaskadi: uchta quyi pogʻona va 30 metrlik asosiysi",
+      "description_md_uz": "Nanay qishlogʻiga boradigan yoʻl yonidagi, taxminan 1000 m balandlikdagi sharsharalar kaskadi. Quyi uchta pogʻona kichik, soʻqmoq boʻylab taxminan 70 m yuqorida esa asosiy sharshara — suv taxminan 30 m dan tushadi. Soʻqmoq boshida — atrofi oʻralgan, soʻrilari bor dam olish maskani; erta tongda u yer boʻsh boʻladi.\n\nMarshrut yengil, lekin bitta joyda tirmashib oʻtishga toʻgʻri keladi. Yozda bu yerga yurishni odatda Pskomda choʻmilish bilan qoʻshishadi.\n\n**Muhim:** yuqori sharshara tagida choʻmilmagan maʼqul — uning ostidan quvurlar oʻtkazilgan, bu suvni atrofdagi qishloqlar va dam olish maskanlari ichishadi.\n\n---\n**Kirish:** 2025-yil avgust — sharsharadan yuqorida yoʻlda shlagbaum, undan narisi xususiy hudud: oʻtib ketmoqchi boʻlgan guruhni orqaga qaytarishgan",
+      "how_to_get_md_uz": "Toshkentdan Nanay qishlogʻi tomonga borish kerak — sharsharalar yoʻlning yonida, yuqori kaskadga koʻtarilish soʻrilari bor dam olish maskanidan boshlanadi. Yozda bu yerga bir kunlik guruhlarni olib kelishadi, odatda Pskomga kirib oʻtish bilan."
+    },
+    "kuk-suv": {
+      "name_uz": "Koʻksuv tor darasi",
+      "short_desc_uz": "Burchmulla yonidagi Koʻksuv togʻ daryosining vodiysi: qayinzor, qoyali tor dara, toʻxtash joylari",
+      "description_md_uz": "Koʻksuv — uzunligi taxminan 60 km boʻlgan, Burchmulla tomonga oqib tushadigan togʻ daryosi. Chorvoqdan 18 km narida vodiy kengayadi, suv boʻyida qayinzor turadi, yuqorida esa daryoni baland qoyalar siqib turadi — mana shu joyni Koʻksuv tor darasi deb atashadi.\n\nBu yerga bir kunda ham, tor dara yonida tunash bilan ham borishadi: joy mashhur, 2025-yil yozida bitta chiqishga qariyb 40 kishi yigʻilgan. Lager uchun yukni oʻzingiz koʻtarib yurishingiz shart emas — mahalliy aholida narsalarni ot va eshaklarda tashib berish xizmati bor.",
+      "how_to_get_md_uz": "Yondashuv Burchmulla qishlogʻidan, soʻqmoq Koʻksuv vodiysi boʻylab koʻtariladi."
+    },
+    "kukbet": {
+      "name_uz": "Koʻkbet",
+      "short_desc_uz": "Gijaldan 7 km narida joylashgan panoramali choʻqqi, odatda Maygashkan bilan birga",
+      "description_md_uz": "Gijal qishlogʻidan 7 km narida joylashgan 1945 m choʻqqi. Undan Chotqol, Qorjontogʻ, Kumbel va Surenota tizmalari koʻrinadi, pastda esa — Nurakatasoy va Oqsoqotasoy vodiylari. Yonida turgan Maygashkan (2310 m) sal balandroq — ikkala choʻqqiga koʻpincha bir chiqishda chiqishadi.\n\nKoʻtarilish mevali oʻrmonlar va archazorlar orqali asosiy qirraga olib chiqadi. 2000 m dan pastda oʻtni mol boqish yeb tugatgan, yuqorida esa ot podalari yuradigan quyuq oʻtloqlar boshlanadi. Yil boʻyi borishadi — hisobotlarda aprel chiqishlari ham, dekabr chiqishlari ham bor.",
+      "how_to_get_md_uz": "Start — Gijal qishlogʻi, undan togʻgacha taxminan 7 km. Oqsoqotasoy tomondan mashinani Teshiktosh yonida qoldirishadi va mevali oʻrmonlar orqali qirraga koʻtarilishadi."
+    },
+    "kulasya-tesniny": {
+      "name_uz": "Qulasoy tor darasi",
+      "short_desc_uz": "Burchmulladan uncha uzoq boʻlmagan, oʻzanida suvi bor tor qoyali dara",
+      "description_md_uz": "Qulasoydagi tor daralar — daraning tor qoyali qismi, unda devorlar deyarli tutashib ketadi, soʻqmoq esa toʻgʻridan-toʻgʻri oʻzan boʻylab boradi. Xarakteriga koʻra joy Gʻulkamga yaqin: oʻsha tik qoyali yonlar va kechuvlar.\r\n\r\nBurchmulla atrofida, Chorvoqqa boradigan asosiy turistlar oqimidan chetda joylashgan.\r\n\r\n**Muhim:** faqat suv past boʻlganda yurish mumkin. Toshqin paytida tor dara tuzoqqa aylanadi — undan yon tomonga chiqib ketadigan joy yoʻq, suv sathi esa tez koʻtariladi.",
+      "how_to_get_md_uz": "Toshkentdan Chorvoq suv ombori atrofidan aylanib Burchmulla tomonga (~110 km), keyin soy boʻylab piyoda yuqoriga."
+    },
+    "kumbel-peak": {
+      "name_uz": "Kumbel",
+      "short_desc_uz": "Beldarsoy ustidagi 2307 m choʻqqi — Chimyon massiviga qaraydigan manzara nuqtasi",
+      "description_md_uz": "Chotqol tizmasidagi 2307 m choʻqqi, Beldarsoy vodiysi ustida koʻtarilib turadi. Qirradan Katta Chimyon gumbaziga janubi-gʻarb tomondan va Chorvoq suv omboriga manzara ochiladi.\n\nKumbel — hududdagi eng qulay «haqiqiy» koʻtarilishlardan biri: koʻtarilish meʼyorida, soʻqmoq yaxshi oʻqiladi, marshrut esa maxsus jihozlarsiz bir kunda oʻtiladi.\n\n**Muhim:** qirra ochiq, unda soya yoʻq. Yozda erta chiqqan maʼqul, kech kuz va erta bahorda esa tepada, pastda koʻtargich yonidagiga qaraganda sezilarli darajada sovuqroq va shamolliroq boʻladi.",
+      "how_to_get_md_uz": "Toshkentdan Gʻazalkent orqali Beldarsoy tomonga (~90 km). Koʻtarilish Beldarsoy dam olish maskanidan boshlanadi."
+    },
+    "kungirbuka": {
+      "name_uz": "Qoʻngʻirbuqa",
+      "short_desc_uz": "Chorvoq ustidagi choʻqqi, suv omboriga eng yaxshi manzaralardan biri ochiladi",
+      "description_md_uz": "Chorvoq suv ombori ustidagi, 2000 m ga yaqin choʻqqi. Undan suv omborining oʻziga eng yaxshi manzaralardan biri ochiladi, atrofda esa Katta va Kichik Chimyon, Chotqol va Pskom vodiylari, Mingbuloq va qoʻshni togʻlar koʻrinadi.\n\nKoʻtarilish qisqa, lekin tik — murakkabligini oʻrtachadan yuqori deb baholashadi. Yondashuv variantlaridan biri Chorvoq atrofidagi eng katta oʻrmon massivi orqali oʻtadi. Bu yerga yil boʻyi borishadi, shu jumladan qor ustidan ham: 2025-yil qishida choʻqqiga hatto 10 yoshli bola ham chiqqan. 2024-yil noyabridan choʻqqida axborot taxtachasi turibdi.",
+      "how_to_get_md_uz": "Chorvoq tomonga Toshkent–Chinorkent poyezdida yetib borish mumkin, keyin piyoda. Soʻqmoqning start nuqtasi — 41.62361, 69.93811. Chorvoq atrofidagi katta oʻrmon massivi orqali muqobil yondashuv ham bor."
+    },
+    "kungirbuka-gori": {
+      "name_uz": "Qoʻngʻirbuqa gʻori va groti",
+      "short_desc_uz": "Qoʻngʻirbuqa choʻqqisi ostidagi grot va gʻor; togʻ etagida — petrogliflar va ibtidoiy odam makoni",
+      "description_md_uz": "Xoʻjakent tepasidagi Qoʻngʻirbuqa togʻidagi grot va gʻor. «21 PODZEMELYE» dasturida ular bitta lokatsiya sifatida yuritiladi — tashkilotchilar ularni yonma-yon joylashgani uchun birlashtirgan. Togʻ etagida, petrogliflari bor qoyaning yonginasida, tosh qurollar topilgani haqidagi taxtacha turibdi: unga koʻra, bu yerda odamlar bundan 100 ming yil ilgaridan 40 ming yil ilgarigacha boʻlgan davrda yashagan.\n\nQoʻngʻirbuqa yonbagʻirlaridan Chorvoq va Xoʻjakent suv omborlari koʻrinadi. Shimoliy yonbagʻir boʻylab marshrutlar «chinorlar» deb ataladigan joydan boshlanadi, petrogliflar va kichik sharshara yonidan oʻtib, Buloqsuv darasi ustidagi Shayton barmogʻi qoyasiga (1350 m) olib chiqadi. Gʻorning oʻzini topish esa oson emas: 2023-yil mart oyida unga boradigan trekni forumda bir kun oldin choʻqqiga chiqqan odam soʻragan edi.\n\n**Muhim:** 2025-yil yozida Qoʻngʻirbuqada yongʻin boʻlgan; oʻsha yilning sentabr oyi holatiga koʻra, oqibatlarini forumda hech kim tasvirlamagan. — 2025-yil 12-sentabr",
+      "how_to_get_md_uz": "Xoʻjakentdan. Shimoliy yonbagʻirdagi marshrutlar «chinorlar» — chinor daraxtlari — deb ataladigan joydan boshlanadi va petrogliflari bor qoya yonidan oʻtadi."
+    },
+    "kurdupur": {
+      "name_uz": "Qurdupur sharsharasi",
+      "short_desc_uz": "Pskom tizmasidagi 100 metrlik sharshara, yiliga taxminan bir oy suvi koʻp boʻladi",
+      "description_md_uz": "Toshkent viloyatining olis burchagida, Pskom tizmasida joylashgan 100 metrlik sharshara. Asosiy xususiyati — mavsumi qisqa: toʻliq kuchida u atigi bir oycha oqadi, guruhlarni bu yerga aprelda olib kelishadi.\n\nOdatda uni qoʻshni Polvonak sharsharalari bilan birga koʻrishadi.",
+      "how_to_get_md_uz": ""
+    },
+    "kushpar": {
+      "name_uz": "Qoʻshpar sharsharasi",
+      "short_desc_uz": "«Uchta sharshara» — Pskomdagi Polvonak guruhining eng yuqori nuqtasi, qariyb 1800 m",
+      "description_md_uz": "Pskom togʻlaridagi sharshara, xaykerlar orasida «Uchta sharshara» nomi bilan tanilgan. Qariyb 1800 m balandlikda joylashgan — Polvonak guruhining qolganlaridan balandroq.\n\nOdatda uni Obi Par va Opar bilan bir kunda koʻrishadi: uchala sharshara ham bir-biridan bir-ikki km narida, qoʻshni yonbagʻirlarda joylashgan.",
+      "how_to_get_md_uz": ""
+    },
+    "kyzylgaza": {
+      "name_uz": "Qizilgʻaza platosi",
+      "short_desc_uz": "Hisordagi baland plato — choʻqqilar va gʻorlarga yoʻllar tarqaladigan tugun",
+      "description_md_uz": "Hisor tizmasida 3000 m dan baland joylashgan plato. Oʻzi alohida maqsad emas, balki tugun: bu yerdan Xoʻja Axcha Burun (3855 m) va Chimboy choʻqqilariga, Chilsim va Amir Temur gʻorlariga yoʻl olishadi. Yonginasida qoʻshni Maydanak platosi joylashgan, pastga esa devorlari 100 m chamasi boʻlgan Qalasoy kanyoni tushib ketadi; Qizilgʻazadan shu nomdagi dovon ham oʻtadi.\n\nPlatoning oʻzida koʻtarilish deyarli yoʻq — yurish oson. Ogʻirlik boshqa narsada: atrofdagi choʻqqilar va gʻorlarni ham qamrab olish uchun 3 kun rejalashtirishadi va bunday chiqishlarning murakkabligini juda yuqori deb baholashadi. Qish erta keladi — 2024-yil sentabr oʻrtalarida Hisor qoʻriqxonasida allaqachon 10 sm qor yotgan edi.\n\n**Kirish:** plato va qoʻshni choʻqqilar Hisor qoʻriqxonasida joylashgan. 2024-yil sentabr oyida uning xodimlari hudud chegaralarida nazorat kuchaytirilgani haqida xabar berishgan. — 2024-yil 10-sentabr",
+      "how_to_get_md_uz": ""
+    },
+    "kyzylnavr": {
+      "name_uz": "Qizilnavr sharsharasi",
+      "short_desc_uz": "«GORETS» forumida Oʻzbekistondagi eng baland deb ataladigan sharshara",
+      "description_md_uz": "Surxondaryo togʻlaridagi sharshara. 2025-yil aprel oyida uning etagida «21 KASKAD» dasturi taxtachasi oʻrnatilgan, forumdagi xabarda esa Qizilnavr Oʻzbekistondagi eng baland sharshara deb atalgan — ishtirokchilar suratlarga «masshtab» deb izoh yozishadi.\n\nKoʻtarilish qisqa va tik: 8 km va taxminan 680 m koʻtarilish, yaʼni yarim kunlik chiqish. Forum xabarlarida yonida Qizilnavr qishlogʻi ham tilga olinadi — undan Xoʻja Gur Gur Ota qirrasiga ham chiqishadi.\n\n**Kirish:** sharshara mavsumiy. «21 KASKAD» dasturida Surxondaryoning eng baland sharsharasi uchun tashrif mavsumi aprel–iyun deb koʻrsatilgan va hisobot faqat sharshara oqib turgan paytda hisobga olinadi. — 2024-yil 15-avgust",
+      "how_to_get_md_uz": ""
+    },
+    "kyzylnura": {
+      "name_uz": "Qizilnura",
+      "short_desc_uz": "Chotqol tizmasi tarmoqlaridagi eng baland choʻqqilardan biri — 3267 m",
+      "description_md_uz": "Qizilnura — Gʻarbiy Tyanshanning Chotqol tizmasi tarmoqlaridagi eng baland choʻqqilardan biri, 3267 m. Toshkent viloyatining markazida, Toshkentdan sharqda va Katta Chimyondan janubi-janubi-gʻarbda joylashgan.\n\nBalandligi boʻyicha Qizilnura Katta Chimyondan deyarli qolishmaydi, lekin ancha kam tanilgan va bu yerda odam ham bir necha barobar kam.\n\n**Muhim:** bu — yondashuvi uzoq boʻlgan baland togʻ marshruti. Toʻliq kunduz yorugʻligi zaxirasi, shamoldan himoya kiyimi va tajriba kerak: shimoliy yonbagʻirlardagi qor maydonlari deyarli yoz boʻyi erimay yotadi.",
+      "how_to_get_md_uz": "Toshkentdan Parkent tomonga va keyin togʻlarga. Yondashuvlar uzoq, qorongʻida yoʻlga chiqqan maʼqul."
+    },
+    "lashkarak-sharsharasi": {
+      "name_uz": "Lashkarak sharsharasi",
+      "short_desc_uz": "Angren yaqinidagi oʻrmonlarda joylashgan 25 metrlik sharshara — qishda muzlaydi",
+      "description_md_uz": "Qurama tizmasida, Angrendan uncha uzoq boʻlmagan oʻrmonli vodiyda joylashgan balandligi 25 m boʻlgan sharshara. Vodiy yonbagʻirlarini archazorlar qoplagan, tepasida esa Oʻrikbel qirrasi koʻtarilib turadi — bu tizmaning eng chiroyli joylaridan biri: uning manzara maydonchasidan butun Lashkarak vodiysi koʻrinadi.\n\nQishda sharshara muzlaydi — bu paytda bu yerga muz va qorli oʻrmon uchun borishadi. Marshrutlarni turlicha oʻtkazishadi: yengil sayrdan tortib uzunroq oʻrmon variantlarigacha.",
+      "how_to_get_md_uz": "Angren atrofi, Toshkentdan taxminan 130 km."
+    },
+    "lashkerek": {
+      "name_uz": "Lashkarak darasi",
+      "short_desc_uz": "Angrendan 20 km naridagi archazor dara: sharsharalar kaskadi, qishda ular muzlaydi",
+      "description_md_uz": "Qurama tizmasi etagidagi dara, Angrendan 20 km chamasi narida. Yonbagʻirlarni butunlay archa bosib ketgan; Lashkaraksoy daryosiga tutash darada bir necha sharsharadan iborat kaskad joylashgan. Oʻrikbel choʻqqilariga qaragan manzara maydonchasi ham bor.\n\nSharsharaning oʻziga yondashuv qisqa va deyarli koʻtarilishsiz — taxminan bir soatlik yoʻl. Manzara maydonchasiga koʻtariladigan halqa marshrut varianti 8–10 km va 400–500 m koʻtarilishgacha choʻziladi. Qishda bu yerga alohida borishadi: sharshara muzlaydi, archazor esa qor ostida turadi.\n\n**Kirish:** marshrutda daryodan kechuvlar bor. 2024-yil noyabr oyida forum ishtirokchisi qarshi qirgʻoqda bir guruhga duch kelganini tasvirlab bergan: ularni soʻqmoq umuman yoʻq tik toshloq yonbagʻir boʻylab olib borishayotgan ekan, u odamlarning tushishiga yordam bergan, — toʻkilma toshli yonlardan emas, bosilgan soʻqmoqdan yurgan maʼqul. — 2024-yil 12-noyabr",
+      "how_to_get_md_uz": "Toshkent — Ohangaron — Angren — Lashkarak qishlogʻi; Angrendan taxminan 20 km. Yengil mashina start nuqtasigacha yetib boradi, qishda qishki shinalar kerak. Piyoda marshrut qishloqning oʻzidan boshlanadi."
+    },
+    "lednik-ozyorny": {
+      "name_uz": "Ozyorniy muzligi",
+      "short_desc_uz": "Oygaing yuqori oqimidagi muzlik, tili yonida koʻllar bor — chegara hududidagi olis chiqish",
+      "description_md_uz": "Oygaingning yuqori oqimidagi muzlik, Tuxvatullin choʻqqisi tomonda. Uning tili yonida koʻllar yotadi; bu yerga kelishning maqsadi ham aynan ulardan quyisi, — 2024-yil avgust oyida uning qirgʻogʻiga «21 MIRAJ» dasturi taxtachasi oʻrnatilgan. Koʻl yonida koʻzga tashlanadigan katta tilla rangli tosh bor.\n\nBu chiqish bir kunlik boʻlmaydi. Koʻtarilishning oʻzi — taxminan 8 km va 1 km dan ortiq koʻtarilish, ammo togʻ etagiga yetib borish uchun avval Oygaing vodiysini bosib oʻtish kerak: forumda «Oygaingdan Ozyorniy muzliklarigacha borib-qaytish» yoʻlini 5–6 kun deb baholashadi.\n\n**Kirish:** 2025-yildan chegarachilar Oygaing SLS stansiyasidan nariga, Ozyorniy muzligi tomonga oʻtkazishmaydi. Oygaing vodiysining oʻzi — chegara hududi: oldindan rasmiylashtiriladigan Boʻstonliq tumani ruxsatnomasi kerak. — 2025-yil 30-mart",
+      "how_to_get_md_uz": "Oygaing vodiysi boʻylab: yoʻl Oygaing qor-koʻchki stansiyasigacha (SLS) boradi, keyin vodiy boʻylab yuqoriga piyoda."
+    },
+    "machetli": {
+      "name_uz": "Machetli",
+      "short_desc_uz": "Oʻzbekistonning eng janubi-sharqiy uch minglik choʻqqisi, Toʻpalang suv ombori hududida",
+      "description_md_uz": "Toʻpalang suv ombori hududidagi choʻqqi — «GORETS» loyihasi tashkilotchilarining soʻzlariga koʻra, Oʻzbekistonning eng janubi-sharqiy uch minglik choʻqqisi. «21 GORIZONT» dasturida u 2025-yil avgust oyida paydo boʻldi va Mankent oʻrnini egalladi. Bu yerga kamdan-kam borishadi: marshrut Oʻzbekiston togʻ turizmida 2025-yilning eng yaxshi birinchi oʻtishi deb tan olindi, gidlar esa Machetlini Surxondaryoning eng goʻzal va kam boriladigan choʻqqilaridan biri deb atashadi.\n\nBu chiqish bir kunlik boʻlmaydi: qariyb 22 km va 3 km dan ortiq koʻtarilish. Odatda chodirlarda tunab, uch kunda borishadi. Bu yerda ob-havo Surxondaryodan kutilganidek barqaror emas: 2026-yil iyun oyida guruh koʻtarilishda yomgʻirga ham, doʻlga ham, kuchli shamolga ham duch keldi.",
+      "how_to_get_md_uz": "Poyezdda Surxondaryogacha, keyin mashinada Toʻpalang suv ombori hududiga. Marshrutning oʻziga chodirlarda tunash bilan uch kun ajratishadi; poyezd chiptalarini oldindan olish tavsiya etiladi."
+    },
+    "majerum-archa": {
+      "name_uz": "Majerum archasi",
+      "short_desc_uz": "Taxminan 1500 yillik sharqiy biota; tanasining aylanasi — 24 m",
+      "description_md_uz": "Ulkan daraxt — sharqiy biota — tabiat yodgorligi deb tan olingan. Yoshi taxminan 1500 yil deb baholanadi, tanasining aylanasi — qariyb 24 m, faqat markaziy shoxining aylanasi — 12 m. Nurota togʻlarida, Majerum qishlogʻi ortida, suv tegirmonidan 300 m yuqorida va soyning chap qirgʻogʻidan 50–60 m narida oʻsadi. Yonida — masjid va qadimiy qishloq xarobalari.\n\nBu yerda yurish 1 km dan kam: bu marshrut emas, yoʻldagi toʻxtash. Odatda archani Nurota togʻlari boʻylab ikki kunlik safarlarga Fozilmon va Tuzkon koʻllari, Sentob, Uxum va Hayot qishloqlari hamda petrogliflar bilan birga kiritishadi.\n\n**Kirish:** daraxt tashkil etilayotgan Nurota-Qizilqum biosfera rezervati hududida oʻsadi. — 2025-yil 28-fevral",
+      "how_to_get_md_uz": "Jizzax viloyati Forish tumani, Majerum qishlogʻi ortida. Joydagi moʻljal — suv tegirmoni: daraxt undan 300 m yuqorida, soyning chap qirgʻogʻidan 50–60 m narida."
+    },
+    "maly-chimgan": {
+      "name_uz": "Kichik Chimyon",
+      "short_desc_uz": "Ideal «birinchi choʻqqiga chiqish»: 3 soat yoʻl va butun Chimyon panoramasi",
+      "description_md_uz": "Chimyon dam olish maskani ustidagi 2097 m choʻqqi — toshkentliklar orasida eng mashhur «birinchi choʻqqi». Soʻqmoq Pesochniy dovoni (1832 m) orqali oʻtadi, yonbagʻirlar tik emas, koʻtarilish taxminan 550 m.\n\nChoʻqqidan Katta Chimyon, Chorvoq suv ombori va Pskom tizmasi panoramasi ochiladi — bu manzaralar 3 soatlik mehnat uchun haddan tashqari saxiy. Bahorda yonbagʻirlar lola va lolaqizgʻaldoqqa burkanadi.\n\nMarshrutga muntazam ravishda maktab yoshidagi bolalar bilan chiqishadi.",
+      "how_to_get_md_uz": "Toshkentdan Chimyon dam olish maskanigacha ~85 km (Gʻazalkent orqali 1,5 soat). Soʻqmoq osma yoʻl ortidan boshlanadi, yoʻnalish — Pesochniy dovoniga, keyin qirra boʻylab chapga."
+    },
+    "mankent-peak": {
+      "name_uz": "Mankent",
+      "short_desc_uz": "Pskom tizmasining uch minglik choʻqqisi — 3018 m",
+      "description_md_uz": "Pskom tizmasida, Pskom vodiysining yuqori oqimida joylashgan 3018 m choʻqqi. Hududda odam kam: Chimyondan farqli oʻlaroq, bu yerda kun boʻyi hech kimni uchratmasligingiz mumkin.\n\n**Muhim:** uzoq yondashuvli va infratuzilmasiz uch minglik choʻqqi. Vaqt zaxirasi va togʻ etagida tunash bilan rejalashtiring.",
+      "how_to_get_md_uz": "Toshkentdan Pskom vodiysiga (~150 km), keyin piyoda yondashuv."
+    },
+    "maydan-gori": {
+      "name_uz": "Maydan gʻori",
+      "short_desc_uz": "«21 PODZEMELYE» dasturida chegara hududi sababli yopilgan Jurchashaya gʻori oʻrnini egallagan gʻor",
+      "description_md_uz": "Navoiy viloyatidagi gʻor. «21 PODZEMELYE» dasturida u 2025-yil aprel oyida Jurchashaya gʻori oʻrniga paydo boʻldi — Jurchashaya chegara cheklovlari sababli dasturdan olib tashlangan edi. Kirish yonidagi taxtacha 2025-yil oktabr oyida oʻrnatilgan.\n\nYondashuv qisqa: 2 km dan sal koʻproq va taxminan 200 m koʻtarilish. Shundan qanchasini piyoda bosib oʻtish kerakligi mashinaga bogʻliq — yengil mashinada soʻqmoq boshigacha yetib borishadi, yoʻltanlamasda esa toʻgʻridan-toʻgʻri togʻ etagigacha borish mumkin.",
+      "how_to_get_md_uz": "Yengil mashinada start nuqtasigacha yetib borishadi; yoʻltanlamasda — toʻgʻridan-toʻgʻri togʻ etagiga, shunda piyoda juda oz yoʻl qoladi."
+    },
+    "maydanak-plateau": {
+      "name_uz": "Maydanak platosi",
+      "short_desc_uz": "Astronomiya rasadxonasi joylashgan 2750 m balandlikdagi togʻ platosi",
+      "description_md_uz": "Maydanak — Qashqadaryo viloyatidagi Hisor tizmasining baland togʻ platosi, balandligi 2750 m, ikkita yotiq choʻqqisi bor. Gʻarbiysida Maydanak astronomiya rasadxonasi, sharqiysida — qoʻmondonlik-oʻlchov majmuasi joylashgan.\n\nNomi oʻzbekcha «maydon-oq» — «oq maydon» degan maʼnoni anglatadi. Plato Shahrisabzdan 45 km janubda joylashgan va Igrisuv daryosining oʻng qirgʻogʻidagi Xontaxta massivining eng janubiy choʻqqisi hisoblanadi.\n\nRasadxona bu yerda bejiz qurilmagan: Maydanakning astroiqlimi mintaqadagi eng yaxshilaridan biri hisoblanadi — tunlari tiniq va tinch.\n\n**Muhim:** rasadxona — amaldagi ilmiy obyekt, uning hududiga kirish cheklangan. Balandlikda tunda yilning istalgan faslida sovuq boʻladi.",
+      "how_to_get_md_uz": "Shahrisabzdan janubga, togʻlarga taxminan 45 km. Platoga boradigan yoʻl togʻ yoʻli, mos transport kerak."
+    },
+    "maygashkan": {
+      "name_uz": "Maygashkan",
+      "short_desc_uz": "Chimyondan gʻarbda, Chotqol tizmasi tarmoqlaridagi 2310 m choʻqqi",
+      "description_md_uz": "Chotqol tizmasining gʻarbiy tarmoqlaridagi 2310 m choʻqqi, Kumbel bilan qoʻshni. Balandliklari deyarli bir xil, biroq Maygashkanga sezilarli darajada kam chiqishadi — bu yerda dam olish kunlari ham odam kamroq uchraydi.\n\nYonbagʻirlar oʻt va butalar bilan qoplangan, yuqorida — ochiq toshloq uchastkalar. Choʻqqidan ochiladigan panorama Chimyon massivi va Chirchiq vodiysini qamrab oladi.\n\n**Muhim:** aniq yagona soʻqmoq yoʻq, qirra boʻylab moʻljal olishga toʻgʻri keladi. Navigatorsiz va kunduz yorugʻligi zaxirasisiz bu yerga bormagan maʼqul.",
+      "how_to_get_md_uz": "Toshkentdan Gʻazalkent orqali Chimyon tomonga; yondashuvlar — Beldarsoy tomondan."
+    },
+    "moviy-toglar": {
+      "name_uz": "Moviy togʻlar",
+      "short_desc_uz": "Qurama tizmasining archazorlari — Toshkent viloyatining boshqa togʻlariga oʻxshamaydi",
+      "description_md_uz": "Ohangaron ustidagi Qurama tizmasining bir qismi, marshrutning eng baland nuqtasi — 2242 m. Toshkent viloyatining boshqa tizmalaridan asosiy farqi — archazorlar: soʻqmoq archa bosgan qoyalar orasidan, kichik tepaliklar va quyuq oʻrmon orqali burilib-burilib oʻtadi.\n\nTojikiston chegarasiga yaqinligi sababli bu joyda uzoq vaqt odam kam boʻlgan va u ilk qiyofasini saqlab qolgan. 2026-yilga kelib manzara oʻzgardi: mashhur soʻqmoqlarda odam koʻpaydi, yoʻl boʻylab chiqindi paydo boʻldi, klublarning bir qismi esa bu yerga guruhlarni olib kelishni toʻxtatib, qoʻshni yovvoyiroq mavzelarga oʻtdi.\n\n---\n**Kirish:** 2025-yil may — Tojikiston bilan chegaradosh hudud",
+      "how_to_get_md_uz": ""
+    },
+    "mozorzhon": {
+      "name_uz": "Mozorjon",
+      "short_desc_uz": "Yangiobod ustidagi choʻqqi: archazor, Dukent meteostansiyasi, qishda juda koʻp qor",
+      "description_md_uz": "Ohangaron tumanidagi Yangiobod togʻlaridagi 2428 m choʻqqi. Soʻqmoq archazor orqali, Dukent meteostansiyasi (2000 m) yonidan oʻtib koʻtariladi, yoʻlda sharshara bor. Choʻqqidan — Chotqol va Qurama tizmalari panoramasi.\n\nQishda bu yer yaqin togʻlardagi eng qorli joylardan biri: choʻqqida qor 1 m dan qalin, oʻrmon qor uyumlari ichida turadi. Yurishlarni yil boʻyi, jumladan yanvarda −5…−8 °C da ham oʻtkazishadi.\n\n**Muhim:** mahalliy aholi bu yerdagi jilgʻadan suv ichishni maslahat bermaydi — uni radioaktiv deb hisoblashadi. Suvni oʻzingiz bilan olib boring.",
+      "how_to_get_md_uz": "Angren orqali Yangiobod tomonga; marshrut Olatanga soyi yonidan boshlanadi. Mashinada taxminan 1400 m gacha koʻtarilish mumkin, keyin piyoda archazor orqali Dukent meteostansiyasi yonidan."
+    },
+    "myk": {
+      "name_uz": "Mik qalʼasi",
+      "short_desc_uz": "Jizzax viloyati togʻlaridagi qalʼa; yoʻldagi vodiyda chodir tikish joylari koʻp",
+      "description_md_uz": "Jizzax viloyati togʻlaridagi qalʼa xarobalari. Unga boradigan soʻqmoq mashhur Sherbuloq bulogʻidan sal yuqorida, yoʻl boʻyidagi toʻrtburchak toʻsiqlar boshlanadigan joyda boshlanadi va vodiyga kiradi; avtomobil yoʻlidan vodiygacha 1,5–2 km, qalʼaning oʻziga esa, forumda yozishlaricha, «yuraverasiz, yuraverasiz» — ustiga ustak, dovon orqali.\n\nKoʻtarilish bu yerda katta emas — 8 km ga taxminan 120 m, shuning uchun marshrutning ogʻirligi koʻtarilishda emas, uzunligida. Yoʻldagi vodiyda chodir tikish joylari koʻp. Mik orqali velosiped marshruti ham oʻtkazilgan: qadimiy Boboyongʻoq daraxtidan soy boʻylab Yettikechuv qishlogʻigacha 26 km.\n\n**Kirish:** Dugʻoba tomonidan kirish qulayroq, lekin u yerda nazorat posti va shlagbaum bor — masala joyida kelishuv orqali hal qilinadi. Ruxsat beriladiganlarga asosiy talab — gulxan yoqmaslik. — 2025-yil 8-iyul",
+      "how_to_get_md_uz": "Ikkita kirish yoʻli bor. Sherbuloq bulogʻidan: soʻqmoq undan sal yuqorida, yoʻlning toʻrtburchak toʻsiqlari yonida boshlanadi va vodiyga kiradi (avtomobil yoʻlidan 1,5–2 km), keyin dovon orqali. Ikkinchisi, sharhlarga koʻra qulayroq, — Dugʻoba tomonidan Yettikechuvga: mashinada shlagbaumgacha borishadi."
+    },
+    "navolisoy": {
+      "name_uz": "Navolisoy sharsharasi",
+      "short_desc_uz": "«Ohangdor soy»: Ugom tizmasi etagida, Pskomning oʻng irmogʻidagi sharshara",
+      "description_md_uz": "Pskomning oʻng irmogʻi — Navolisoydagi sharshara. Nomini «ohangdor soy» deb tarjima qilishadi: toshloq oʻzanda suv xuddi musiqa asbobi chalinayotgandek jaranglaydi. Soy Ugom tizmasining janubi-gʻarbiy yonbagʻirlaridagi buloqlardan, taxminan 3000 m balandlikda boshlanadi.\n\nForumdagi «Kaskad» sharsharalar roʻyxatiga kiradi. Bu yerga guruh turlarini may–avgust oylarida tashkil qilishadi va marshrutni oʻrtacha murakkablikdagi deb baholashadi.\n\n---\n**Kirish:** 2025-yil may — hududga kirish uchun ruxsatnoma kerak; turoperatorlar uni oʻzlari rasmiylashtiradi va narxga qoʻshadi.",
+      "how_to_get_md_uz": ""
+    },
+    "nuratau-sentob": {
+      "name_uz": "Sentob ustidagi qirra",
+      "short_desc_uz": "Halqa marshrutning manzara nuqtalari: Sentob vodiysi va choʻl ortidagi Aydarkoʻl",
+      "description_md_uz": "Sentob qishlogʻidan gʻarbdagi qirra boʻylab oʻtadigan halqa marshrutning eng baland nuqtasi (1115 m): choʻponlar soʻqmoqlari boʻylab 9 km, start nuqtasi ~605 m da, 801 m li egar va ikkita manzara nuqtasi (1067 m va 1115 m). Yuqoridan — Sentob vodiysi, Sop darasi, Qadvon vodiysining xarobalari va choʻl ortida, tumanda — Aydarkoʻl koʻrinadi.\n\nSoʻqmoq baʼzi joylarda zoʻrgʻa bilinadi, soya deyarli yoʻq: bahorda bu yerlar gullaydi, yozda — jazirama. Sentob — Nurota togʻlarining asosiy mehmon uylari qishlogʻi, shuning uchun halqani kelgan kuniyoq aylanish qulay.",
+      "how_to_get_md_uz": "Sentob qishlogʻi (Navoiy viloyati): Toshkentdan Jizzax orqali ~330 km, Samarqanddan ~200 km. Soʻqmoq qishloqning janubiy chekkasidan boshlanadi va gʻarbiy qirraga koʻtariladi. Mehmon uyida tunashni oldindan bron qiling."
+    },
+    "nurekata": {
+      "name_uz": "Nurakata tor darasi",
+      "short_desc_uz": "Mavsumiy koʻllari va yovvoyi otlari bor dara; bir vaqtlar bu yerda qishloq boʻlgan",
+      "description_md_uz": "Katta Chimyon yonbagʻirlaridan oqib tushadigan daryo — Nurakatasoyning darasi. Start nuqtasidan bir yoʻla bir nechta choʻqqi koʻrinadi: Koʻkbet, Maygashqan, Surenota va Katta Chimyonning oʻzi. Taxminan 1 km yurgach mavsumiy koʻllar uchraydi, undan keyin qalin oʻrmonlar boshlanadi; 2025-yil aprel oyida bir guruh bu yerda yovvoyi otlarni uchratgan. Kuzda soʻqmoq boʻylab meva koʻp — olma, togʻolcha, olxoʻri, doʻlana.\n\nDastlabki kilometrlar yotiq, tik koʻtarilish uchinchi-toʻrtinchi kilometrdan keyin boshlanadi. Soʻqmoq bu yerdan yanada uzoqroqqa — Katta Chimyon va Poʻlatxon platosiga — ketadi, taxminan 2000 m balandlikdan esa Kumbel meteostansiyasi va butun vodiy koʻrinadi.\n\nBu yerlar oʻzlashtirilgan: forumda aytishlaricha, ilgari Nurakatada qishloq boʻlgan, uni Stalin davrida pastga, Parkent tomonga koʻchirishgan, marmar kanyonning roʻparasida esa hanuz eski uylar turibdi.\n\n**Kirish:** sharhlarga koʻra, daraning oʻzidan yengil mashina ham oʻtadi, lekin kiraverishda shlagbaum bor — 2024-yil sentabr oyida bir guruh Gijal va Surenota fermasi orqali oʻtayotib undan oʻtgan. Soylarni bu yerda kechib oʻtishadi. — 2024-yil 19-sentabr",
+      "how_to_get_md_uz": "Ikkita kirish yoʻli: Gijal va Surenota fermasi orqali, u yerda shlagbaum turadi, yoki Kumushkon qishlogʻi orqali Oqsoqotasoyga va u yerdan Nurakatasoy vodiysiga."
+    },
+    "obi-kashka": {
+      "name_uz": "Obi Qashqa",
+      "short_desc_uz": "Chimyon–Chorvoq hududidagi uch minglik choʻqqi (3099 m)",
+      "description_md_uz": "Chimyon–Chorvoq togʻ hududidagi balandligi 3099 m boʻlgan choʻqqi, unga bir kunlik trek bor. Xaykerlar chatlarida marshrutning yangi tavsiflari hozircha yoʻq.",
+      "how_to_get_md_uz": ""
+    },
+    "obi-par": {
+      "name_uz": "Obi Par sharsharasi",
+      "short_desc_uz": "Polvonak guruhidagi uchta Pskom sharsharasidan biri — bir kunda aylanib chiqishadi",
+      "description_md_uz": "Pskom togʻlarida, taxminan 1560 m balandlikdagi sharshara. Polvonak sharsharalari guruhiga kiradi: bir kunda uni Opar va Qoʻshpar bilan birga koʻrishadi.",
+      "how_to_get_md_uz": ""
+    },
+    "obi-rakhmat": {
+      "name_uz": "Obi-Rahmat groti",
+      "short_desc_uz": "Paltogʻ ustidagi grotda neandertallar makoni — arxeologik yodgorlik",
+      "description_md_uz": "Obi-Rahmat (tojikcha «obi» — suv, oʻzbekcha «rahmat» — marhamat) — Boʻstonliq tumanidagi grot va arxeologik yodgorlik. Paltogʻ soyining oʻng qirgʻogʻida joylashgan.\n\nAynan shu grotdagi topilmalar Paltogʻni mashhur qilgan: bu yerda neandertallar bilan bogʻliq qoldiqlar saqlangan oʻrta paleolit davri qatlamlari oʻrganilgan.\n\n**Muhim:** bu — yodgorlik, attraksion emas. Hech narsani qazib olmang, toshlarni olib chiqmang va yozuvlar qoldirmang — bu yerdagi qatlamlar hanuzgacha oʻrganilmoqda.",
+      "how_to_get_md_uz": "Toshkentdan Burchmulla tomonga, Paltogʻ soyi vodiysiga. Yoʻldan grotgacha koʻtarilish qisqa."
+    },
+    "okhotnichiy": {
+      "name_uz": "Oxotnichiy choʻqqisi (Ovqashqa)",
+      "short_desc_uz": "Chotqol tizmasidagi uch minglik choʻqqi; yoʻlning yarmida grot bor, odatda oʻsha yerda tunashadi",
+      "description_md_uz": "Chotqol tizmasidagi choʻqqi, u yana Ovqashqa deb ham ataladi. Forumda uni hududning eng chiroyli uch minglik choʻqqilaridan biri deb atashadi: choʻqqidan Chorvoq, Katta Chimyon va Poʻlatxon platosi koʻrinadi. Ohotnichiyning oʻzi esa, aksincha, atrofdagi deyarli barcha manzara maydonchalaridan — Kichik Chimyondan, Dodekatimdan, Pesochniy dovonidan — moʻljal vazifasini oʻtaydi.\n\nKlassik variant — tunash bilan: Yangiqoʻrgʻon qishlogʻidan chiqib, Gʻulkam tor darasiga yetmasdan qariyb 1000 m koʻtarilishadi va «Xolodilnik» («Muzlatgich») deb ataladigan joy yaqinidagi grot yonida lager tikishadi, ertalab esa choʻqqiga yengil yuk bilan chiqishadi. Bir kunda ham borishadi, Katta Chimyon bilan birga koʻp kunlik yurishlar tarkibida ham.\n\n**Muhim:** koʻtarilishdagi grot — tabiiy chegara nuqtasi. 2023-yil may oyida forumda gidning oʻsha yerda undan nariga yurmaydigan ishtirokchilarni qoldirib, guruh avtobusga ulgurishi uchun ularni yordamchi bilan pastga joʻnatganini eslashgan. — 2023-yil 17-may",
+      "how_to_get_md_uz": "Yangiqoʻrgʻon qishlogʻidan. Soʻqmoq Gʻulkam tor darasiga yetmasdan koʻtarila boshlaydi va «Xolodilnik» joyi yonidagi grotga olib chiqadi — odatda oʻsha yerda lager tikishadi; keyin choʻqqiga."
+    },
+    "oksok-ota-kaneni": {
+      "name_uz": "Oqsoqota kanyonlari",
+      "short_desc_uz": "Oqsoqotasoydagi marmar kanyon, yonida 25 metrlik Qashqasuv sharsharasi",
+      "description_md_uz": "Oqsoqotasoydagi kanyon; hisobotlarda uni marmar kanyon deb atashadi. Oqsoqota Qashqasuv bilan qoʻshiladigan joydan 5 km yuqorida — tor daraga burilish, yana 300 m dan keyin 25 metrlik Qashqasuv sharsharasi ochiladi; qishda uning atrofidagi suv muzlaydi. Soʻnggi mavsumlarda soydagi suv odatdagidan sezilarli darajada kam.\n\nYuqori oqimga boradigan yoʻlda 1991-yilda qurilgan tashlandiq ikki qavatli uy turibdi, sayyohlar uni «Magazin» deb atashadi: uni boshpana sifatida ishlatishadi, ichida oʻtin pechkasi bor. Kanyonga yil boʻyi borishadi — yanvardagi turlardan yozgi chiqishlargacha, koʻpincha Surenotaga koʻtarilish bilan birga.",
+      "how_to_get_md_uz": "Toshkentdan Parkent orqali Kumushkonga: Oltinbel yonidagi qurilayotgan kurortgacha yoʻl asfaltlangan, undan keyin — kechuvlari bor eski toshloq tuproq yoʻl, yuqoriga yoʻltanlamassiz oʻtib boʻlmaydi. Mashinani odatda Teshiktosh yonida qoldirib, Oqsoqotasoy boʻylab yuqoriga yurishadi; pastdan Gijal qishlogʻidan ham kirishadi."
+    },
+    "oktosh-sharsharasi": {
+      "name_uz": "Oqtosh sharsharasi (Oqtoshsoy)",
+      "short_desc_uz": "Oqtoshsoydagi sharsharalar: oʻrmonli dara va mozaikali tashlandiq rassomlar dala hovlisi",
+      "description_md_uz": "Oqtosh qishlogʻidan yuqorida, Oqtoshsoyda bir nechta kichik sharshara bor. Dara oʻrmonli va soyali, yonbagʻirlarni qalin oʻsimlik bosgan, havoda archa hidi anqiydi — kuzda oʻrmon ayniqsa yorqin boʻladi. Marshrutning gʻayrioddiy nuqtasi — qishloqdan 4 km naridagi sobiq rassomlar dala hovlisi: oʻttiz yilcha oldin ishlagan ijodiy baza; oʻnga yaqin tashlandiq binodan mozaikali panno tushirilgan devor saqlanib qolgan.\n\nDala hovlidan yuqoriga, Soylik darasiga koʻtarilish mumkin — u yerdagi manzaralar yanada qiziqroq.\n\n---\n**Kirish:** 2024-yil aprel — rassomlar dala hovlisi hududini harbiy tashkilot sotib olgan; agar qurilish boshlanib, yer uchastkasi qoʻriqlovga olinsa, dala hovliga kirish — u bilan birga yuqoriga boradigan odatiy yoʻl ham — yopilishi mumkin.",
+      "how_to_get_md_uz": "Toshkentdan taxminan 60 km. Start — Oqtosh qishlogʻi yonida (moʻljal — «kislorod zavodi»), keyin Oqtoshsoy boʻylab piyoda yuqoriga; rassomlar dala hovlisi qishloqdan 4 km narida. Gidlarning eʼlonlariga koʻra, u yerga elektrichka yoki marshrutkada ham borishadi."
+    },
+    "opar": {
+      "name_uz": "Opar sharsharasi",
+      "short_desc_uz": "Pskomdagi Polvonak guruhining yana bir sharsharasi — Obi Par va Qoʻshpar bilan birga koʻrishadi",
+      "description_md_uz": "Pskom togʻlarida, taxminan 1550 m balandlikdagi sharshara. Uni Obi Par va Qoʻshpar bilan bir kunda koʻrishadi — Polvonak turkumidagi uchala sharshara ham bir yarim kilometr radiusda joylashgan.",
+      "how_to_get_md_uz": ""
+    },
+    "oqtoshtov": {
+      "name_uz": "Oqtoshtogʻ",
+      "short_desc_uz": "Turkiston tizmasidagi 3401 m choʻqqi, Zomin milliy bogʻi ustida",
+      "description_md_uz": "Turkiston tizmasidagi 3401 m choʻqqi — Zomin milliy bogʻi ustida koʻtarilib turadi. Jizzax viloyatida borish mumkin boʻlgan eng baland piyoda marshrutlardan biri.\n\nKoʻtarilish bogʻning archazorlari orqali oʻtadi — Zomin aynan shu archa mintaqalarini saqlab qolish uchun milliy bogʻ maqomini olgan.\n\n**Muhim:** balandlik 3400 m dan ortiq, ob-havo tez oʻzgaradi. Erta yoʻlga chiqing va qorongʻi tushguncha ulgurmasangiz, orqaga qayting.",
+      "how_to_get_md_uz": "Jizzaxdan Zomin milliy bogʻiga, keyin bogʻning yuqori qismidan piyoda yondashuv."
+    },
+    "oynatosh": {
+      "name_uz": "Oynatosh",
+      "short_desc_uz": "Chorvoq ustidagi Pskom tizmasi choʻqqisi; murakkabligi boʻyicha Katta Chimyon bilan qiyoslashadi",
+      "description_md_uz": "Chorvoq yaqinida, Pskom tizmasidagi 2552 m choʻqqi. Togʻga nom bergan Oynatoshning oʻzi — balandligi taxminan 500 m, uzunligi bir kilometrcha boʻlgan, 70° burchak ostida qiya turgan ulkan uchburchak plita: quyoshda yaltiraydi. Togʻning asosiy nuqtasi shu plitadan 150 metrcha yuqorida.\n\nChoʻqqidan Padar, Chadak va Chatan, Machitasgansoy vodiysi, Ugom tizmasining togʻlari va sharsharalari koʻrinadi. Taxminan 1800 m balandlikda toshlarda qadimgi dengiz organizmlarining izlari uchraydi — bu joylar bir vaqtlar Tetis okeanining tubi boʻlgan.\n\nBu hudud uchun balandligi kamtarona boʻlsa-da, koʻtarilishning murakkabligini Katta Chimyon bilan qiyoslashadi — unga koʻpincha Katta Chimyon oldidan mashq uchun chiqishadi.",
+      "how_to_get_md_uz": "Start — Boʻstonliq tumanidagi Mullalo qishlogʻi: Urungachga boradigan yoʻlda Qorabuloq postidan keyin oʻngga burilib, kichik koʻprikdan oʻtiladi. Soʻqmoq qishloqdan boshlanib, yongʻoq va olma bogʻlari orqali oʻtadi."
+    },
+    "paltau-waterfall": {
+      "name_uz": "Paltogʻ sharsharasi",
+      "short_desc_uz": "Paltogʻsoydagi sharshara — Obi-Rahmat groti yonida",
+      "description_md_uz": "Paltogʻsoydagi sharshara — soy Chotqolning oʻng irmogʻi boʻlib, kech bahor va yoz boshida toʻgʻridan-toʻgʻri Chorvoq suv omboriga quyiladi.\n\nObi-Rahmat groti bilan birga koʻrish qulay: ikkala joy ham bir vodiyda joylashgan, ularga bitta chiqish yetadi.\n\n**Muhim:** suvi eng koʻp boʻladigan vaqt — may va iyun. Avgustga borib oqim sezilarli darajada susayadi.",
+      "how_to_get_md_uz": "Toshkentdan Burchmulla tomonga, Paltogʻ vodiysiga burilish. Keyin soy boʻylab piyoda."
+    },
+    "paltog": {
+      "name_uz": "Paltogʻ",
+      "short_desc_uz": "38 metrlik sharsharali Paltogʻ kanyoni ustidagi 2024 m choʻqqi",
+      "description_md_uz": "Paltogʻ vodiysi ustidagi 2024 m choʻqqi; odatda uni yoʻlda uchraydigan sharshara bilan birga koʻrishadi. Balandligi 35–40 m boʻlgan sharshara tik, 50 metrli devorli tor kanyonga quyiladi, suvi biroz loyqa. Qishda oqimning chetlari muzlaydi, oqim ostida esa qalinligi 2 m gacha muzlama oʻsib boradi.\n\nNomni ikki xil izohlashadi: yo «pulat togʻ» — «poʻlat togʻ», yo «bol togʻ» — «asalli togʻ»; shundan Paltov va Paltau variantlari kelib chiqqan.\n\n---\n**Kirish:** 2025-yil yanvar — sharshara Ugom-Chotqol qoʻriqxonasi hududida joylashgan.",
+      "how_to_get_md_uz": ""
+    },
+    "patandazboshi": {
+      "name_uz": "Patandozboshi",
+      "short_desc_uz": "Chorvoq ustidagi «Fil boshi» (1877 m) — soʻqmoq tekis, yangi boshlovchilarga toʻgʻri keladi",
+      "description_md_uz": "Chorvoqning janubi-sharqiy qirgʻogʻi ustidagi 1877 m choʻqqini «Fil boshi» deb atashadi. Koʻtarilish tekis, keskin balandlik farqlarisiz — togʻni yangi boshlovchilarga tavsiya qilishadi, shu bilan birga u «33 choʻqqi» klub dasturiga kiradi. Choʻqqidan Chorvoq, Chimyon, Paltogʻ va Qopirtosh koʻrinadi.\n\nYil boʻyi borishadi; qishda murakkablik faqat qor hisobiga ortadi — 2024-yil dekabr boshida qor allaqachon 1200 m dan boshlab yotardi, ertalab esa vodiyni tuman va past bulutlar qoplab olardi. Tajribalilar Patandozboshini travers orqali Ohotnichiy choʻqqisi bilan bogʻlashadi.",
+      "how_to_get_md_uz": "Start — Chorvoqning janubi-sharqiy tomonidagi Yangiqoʻrgʻon qishlogʻi, soʻqmoq Burchmulla tomonga. Yoʻlning birinchi kilometri shagʻal bilan toʻshalgan, undan keyin nam mavsumda — loyli qismlar."
+    },
+    "pioner-chukkisi": {
+      "name_uz": "Pioner choʻqqisi",
+      "short_desc_uz": "Yangiobod ustidagi 2336 m choʻqqi, koʻpincha Bezimyanniy choʻqqisi (2502 m) bilan birga",
+      "description_md_uz": "Ohangaron togʻlaridagi Yangiobod shaharchasi ustidagi choʻqqi, 2336 m. Odatda unga qoʻshni Bezimyanniy choʻqqisi (2502 m) bilan birga chiqishadi — ikkalasiga ham bir kunda ulgurishadi.\n\nChoʻqqiga koʻtarilish 4–5 soat oladi. Qishda ham borishadi, lekin qor yogʻganda Yangiobodgacha boradigan yoʻlning oʻzi ogʻirlashadi — muzlagan yoʻl, sekin haydashga toʻgʻri keladi.",
+      "how_to_get_md_uz": "Toshkentdan taxminan 120 km: Angren orqali Yangiobodgacha. Marshrut shahar tashqarisidagi turbazadan boshlanadi."
+    },
+    "piyozak": {
+      "name_uz": "Piyozak",
+      "short_desc_uz": "Pskom tizmasining qoyali choʻqqisi — «21 GORIZONT» dasturidagi eng murakkablardan biri",
+      "description_md_uz": "Pskom tizmasining balandligi 3736 m boʻlgan qoyali choʻqqisi. 2022-yil sentabrda taxtacha oʻrnatilganda uni «21 GORIZONT» dasturining eng yuqori toifali choʻqqilaridan biri deb atashgan. Pastdan, Ispaysoydan, Piyozak qoʻshni Padar bilan birga koʻrinadi; Ispaysoyning oʻzi tizmaning yuqori qismidan — yozda ham qor yotadigan joydan boshlanadi.\n\nChoʻqqiga Ispay darasi orqali chiqishadi — 2025-yil avgustda marshrutni bir kunda oʻtishgan. Marshrut kartochkasidagi raqamlar faqat choʻqqi qismini tasvirlaydi, butun chiqish ancha uzunroq. Tuman — Boʻstonliq, Ugom-Chotqol milliy tabiat bogʻi hududi.\n\n**Kirish:** togʻ qoyali, forumda ochiq ogohlantirishadi: qor yogʻgandan keyin bu yerga koʻtarilmagan maʼqul — choʻqqiga chiqish jihozlar talab qiladi va ancha murakkablashadi. — 2023-yil 7-sentabr",
+      "how_to_get_md_uz": ""
+    },
+    "pulatkhan-plateau": {
+      "name_uz": "Poʻlatxon platosi",
+      "short_desc_uz": "Jarliklar bilan oʻralgan 2823 m yassitogʻ — yuqorida tunash bilan 2–3 kunlik yurish",
+      "description_md_uz": "Chotqol tizmasi tarmoqlaridagi ulkan yassitogʻ: 2823 m balandlikda, maydoni taxminan 8 km² boʻlgan plato, har tomondan Terakli va Qoraarcha daryolariga qarab tik qoyali yonlar bilan kesilgan. Yuqoriga faqat bir nechta kuluar va qirralar orqali koʻtarilish mumkin — «qalʼa» degan nom ham shundan.\n\nOdatiy format — platoda tunash bilan 2–3 kunlik yurish: yuqoridagi quyosh botishi va quyosh chiqishi bunga arziydi. Yuqorida — oʻtloqlar, voronkalar va grotlar; suvni marshrut boʻyidagi qor maydonlari va buloqlardan olishadi.\n\n**Muhim:** marshrut tajribali rahbar boshchiligidagi, tayyorgarligi bor guruhlar uchun. Mavsumdan tashqari (noyabr–may) — qor va koʻchki xavfi.",
+      "how_to_get_md_uz": "Toshkentdan Gʻazalkent orqali Burchmulla tomonga; marshrutlarning start nuqtalari — togʻ etagidagi daryo vodiylarida (bir necha yondashuv varianti bor, eng koʻp yuriladigani — Terakli orqali). Faqat guruh bilan yoki yondashuvni biladigan gid bilan."
+    },
+    "rakhmanyaylov": {
+      "name_uz": "Rahmonyaylov",
+      "short_desc_uz": "Qurama tizmasidagi 2857 m choʻqqi, Toshkent viloyatining janubida",
+      "description_md_uz": "Qurama tizmasidagi 2857 m choʻqqi, Ohangaronning yuqori oqimida. Bu hudud Chimyonga qaraganda ancha kam boriladi: bu yerga sokinlik izlaganlar keladi.\n\n**Muhim:** infratuzilma yoʻq, aloqa uzilib qoladi. Marshrut tayyorgarligi bor kishilar uchun, toʻliq suv va oziq-ovqat zaxirasi bilan.",
+      "how_to_get_md_uz": "Toshkentdan Angren orqali Ohangaronning yuqori oqimiga, keyin piyoda yondashuv."
+    },
+    "sangardak-waterfall": {
+      "name_uz": "Sangardak sharsharasi",
+      "short_desc_uz": "Hisor togʻlaridagi 100 metrlik suv va yoʻsin devori — janubning eng taʼsirchan sharsharasi",
+      "description_md_uz": "Hisor togʻlarida, shu nomli qishloq yonidagi Sangardak daryosidagi koʻp pogʻonali sharshara. Oqimlarning bir qismi yoʻsin bosgan qoya devoridan toʻgʻridan-toʻgʻri buloq boʻlib otilib chiqadi — goʻyo qoya suv bilan «yigʻlayotgandek» koʻrinadi. Umumiy tushish balandligi turli baholarga koʻra — 100–165 m.\n\nSuvi eng koʻp boʻladigan vaqt — bahor va yoz boshi; kuzga borib kichik oqimlar qurib qoladi. Yoʻldan sharshara etagigacha — qisqa soʻqmoq, bir kilometrdan kam.\n\nAgar janub faqat dashtdan iborat deb oʻylagan boʻlsangiz, Surxondaryogacha yetib borish uchun eng yaxshi bahona.",
+      "how_to_get_md_uz": "Termizdan ~190 km (3 soat) Denov orqali, Toshkentdan — uzoq safar (~700 km), odatda Boysun va mamlakat janubi bilan birga."
+    },
+    "sarmishsay-petroglyphs": {
+      "name_uz": "Sarmishsoy petrogliflari",
+      "short_desc_uz": "Tosh davrining eng yirik «rasm galereyasi»: bitta darada minglab rasm",
+      "description_md_uz": "Oʻzbekistondagi eng yirik qoyatosh rasmlari toʻplami: Qoratogʻ tizmasining janubiy yonbagʻridagi darada 5000 dan ortiq (baholarga koʻra — 10 000 gacha) petroglif. Asosiy «galereya» dara tubi boʻylab ~2,5 km ga choʻzilgan.\n\nEng qadimgi tasvirlar — mezolit davriga oid, asosiy qismi — bronza davri: yovvoyi buqalar, togʻ echkilari, ovchilar, jang aravalari. 2004-yildan hudud — tabiiy-arxeologik qoʻriqxona.\n\nSayr yengil (borib-qaytib ~4 km), oyoq ostida quruq oʻzan, yozda jazirama juda kuchli — suv oling.",
+      "how_to_get_md_uz": "Navoiydan 30–40 km (mashinada yarim soat), Toshkentdan ~430 km — Nurota yoki Aydarkoʻlga safar bilan birga qilgan maʼqul."
+    },
+    "shahkurgan-peak": {
+      "name_uz": "Shoxqoʻrgʻon",
+      "short_desc_uz": "Parkent tumanidagi ikki minglik choʻqqi, deyarli butun issiq mavsum davomida borish mumkin",
+      "description_md_uz": "Chotqol tizmasi tarmoqlaridagi, Parkent tumani ustidagi 2025 m balandlikdagi choʻqqi. Balandligi bu yerlarning oʻlchoviga koʻra katta emas, shuning uchun mavsum uzun — apreldan noyabrgacha.\n\nHududning jiddiyroq choʻqqilaridan oldingi mashq chiqishi sifatida mos keladi.\n\n**Muhim:** bahorda yonbagʻirlarda ivigan loy boʻladi, soʻqmoq sirpanchiq. Protektorli poyabzal shart.",
+      "how_to_get_md_uz": "Toshkentdan Parkent orqali, koʻtarilish Soʻqoq darasi tomonidan."
+    },
+    "shakhter": {
+      "name_uz": "Shaxtyor",
+      "short_desc_uz": "Boboytogʻ yonidagi 3190 m choʻqqi: dastlabki metrlardanoq keskin koʻtarilish",
+      "description_md_uz": "Ohangaron tumanidagi 3190 m choʻqqi, Boboytogʻning qoʻshnisi — ikkala choʻqqiga koʻpincha bir chiqishda birga chiqishadi. Koʻtarilish dastlabki metrlardanoq keskin, koʻnikib olishga vaqt bermaydi.\n\nYil boʻyi borishadi: Angren tomonidan (Igil-Rok hududi) 1680 m dan start olib qishda choʻqqiga chiqqanlari maʼlum, marshrutning yuqori qismida — qor va tik koʻtarilishlar. Shaxtyor va qoʻshni Boboytogʻda qor may oxirigacha turadi.",
+      "how_to_get_md_uz": "Klassik yondashuv — Ohangaron tumanidagi Chinor qishlogʻidan: Kamchiq dovoniga kiraverishdagi sobiq post ortida oʻngga burilish, yoʻlning bir qismi asfaltlangan. Koʻtarilishni «Butgut-qoya» dam olish maskani yonidan, taxminan 1750 m balandlikdan boshlashadi. Qishki variant — Angren tomonidan, Igil-Rok hududidan, start taxminan 1680 m."
+    },
+    "shovurkul": {
+      "name_uz": "Shovurkoʻl",
+      "short_desc_uz": "Oygaing havzasidagi koʻl; Barkrak muzligi bilan birga, tunash bilan borishadi",
+      "description_md_uz": "Pskom togʻlaridagi, Oygaing havzasidagi koʻl. «21 MIRAJ» dasturida u Ozyorniy muzligi yonidagi koʻl va Medvejye koʻli bilan birga yuritiladi — uchala koʻl qirgʻogʻiga taxtachalar 2024-yil yozida bir chiqishda oʻrnatilgan.\n\nKoʻlning oʻziga yondashuv — 11 km va taxminan 700 m koʻtarilish, biroq bu joylargacha yetib borish uzoq. Guruhlar 3 kun va piyoda qariyb 45 km yoʻl rejalashtiradi, startgacha esa — mashinada taxminan 500 km; yoʻl-yoʻlakay Barkrak muzligiga va Oqqapchigʻaysoyga ham kirishadi.\n\n**Kirish:** marshrut chegara hududidan oʻtadi: pasport asli va Boʻstonliq tumani ruxsatnomasi kerak. — 2025-yil 5-avgust",
+      "how_to_get_md_uz": "Oygaing vodiysi boʻylab. Yoʻl Oygaing qor-koʻchki stansiyasigacha boradi: 2025-yil avgustda guruh ertalab soat toʻrtlarda yoʻlga chiqib, unga tush paytiga yetib kelgan. Keyin vodiy boʻylab yuqoriga, yoʻlning bir qismini mashinada oʻtish mumkin. Yoʻltanlamaslarda borishadi."
+    },
+    "sukok-waterfall": {
+      "name_uz": "Soʻqoq sharsharasi",
+      "short_desc_uz": "Parkent yaqinidagi Soʻqoq darasidagi sharshara — Toshkentga yaqin",
+      "description_md_uz": "Toshkentga eng yaqin togʻ daralaridan biri — Soʻqoq darasidagi sharshara. Daryo boʻylab bosilgan soʻqmoq ketadi, koʻtarilish yotiq.\n\nYaqinligi va soddaligi tufayli Soʻqoq togʻlarga birinchi chiqish uchun va yarim kunlik qisqa safar uchun yaxshi mos keladi.\n\n**Muhim:** dam olish kunlari bu yerda odam koʻp boʻladi. Sokinlik istasangiz — ish kuni yoki erta tongda keling.",
+      "how_to_get_md_uz": "Toshkentdan Parkent orqali Soʻqoq tomonga — shahardan eng yaqin togʻ yoʻnalishlaridan biri."
+    },
+    "suren-ota": {
+      "name_uz": "Surenota",
+      "short_desc_uz": "Oqsoqota ustidagi ikki minglik choʻqqi: Chotqol tizmasi panoramasi, togʻ etagida archa",
+      "description_md_uz": "Gʻazalkentdan 25 km uzoqlikdagi, Oqsoqotasoy vodiysi ustidagi ikki minglik choʻqqi (2042 m). Choʻqqidan Nurakata va Oqsoqota daralari hamda Chotqol tizmasining qorli qirralari koʻrinadi; togʻning oʻzi esa atrof uchun moʻljal boʻlib xizmat qiladi — uni Koʻkbet, Maygashkan va Zarshox panoramalari qatorida tilga olishadi.\n\nKlassik chiqish Oqsoqota daryosi yaqinidagi marmar kanyondan boshlanadi va togʻ etagiga qarab boradi, u yerda archalar orasida guruhning bir qismi odatda piknik uchun qolib ketadi. Yozda choʻqqiga chiqish texnik murakkabliklarsiz oʻtadi.",
+      "how_to_get_md_uz": "Gʻazalkentdan taxminan 25 km; oxirgi kilometrlar — asfalt koʻrmagan tuproq yoʻllar. Guruhlarning bir qismi togʻ yoʻli bilan Kumushkon (Parkent) orqali kiradi — tosh, shagʻal va bir-ikki kechuv, yoʻltanlamassiz qiyin. Marshrutni odatda Oqsoqota daryosi yonidagi marmar kanyondan boshlashadi."
+    },
+    "suvatar-gori": {
+      "name_uz": "Suvatar gʻori",
+      "short_desc_uz": "Ichkarida yer osti soyi oqadi; yoʻlak 250–300 metr ichkariga choʻziladi",
+      "description_md_uz": "Yer ostidan soy oqib oʻtadigan gʻor: ichkariga uning oqimi boʻylab taxminan 250–300 metr yuriladi. Kirish joyi 45–60 gradus qiyalikdagi toʻkilma tuproq-tosh boʻylab 40–50 metr tushgandan keyin ochiladi — tuproq boʻsh, ehtiyotkorlik bilan tushishga toʻgʻri keladi.\n\n«21 PODZEMELYE» dasturida Suvatar 2025-yil oktabr oyida Hisor gʻori oʻrniga — borish osonroq joy sifatida paydo boʻldi. 2026-yil yanvar oyidagi taʼrifga koʻra, mashinadan kirish joyigacha atigi taxminan 200 metr.\n\n**Muhim:** ichkarisi nam va joy-joyida sirpanchiq, shift esa yoriqlarga toʻla, tepada yirik toshlar osilib turadi — sekin yurish, bosh ustida nima borligini doimo kuzatib borish kerak. — 2026-yil 12-yanvar",
+      "how_to_get_md_uz": ""
+    },
+    "suvtushar-waterfall": {
+      "name_uz": "Suvtushar sharsharasi",
+      "short_desc_uz": "Hisor qoʻriqxonasidagi 84 metrlik kaskadli sharshara",
+      "description_md_uz": "Suvtushar — Hisor-Olay togʻ tizimidagi kaskadli sharshara, Hisor qoʻriqxonasi hududidagi shu nomli kichik daryoda joylashgan. Suvning tushish balandligi — 84 metr, bu mamlakatdagi eng baland sharsharalardan biri.\n\nMahalliy aholi uni koʻpincha Suttushar — «Sut sharshara» deb ataydi: sachrayotgan tomchilardan oppoq koʻrinadigan suv oqimlari uchun. Bu joy mahalliy ekologik turizm obyekti sifatida tanilgan.\n\n**Muhim:** sharshara qoʻriqxona hududida joylashgan — tashrifni maʼmuriyat bilan kelishib olish kerak. Yarim kun yoʻlni behuda bosib bormaslik uchun kirish tartibini oldindan aniqlang.",
+      "how_to_get_md_uz": "Shahrisabz yoki Qarshidan Qashqadaryo viloyatining togʻli qismiga, Hisor qoʻriqxonasi hududiga."
+    },
+    "taragay-gori": {
+      "name_uz": "Amir Temur gʻori (Taragʻay)",
+      "short_desc_uz": "Taragʻay qishlogʻi yonidagi gʻor — qisqa, lekin juda tik koʻtarilish",
+      "description_md_uz": "Taragʻay qishlogʻi yonidagi gʻor, Amir Temur gʻori nomi bilan tanilgan. Oʻzbekistonda shu nomdagi gʻorlar bir nechta, bunisini esa aynan qishloq nomi bilan ajratishadi. «21 PODZEMELYE» dasturi taxtachasi kirish joyiga 2024-yil bahorida oʻrnatilgan.\n\nKoʻtarilish qisqa, lekin tik: 4 km masofada qariyb 750 m balandlik olinadi — deyarli butun yoʻl davomida yuqoriga yuriladi.",
+      "how_to_get_md_uz": ""
+    },
+    "tashgul-waterfalls": {
+      "name_uz": "Toshgul sharsharalari",
+      "short_desc_uz": "Chorvoqdan gʻarbdagi darada sharsharalar kaskadi — ketma-ket bir necha pogʻona",
+      "description_md_uz": "Toshgul — bitta sharshara emas, balki kaskad: dara boʻylab pogʻonalar birin-ketin almashib boradi, koʻpchiligini mahalliy aholi oʻz nomi bilan ataydi. Quyi pogʻonalardan yuqorigilariga koʻtarilib, oxirigacha oʻtib borish qiziqroq.\n\nDara Chorvoqdan gʻarbda joylashgan, shuning uchun Chimyonga qaraganda ancha kam odamli.\n\n**Muhim:** soʻqmoq joy-joyida suv yonidagi hoʻl toshlar ustidan oʻtadi. Suvi eng koʻp boʻladigan vaqt — aprel–iyun, oʻshanda sirpanchiq ham boʻladi.",
+      "how_to_get_md_uz": "Toshkentdan Gʻazalkent tomonga va keyin Chorvoqdan gʻarbga. Oxirgi qism — tuproq yoʻl."
+    },
+    "tavalgan": {
+      "name_uz": "Tavalgan",
+      "short_desc_uz": "Devorlari ostida muzlik va sirk boʻlgan choʻqqi; faqat yondashuvning oʻzi 4 kun oladi",
+      "description_md_uz": "Pskom togʻlaridagi, Kaptarqumushsoy darasi ustidagi choʻqqi. Devorlari ostida muzlikli sirk va koʻllari bor morena joylashgan: u yerga koʻtarilishning ikkinchi kunida, 1,5 km dan ortiq balandlik olib chiqishadi va nolga yaqin haroratda tunashadi. Yoʻlda tosh va qulamalar yetarlicha uchraydi.\n\nMarshrut raqamlarining oʻzi koʻp narsani aytib turadi: 18 km va 3 km dan ortiq koʻtarilish, 10 soat. Lekin bu faqat togʻning oʻzi — unga yondashuv uchun forum ishtirokchilari yana 4 kun ajratishadi. Bu yerda qor yildan yilga kamayib bormoqda: 2024-yil noyabr oyida forum ishtirokchisi iyun oʻrtalariga borib Tavalgan ostidagi sirkda qor 5 yil oldingiga qaraganda sezilarli darajada kamayganini, Paxtakor muzligi esa ancha uzoqqa chekinganini qayd etgan.\n\n**Kirish:** qishda Tavalganga chiqishmaydi: qor yogʻgandan keyin 3–4 kun koʻchki xavfi saqlanadi. — 2025-yil 6-noyabr",
+      "how_to_get_md_uz": ""
+    },
+    "temirtosh": {
+      "name_uz": "Temirtosh koʻli",
+      "short_desc_uz": "Oygaing vodiysidagi gʻayrioddiy rangli muzlik koʻli; yonida kaskadning yana ikkita koʻli bor",
+      "description_md_uz": "Oygaing vodiysi (Pskom) yuqori oqimidagi 2375 m balandlikdagi koʻl. U bevosita koʻl kosasi ustida koʻrinib turgan muzliklarning erigan suvi bilan toʻyinadi. Asosiy koʻl taxminan 400 m ga choʻzilgan, kengligi esa taxminan 100 m; suvning rangini oʻziga xos deb taʼriflashadi — «na feruza, na nefrit, na koʻk», u bulutlar va yorugʻlikka qarab oʻzgaradi. Suv muzdek, taxminan 2 °C: choʻmilish mumkin, biroq bir daqiqadan ortiq chidash qiyin.\n\nYoʻlda yana ikkita koʻl uchraydi: Quyi Temirtosh — sayoz va tiniq, tubi koʻrinib turadi, hamda shakli yurakni eslatadigan Kichik Temirtosh. Koʻllar toʻgʻonlangan: qulama va surilmalar daradan oqib chiqadigan daryoni toʻsib qoʻygan, suv esa toʻsiqlar orasida toʻplangan.\n\nQoʻshni Qoraqanishdan farqli oʻlaroq, Temirtoshga soʻqmoq bor. Odatda ikkala koʻlga vodiydagi bazaviy lagerdan bitta ikki kunlik yurishda borishadi.",
+      "how_to_get_md_uz": "Oygaing vodiysidagi bazaviy lager bilan ikki kunlik formatda borishadi; guruhlar Toshkentdan tunash bilan chiqishadi. Soʻqmoqdan 1,5 km yurgach — Tunduksoy ustidagi koʻprik: xodalar va toshlardan yasalgan poyandoz qimirlaydi, ehtiyotkorlik bilan oʻtish kerak. Koʻprikdan sal quyiroqda Tunduksoy Koʻksuvga quyiladi, keyin yoʻl Koʻksuv vodiysi boʻylab yuqoriga ketadi. Taxminan 3500 m balandlikdagi choʻqqi roʻparasida vodiy ikkiga ayriladi: oʻngdagi dara Temirtoshga olib boradi, chapga burilish — Qoraqanishga."
+    },
+    "teshik-tash": {
+      "name_uz": "Teshiktosh groti",
+      "short_desc_uz": "Devorlari yozuvlar bilan toʻlgan grot; Oʻzbekistonda «Teshiktosh» nomi bilan bir nechta joy ataladi",
+      "description_md_uz": "Qashqadaryodagi grot, «21 PODZEMELYE» dasturi nuqtalaridan biri — kirish joyidagi taxtacha 2024-yil aprel oyida oʻrnatilgan. Ichkarida devorlar boshdan-oyoq yozuvlar bilan toʻlgan: 2024-yil may oyida forumda bu haqda odatiy holdek gapirishgan.\n\nUnga chiqish — yengil sayr emas: qariyb 13 km va 1000 m ga yaqin koʻtarilish, yaʼni erta start bilan toʻliq bir kun.\n\n**Muhim:** «Teshiktosh» deb faqat bitta joy atalmaydi — forumda shu nom ostida Samarqand yaqinidagi togʻ haqida ham, Oqsoqotasoy yonidagi mavze haqida ham soʻrashadi. Safardan oldin faqat nomni emas, koordinatalarni ham solishtirib koʻrish kerak. — 2026-yil 27-mart",
+      "how_to_get_md_uz": ""
+    },
+    "turpolkul": {
+      "name_uz": "Tulparkoʻl",
+      "short_desc_uz": "Arashan koʻllari guruhidagi 2873 m balandlikdagi koʻl, choʻqqiga boradigan marshrutda",
+      "description_md_uz": "Arashan koʻllari guruhidagi 2873 m balandlikdagi koʻl. U ham qoʻshni Uzunkoʻl va choʻqqi ostidagi yuqori koʻl kabi «Arashan choʻqqisi va koʻllari» marshrutida joylashgan — odatda uni yoʻl-yoʻlakay koʻrishadi.",
+      "how_to_get_md_uz": ""
+    },
+    "tuzkon-kuli": {
+      "name_uz": "Tuzkon koʻli",
+      "short_desc_uz": "Qizilqum chekkasidagi choʻl koʻli: pistazorlar, lolaqizgʻaldoqlar va odamsiz plajlar",
+      "description_md_uz": "Oʻzbekistonning eng yirik koʻllaridan biri, Qizilqum choʻlining sharqiy chekkasida, Jizzax viloyatining Forish tumanida joylashgan. Bahorda gʻarbiy qirgʻoq choʻlga kam oʻxshaydi: Pistalitogʻ tizmasining qirgʻoqboʻyi qoyalari qirralarida — yovvoyi pista chakalakzorlari, ular ortida lolaqizgʻaldoq va isiriq dalalari, qumli plajlar va qoʻltiqlarda esa goh-goh baliqchi qayigʻi koʻzga tashlanadi.\n\nOdatiy variant — qirgʻoq boʻylab sayr va Pistalitogʻ boʻylab trek: yovvoyi bodomzorlar, marmar qazib olinadigan joylar, koʻlga yuqoridan ochiladigan manzaralar. Eng yaxshi vaqt — bahor; dam olish kunlari chodirda tunash bilan ham borishadi.\n\n---\n**Kirish:** 2023-yil sentabr — joyida ekologik yigʻim (kirish haqi) olinadi, turoperatorlar uni narxga qoʻshadi.",
+      "how_to_get_md_uz": "Jizzaxdan 56 km shimoli-sharqda. Avtomobil yoʻlining oxirgi qismi yomon holatda; navigator olib boradi, lekin oflayn xaritalarni oldindan yuklab olgan maʼqul."
+    },
+    "uchtosh": {
+      "name_uz": "Uchtosh",
+      "short_desc_uz": "Kumushkon bilan Qizilnura orasidagi qirrada 2840 m choʻqqi, sayyohlar bu yerda kamdan-kam uchraydi",
+      "description_md_uz": "Kumushkon ustidagi qirrada, Qizilnuraga boradigan yoʻlda joylashgan 2840 m choʻqqi. Hududga kam borishadi — bu marshrutlarda sayyohlar kamdan-kam uchraydi. Qizilnuraga Uchtosh orqali chiqish varianti aylanib oʻtishga qaraganda murakkabroq hisoblanadi.\n\nKoʻtarilish boshida soʻqmoq umuman boʻlmasligi mumkin: Oqsoqotasoydan boshlab dastlabki 200 m ga yaqin koʻtarilishda soʻqmoq koʻzga tashlanguncha yonbagʻir boʻylab tirmashishga toʻgʻri keladi. Keyin soʻqmoq tor boʻlib, deyarli yotiqlashishsiz yuqoriga choʻziladi.\n\nQishda hududga borish mumkin, lekin qor va muzlagan yoʻl Kumushkondan yuqoridagi yoʻlni yopib qoʻyadi — mashina odatdagi start nuqtasiga yetib bormasligi mumkin.",
+      "how_to_get_md_uz": "Kumushkon qishlogʻi orqali. Keyin yoʻltanlamaslarda Oqsoqotasoy tomonga yoki Oltinbel vodiysiga koʻtarilishadi — mashinani taxminan 1700 m balandlikda qoldirishadi. Qishda muzlagan yoʻl va qor tufayli mashinada yetib borish pastroqda tugaydi."
+    },
+    "urungach-lakes": {
+      "name_uz": "Urungʻoch (Nefrit) koʻllari",
+      "short_desc_uz": "Pskom vodiysining «Nefrit koʻllari» — bahorgi yurishlarning ramzi",
+      "description_md_uz": "Pskomning irmogʻi boʻlgan Urungʻoch soyida joylashgan, suvi quyuq nefrit tusidagi ikkita toʻgʻonlangan koʻl (Ugom-Chotqol milliy tabiat bogʻi hududi). Quyi koʻl ~1250 m, yuqorigisi — ~1570 m balandlikda joylashgan.\n\nSoy boʻyidagi soʻqmoq boʻylab borib-qaytib taxminan 8 km, ~320 m koʻtarilish bilan — deyarli hammaning kuchi yetadi. Rangi eng toʻyingan va suvi eng koʻp boʻladigan vaqt — may oʻrtasidan iyun oʻrtasigacha; yoz oxiriga borib yuqori koʻl sayozlashib, toshlar orasiga singib ketadi.\n\nYozda ham suvga tushish sovuq, lekin bu yerda olingan suratlar oʻzbek xaykingidagi eng tanilganlaridan.",
+      "how_to_get_md_uz": "Toshkentdan ~160 km (3–3,5 soat): Gʻazalkent, Chorvoq orqali va keyin Pskom vodiysi yoʻli boʻylab Urungʻoch qishlogʻigacha. Oxirgi qism — tuproq yoʻl, oddiy yengil mashina ehtiyotkorlik bilan oʻtadi. Milliy bogʻga kirish pullik (naqd pulda)."
+    },
+    "uzunkul": {
+      "name_uz": "Uzunkoʻl",
+      "short_desc_uz": "2763 m balandlikdagi Arashan koʻli — choʻqqiga chiqishlar oldidan odatdagi tunash joyi",
+      "description_md_uz": "Oltita Arashan koʻlidan biri (yonida — Oynakoʻl, Tulporkoʻl, Chuqurkoʻl, Muzkoʻl va Yuqori Muzkoʻl); butun guruh Toshkentdan 190 km uzoqlikda, taxminan 2800 m balandlikda joylashgan. Uzunkoʻl — odatdagi tunash nuqtasi: bu yerdan ertalab Arashan choʻqqisiga (3750 m) va Chingulga (4021 m) chiqishadi, koʻtarilish Mejozyorniy dovoni orqali oʻtadi. Koʻllar ustidagi manzara maydonchasidan bir vaqtning oʻzida toʻrtta koʻl koʻrinadi.\n\nYozda ham tunlar sovuq: iyulda ham, avgust boshida ham suv yonida harorat nolga yaqin, tashqarida qoldirilgan narsalar muzlaydi. Kunduzi quyosh botiqni tez isitadi — tun bilan farq 25 gradusgacha yetadi, koʻlda suvga tushishadi. Atrofda buloqlar koʻp; yonginasida suvi taxminan 36 °C boʻlgan issiq buloq ham bor.\n\nBir kunlik formatda ham borishadi: «Niva» haydovchisi koʻlning oʻzida kutib turadi va oʻsha kuni pastga olib tushadi. Kamchiligi — balandlikning keskin ortishi: Toshkentdan chiqib oʻsha kuni 3700 m ga koʻtarilganda ayrim odamlarning boshi ogʻrigan va aylangan.",
+      "how_to_get_md_uz": "Toshkentdan taxminan 190 km, yoʻl 5–6 soat oladi: guruhlar kun oʻrtasida yoʻlga chiqib, kechga yaqin koʻl yonida boʻlishadi. Kirish yoʻli Kamchiq trassasi yonidagi Ertosh (Ertoshsoy) qishlogʻi orqali, keyin «Niva»da buzilgan toshloq tuproq yoʻl boʻylab (2,5 soatdan koʻproq). 2023-yilda «Niva» bir kunga 700 ming soʻm turgan; bir kunlik chiqishda haydovchi Uzunkoʻl yonida kutib turadi, 2–3 kunga ikki barobar tarif boʻyicha hisoblaydi."
+    },
+    "yangiabad-waterfalls": {
+      "name_uz": "Yangiobod sharsharalari",
+      "short_desc_uz": "Gʻayrioddiy tarixga ega togʻ shaharchasi yonidagi Dukentsoy sharsharalari",
+      "description_md_uz": "Chotqol tizmasining janubi-sharqiy yonbagʻridagi Yangiobod shaharchasi (~1300 m) yonida, Dukentsoy va uning irmoqlaridagi sharsharalar. Balandligi ~11 m boʻlgan doimiy sharshara — Dukentsoy boʻylab yuqorida; mavsumiy «Kaptar sharsharasi»ga — borib-qaytib ~4 km, 150 m koʻtarilish bilan yengil sayr.\n\nSoʻqmoq granit qoyalar va archalar orasida oʻzan boʻylab boradi. Yangiobodning oʻzi — 1940-yillardagi sobiq «uran» shaharchasi, vaqt shu yerda toʻxtab qolgandek; bugun bu yerdan Boboytogʻga (3555 m) marshrutlar boshlanadi.",
+      "how_to_get_md_uz": "Toshkentdan ~110 km, Ohangaron/Angren orqali (taxminan 2 soat). Mashinani Yangiobodda qoldirishadi, keyin Dukentsoy boʻylab piyoda."
+    },
+    "yazyk-sharsharasi": {
+      "name_uz": "Til sharsharasi (Oqsoqota)",
+      "short_desc_uz": "Oqsoqotaning quyilish joyidagi sharshara; yoʻltanlamasda deyarli yoniga qadar borishadi",
+      "description_md_uz": "Oqsoqota daryosining quyilish joyidagi sharshara. U yana daryo nomi bilan — «Oqsoqota» deb ham ataladi, «21 KASKAD» dasturiga shu nom bilan kiritilgan. Xuddi shu daryoda Qashqasuv sharsharasi ham bor, shuning uchun odatda ikkalasini bir chiqishda koʻrishadi.\n\nChiqishning oʻzi murakkab emas: 12 km, taxminan 250 m koʻtarilish bilan — bu choʻqqiga chiqish emas, dara boʻylab sayr. Gidlar bu yerga dara ustidagi choʻqqilar bilan birga boshlab kelishadi, oʻshanda kun uzun boʻlib ketadi. Qishda Oqsoqota kanyonlariga ham borishadi.",
+      "how_to_get_md_uz": "Oqsoqota darasi. 2022-yil noyabrida yoʻltanlamasda toʻgʻridan-toʻgʻri sharshara yoniga borishgan; yengil mashinani pastroqda qoldirib, trek boʻylab bir tomonga taxminan 10 km yurishadi. Guruhlar Toshkentdan tong qorongʻusida yoʻlga chiqishadi, mashina — «Niva»."
+    },
+    "zaamin-national-park": {
+      "name_uz": "Zomin milliy bogʻi",
+      "short_desc_uz": "Turkiston tizmasining archazorlari va yoshi 2500 yilgacha boradigan daraxtlar",
+      "description_md_uz": "Oʻrta Osiyodagi eng qadimiy milliy bogʻlardan biri (1976-yilda tashkil etilgan): Turkiston tizmasining shimoliy yonbagʻrida, 1700–3300 m balandlikda 24 110 gektar archazor. Ayrim archalarning yoshi 2500 yilgacha boradi.\n\nTuristik zona — ~2000 m balandlikdagi «Zomin» sanatoriysi yonida: sayr soʻqmoqlari, manzara maydonchalari, eng toza havo — bu yerda shu havo bilan davolashadi. Yaqin atrofda radioobservatoriyali Suffa platosi (~2400 m) bor. Hududning eng baland nuqtasi — Shovkartogʻ choʻqqisi (4030 m). Bogʻda silovsin, oq tirnoqli ayiq va soqolli burgut yashaydi.\n\nBu yerga dam olish kunlarida kelishadi: sayr bir soatdan toʻliq kunlik marshrutlargacha boʻlishi mumkin.",
+      "how_to_get_md_uz": "Toshkentdan ~300 km (4–4,5 soat), Jizzax orqali «Zomin» sanatoriysigacha. Suffa platosi bilan birga rejalashtirish mumkin — u yerga alohida togʻ yoʻli olib boradi."
+    },
+    "zaamin-waterfall": {
+      "name_uz": "Zomin sharsharasi",
+      "short_desc_uz": "Zomin milliy bogʻining archazorlaridagi sharshara",
+      "description_md_uz": "Zomin milliy bogʻidagi sharshara — archa oʻrmonlari orasida, bogʻ 1976-yilda aynan ular uchun tashkil etilgan.\n\nHududdagi choʻqqilardan farqli oʻlaroq, bu yergacha yondashuv qisqa va murakkab emas, shuning uchun sharshara oilaviy chiqish uchun juda mos.\n\n**Muhim:** suvi eng koʻp boʻladigan vaqt — bahor va yoz boshi. Bogʻ — qoʻriqlanadigan hudud, chiqindini oʻzingiz bilan olib keting.",
+      "how_to_get_md_uz": "Jizzaxdan Zomin milliy bogʻiga (~80 km), keyin qisqa piyoda yondashuv."
+    },
+    "zikrbobo": {
+      "name_uz": "Zikrbobo",
+      "short_desc_uz": "Arashan koʻllari yonidagi toʻrt minglik choʻqqi, qirgʻiz chegarasi boʻylab choʻzilgan qirrada",
+      "description_md_uz": "Arashan koʻllaridan uncha uzoq boʻlmagan, Qirgʻiziston bilan chegara boʻylab choʻzilgan qirradagi toʻrt minglik choʻqqi (4047 m; hisobotlarda koʻproq 4062 raqami uchraydi). Etagida Zikrkoʻl joylashgan. 2024-yil yozida choʻqqiga taxtacha oʻrnatilgan.\n\nTogʻning soxta va haqiqiy choʻqqisi bor — koʻtarilish paytida ularni adashtirish oson. Ochiq havoda Zikrbobo hatto Chimyondan ham koʻrinadi — Chingul va Lev choʻqqisi yonida.\n\n---\n**Kirish:** forum xabarlariga koʻra — chegara hududi: may boshida va iyulda guruhlarni oʻtkazishgan, avgust oxirida nazorat kuchaytirilgani sababli faqat Arashan koʻllarigacha oʻtishga ruxsat berishgan.",
+      "how_to_get_md_uz": "Arashan koʻllari tomonidan borishadi; maʼlum trek 41.37741, 70.60127 nuqtasidan boshlanadi. Bu yer chegara hududi — koʻllardan nariga oʻtishga ruxsat berilmasligi mumkin."
+    },
+    "zikrkul": {
+      "name_uz": "Zikrkoʻl",
+      "short_desc_uz": "Arashan koʻllari qoʻshnisida, Zikrbobo ostidagi sirkda joylashgan koʻl",
+      "description_md_uz": "Toʻrt minglik Zikrbobo choʻqqisi ostidagi sirkda, Arashan koʻllari qoʻshnisida joylashgan baland togʻ koʻli (3662 m).\n\nKoʻlga soʻqmoq olib boradi va undan chiqib ketmagan maʼqul: toʻgʻridan-toʻgʻri qisqa yoʻl izlashga urinish bir guruhning yurishini faqat qiyinlashtirgan. Odatda lagerni taxminan 3300 m balandlikda tikishadi va koʻlga radial chiqish (borib-qaytish) qilishadi — yondashuvdan keyin hatto kechqurun ham ulgurishadi.\n\n---\n**Kirish:** forum xabarlariga koʻra — chegara hududi: avgust oxirida nazorat kuchaytirilgani sababli chegarachilar koʻlga oʻtkazishmagan, chegara chizigʻi boʻylab qirrada patrullar yurgan.",
+      "how_to_get_md_uz": "Arashan koʻllari tomonidan: choʻponlar qoʻralaridan start olishadi, lagerni taxminan 3300 m balandlikda tikishadi, koʻlga radial koʻtarilishadi. Faqat soʻqmoq boʻylab yurgan maʼqul. Bu yer chegara hududi — kirish yopib qoʻyilishi mumkin."
+    }
+  }
+}

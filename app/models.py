@@ -76,6 +76,10 @@ class Region(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120), unique=True)
+    # Узбекское имя — nullable без UNIQUE. Пустая строка означала бы
+    # «перевод есть и он пуст», а нам надо отличать это от «перевода нет»:
+    # на различии стоит и фолбэк на русский, и подсчёт готовности в админке
+    name_uz: Mapped[str | None] = mapped_column(String(120), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     places: Mapped[list["Place"]] = relationship(back_populates="region")
@@ -90,6 +94,7 @@ class Place(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     slug: Mapped[str] = mapped_column(String(120), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(200))
+    name_uz: Mapped[str | None] = mapped_column(String(200), nullable=True)
     category: Mapped[PlaceCategory] = mapped_column(
         Enum(PlaceCategory, name="place_category"), index=True
     )
@@ -120,9 +125,19 @@ class Place(Base):
     best_seasons: Mapped[list[str]] = mapped_column(ARRAY(String(16)), default=list)
     kid_friendly: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Каждый перевод стоит сразу за своим оригиналом: порядок полей формы
+    # в админке sqladmin берёт отсюда, и пара языков должна оказаться рядом,
+    # а не двумя блоками «сначала всё по-русски, потом всё по-узбекски».
+    #
+    # Узбекские колонки nullable — см. комментарий у Region.name_uz. Русские
+    # объявлены NOT NULL с default "", и там «пусто» и «не заполнено»
+    # слиплись; повторять эту ошибку не будем
     short_desc: Mapped[str] = mapped_column(Text, default="")
+    short_desc_uz: Mapped[str | None] = mapped_column(Text, nullable=True)
     description_md: Mapped[str] = mapped_column(Text, default="")
+    description_md_uz: Mapped[str | None] = mapped_column(Text, nullable=True)
     how_to_get_md: Mapped[str] = mapped_column(Text, default="")
+    how_to_get_md_uz: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     is_published: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -164,6 +179,7 @@ class PlaceTrack(Base):
         ForeignKey("places.id", ondelete="CASCADE"), index=True
     )
     name: Mapped[str] = mapped_column(String(200))
+    name_uz: Mapped[str | None] = mapped_column(String(200), nullable=True)
     gpx_file = mapped_column(FileType(storage=gpx_storage), nullable=False)
     gpx_credit: Mapped[str | None] = mapped_column(String(300), nullable=True)
     # Считаются на сервере при сохранении (сид, админка): клиент качает

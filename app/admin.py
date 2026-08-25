@@ -31,6 +31,48 @@ from .services.nearby import rebuild_for_track
 log = logging.getLogger("sayr.admin")
 
 
+# Подписи двуязычных полей. Без них sqladmin выводит имя колонки, и
+# «Name Uz» под «Name» читается как опечатка, а не как пара языков.
+# Одна карта работает и в списке, и в форме — sqladmin передаёт
+# column_labels в scaffold_form
+_PLACE_LABELS = {
+    Place.name: "Название · RU",
+    Place.name_uz: "Название · UZ",
+    Place.short_desc: "Короткое описание · RU",
+    Place.short_desc_uz: "Короткое описание · UZ",
+    Place.description_md: "Описание · RU",
+    Place.description_md_uz: "Описание · UZ",
+    Place.how_to_get_md: "Как добраться · RU",
+    Place.how_to_get_md_uz: "Как добраться · UZ",
+}
+
+# Что считаем переведённым. Пустая строка — это «не переведено»
+# наравне с NULL: так же считает и фолбэк в schemas.pick
+_TRANSLATED_FIELDS = [
+    ("имя", "name_uz"),
+    ("кратко", "short_desc_uz"),
+    ("текст", "description_md_uz"),
+    ("путь", "how_to_get_md_uz"),
+]
+
+
+def _translation_progress(model, attribute, request=None) -> str:
+    """Готовность перевода одной строкой: что уже есть, чего нет.
+
+    Показывается в списке мест вместо голого name_uz. Пустой русский
+    оригинал в знаменатель не идёт: «как добраться» заполнено не везде,
+    и требовать перевод отсутствующего текста незачем — такое поле
+    помечено как неприменимое, а не как долг.
+    """
+    marks = []
+    for label, field in _TRANSLATED_FIELDS:
+        source = getattr(model, field.removesuffix("_uz"), "") or ""
+        if not source:
+            continue
+        marks.append(f"{label} {'✓' if (getattr(model, field) or '') else '—'}")
+    return " · ".join(marks) if marks else "—"
+
+
 class BasicAuthBackend(AuthenticationBackend):
     async def login(self, request: Request) -> bool:
         form = await request.form()
@@ -52,23 +94,51 @@ class BasicAuthBackend(AuthenticationBackend):
 class RegionAdmin(ModelView, model=Region):
     name = "Регион"
     name_plural = "Регионы"
-    column_list = [Region.id, Region.name, Region.sort_order]
-    form_columns = [Region.name, Region.sort_order]
+    column_list = [Region.id, Region.name, Region.name_uz, Region.sort_order]
+    form_columns = [Region.name, Region.name_uz, Region.sort_order]
+    column_labels = {Region.name: "Название · RU", Region.name_uz: "Название · UZ"}
 
 
 class PlaceAdmin(ModelView, model=Place):
     name = "Место"
     name_plural = "Места"
-    column_list = [Place.id, Place.name, Place.category, Place.difficulty, Place.is_published]
-    column_searchable_list = [Place.name, Place.slug]
+    column_list = [
+        Place.id,
+        Place.name,
+        Place.name_uz,
+        Place.category,
+        Place.difficulty,
+        Place.is_published,
+    ]
+    # Вместо голого name_uz в списке — готовность перевода целиком:
+    # по одному месту в форме этого не видно, а наливается перевод
+    # порциями, и надо понимать, что осталось
+    column_formatters = {Place.name_uz: _translation_progress}
+    column_searchable_list = [Place.name, Place.name_uz, Place.slug]
+    column_labels = {**_PLACE_LABELS, Place.name_uz: "Перевод"}
     column_default_sort = ("name", False)
     form_excluded_columns = [Place.photos, Place.created_at, Place.updated_at]
+    # Порядок полей формы sqladmin берёт из порядка колонок в модели,
+    # а там каждое *_uz стоит сразу за своим оригиналом — пара языков
+    # оказывается рядом сама, без form_columns со списком всех полей
+    form_widget_args = {
+        "short_desc": {"rows": 3},
+        "short_desc_uz": {"rows": 3},
+        "description_md": {"rows": 14},
+        "description_md_uz": {"rows": 14},
+        "how_to_get_md": {"rows": 8},
+        "how_to_get_md_uz": {"rows": 8},
+    }
     form_overrides = {"best_seasons": SelectMultipleField}
     form_args = {
         "best_seasons": {
             "choices": [(s.value, s.value) for s in Season],
             "coerce": str,
-        }
+        },
+        # В списке колонка name_uz показывает сводку по всем переводам,
+        # и подпись там «Перевод». В форме это обычное поле — подпись
+        # из form_args перекрывает column_labels (setdefault в конвертере)
+        "name_uz": {"label": "Название · UZ"},
     }
     # Своя страница места: под таблицей полей — плитка снимков.
     # Без неё, чтобы увидеть фотографии места, надо уйти в «Фото мест»
@@ -264,6 +334,7 @@ class PlaceTrackAdmin(ModelView, model=PlaceTrack):
         PlaceTrack.id,
         PlaceTrack.place,
         PlaceTrack.name,
+        PlaceTrack.name_uz,
         PlaceTrack.distance_km,
         PlaceTrack.ascent_m,
         PlaceTrack.sort_order,
