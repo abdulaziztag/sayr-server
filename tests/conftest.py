@@ -89,10 +89,17 @@ async def prepare_db():
 
     async with SessionLocal() as session:
         region = Region(name="Тестовый регион", name_uz="Test viloyati", sort_order=0)
-        session.add(region)
+        # Второй регион нужен, чтобы было на чём проверять порядок выдачи:
+        # с одним «по sort_order» и «по алфавиту» неразличимы. Он же
+        # намеренно идёт первым по алфавиту и вторым по порядку
+        far = Region(name="Дальний регион", name_uz="Uzoq viloyat", sort_order=1)
+        session.add_all([region, far])
         await session.flush()
         for data in FIXTURES:
-            session.add(Place(region_id=region.id, **data))
+            # Плато за радиусом — единственное место дальнего региона:
+            # оно и по смыслу дальнее
+            target = far if data["slug"] == "test-far-plateau" else region
+            session.add(Place(region_id=target.id, **data))
         await session.commit()
 
     yield

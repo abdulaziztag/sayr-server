@@ -72,4 +72,6 @@ async def test_regions_with_counts(client):
     assert resp.status_code == 200
     regions = resp.json()
     assert regions[0]["name"] == "Тестовый регион"
-    assert regions[0]["places_count"] == 4
+    assert regions[0]["places_count"] == 3
+    assert regions[1]["name"] == "Дальний регион"
+    assert regions[1]["places_count"] == 1

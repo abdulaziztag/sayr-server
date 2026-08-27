@@ -40,9 +40,9 @@ async def test_detail_falls_back_field_by_field(client):
 
 async def test_regions_translated_and_fallback(client):
     resp = await client.get("/api/v1/regions", params={"lang": "uz"})
-    assert [r["name"] for r in resp.json()] == ["Test viloyati"]
+    assert [r["name"] for r in resp.json()] == ["Test viloyati", "Uzoq viloyat"]
     ru = await client.get("/api/v1/regions")
-    assert [r["name"] for r in ru.json()] == ["Тестовый регион"]
+    assert [r["name"] for r in ru.json()] == ["Тестовый регион", "Дальний регион"]
 
 
 async def test_order_stays_russian_under_uz(client):
