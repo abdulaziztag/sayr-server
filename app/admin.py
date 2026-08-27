@@ -461,11 +461,31 @@ def _render(d: dict) -> str:
         for label, value in numbers
     )
 
+    def pace_cell(counts: tuple[int, int, int] | None) -> str:
+        """Как прошли: быстрее · так · дольше.
+
+        Прочерк вместо трёх нулей — чтобы места, про которые ещё никто
+        не ответил, не выглядели как места, где всё сошлось. Разница
+        существенная: во втором случае формулу трогать не надо,
+        в первом — про неё просто ничего не известно.
+        """
+        if not counts or not any(counts):
+            return "—"
+        faster, expected, slower = counts
+        return f"{faster} · {expected} · {slower}"
+
     def top(rows: list[dict]) -> str:
         return _table(
-            ["Место", "Открытий", "Устройств", "«Пойду»", "Загрузок GPX"],
+            ["Место", "Открытий", "Устройств", "«Пойду»", "Как прошли", "Загрузок GPX"],
             [
-                [r["name"], r["opens"], r["devices"], r["votes"], r["downloads"]]
+                [
+                    r["name"],
+                    r["opens"],
+                    r["devices"],
+                    r["votes"],
+                    pace_cell(r.get("pace")),
+                    r["downloads"],
+                ]
                 for r in rows
             ],
             "Пока никто ничего не открывал.",

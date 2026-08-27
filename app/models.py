@@ -249,6 +249,13 @@ class TripIntent(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
+    # Как всё прошло. Заполняется вечером дня выхода, когда приложение
+    # спрашивает «были?»; до ответа оба поля пусты — и «не ответил»
+    # должно отличаться от «ответил», поэтому nullable без default
+    went: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    #: faster | expected | slower — насколько разошлось с расчётным временем
+    pace: Mapped[str | None] = mapped_column(String(8), nullable=True)
+
 
 class PlacePhoto(Base):
     __tablename__ = "place_photos"
@@ -311,6 +318,28 @@ class DailyStat(Base):
     place_opens: Mapped[int] = mapped_column(Integer, default=0)
     catalog_opens: Mapped[int] = mapped_column(Integer, default=0)
     gpx_downloads: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class PlacePaceStats(Base):
+    """Сколько людей прошли место быстрее, дольше или как в расчёте.
+
+    Отдельно от `trip_intents`, потому что та чистится через срок
+    хранения: личная отметка живёт свои тридцать дней и уходит,
+    а накопленная картина по местам нужна навсегда — ради неё всё
+    и затевалось. То же разделение, что у статистики просмотров:
+    сырьё стирается, итоги остаются.
+
+    Обезличено по построению: ни устройств, ни дат, только числа.
+    """
+
+    __tablename__ = "place_pace_stats"
+
+    place_id: Mapped[int] = mapped_column(
+        ForeignKey("places.id", ondelete="CASCADE"), primary_key=True
+    )
+    faster: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    expected: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    slower: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class Device(Base):

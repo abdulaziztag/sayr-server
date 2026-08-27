@@ -18,7 +18,15 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .config import settings
 from .db import SessionLocal
-from .models import ApiEvent, DailyStat, Device, Place, PlaceTrack, TripIntent
+from .models import (
+    ApiEvent,
+    DailyStat,
+    Device,
+    Place,
+    PlacePaceStats,
+    PlaceTrack,
+    TripIntent,
+)
 
 log = logging.getLogger(__name__)
 
@@ -416,6 +424,26 @@ async def _top_places(session: AsyncSession, today: date, days: int) -> list[dic
         ).all()
     )
 
+    # Как прошли: счётчик по месту накопительный и срока хранения не знает,
+    # поэтому здесь он без фильтра по дате — в отличие от голосов «Пойду»
+    # выше. Это осознанно: пять ответов набираются месяцами, и обрезать
+    # их окном в неделю значило бы не показать ничего
+    pace = {
+        row.slug: (row.faster, row.expected, row.slower)
+        for row in (
+            await session.execute(
+                select(
+                    Place.slug,
+                    PlacePaceStats.faster,
+                    PlacePaceStats.expected,
+                    PlacePaceStats.slower,
+                )
+                .join(PlacePaceStats, PlacePaceStats.place_id == Place.id)
+                .where(Place.slug.in_(slugs))
+            )
+        ).all()
+    }
+
     # Скачивание знает только имя файла: gpx_url у трека — вычисляемое
     # свойство поверх gpx_file, а не колонка, искать надо по хранилищу
     files = dict(
@@ -447,6 +475,7 @@ async def _top_places(session: AsyncSession, today: date, days: int) -> list[dic
             "opens": row.opens,
             "devices": row.devices,
             "votes": votes.get(row.slug, 0),
+            "pace": pace.get(row.slug),
             "downloads": downloads.get(row.slug, 0),
         }
         for row in opens

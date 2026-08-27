@@ -1,15 +1,20 @@
 from datetime import date, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_session
-from ..models import Place, TripIntent
+from ..models import Place, PlacePaceStats, TripIntent
 
 router = APIRouter(prefix="/api/v1", tags=["intents"])
+
+# 62, не 60: календарь клиента показывает два месяца целиком, а 31+31
+# дней в 60 не помещаются — последние даты оставались без счётчиков
+DEFAULT_DAYS = 62
 
 
 class DayCount(BaseModel):
@@ -28,6 +33,18 @@ class IntentIn(BaseModel):
     device_id: str = Field(min_length=8, max_length=64)
 
 
+#: Насколько прошедший выход разошёлся с расчётным временем
+Pace = Literal["faster", "expected", "slower"]
+
+
+class PaceIn(BaseModel):
+    date: date
+    device_id: str = Field(min_length=8, max_length=64)
+    #: Состоялся ли выход. False — человек не пошёл, темпа тогда нет
+    went: bool
+    pace: Pace | None = None
+
+
 async def _place_id(slug: str, session: AsyncSession) -> int:
     stmt = select(Place.id).where(Place.slug == slug, Place.is_published)
     place_id = (await session.execute(stmt)).scalar_one_or_none()
@@ -40,9 +57,7 @@ async def _place_id(slug: str, session: AsyncSession) -> int:
 async def list_intents(
     slug: str,
     device_id: str | None = None,
-    # 62, не 60: календарь клиента показывает два месяца целиком, а 31+31
-    # дней в 60 не помещаются — последние даты оставались без счётчиков
-    days: int = Query(62, ge=1, le=180),
+    days: int = Query(DEFAULT_DAYS, ge=1, le=180),
     session: AsyncSession = Depends(get_session),
 ):
     """Сколько человек собирается в место по дням — числа под датами календаря."""
@@ -107,7 +122,10 @@ async def add_intent(
         .on_conflict_do_nothing(constraint="uq_intent_place_day_device")
     )
     await session.commit()
-    return await list_intents(slug, body.device_id, 60, session)
+    # Тот же горизонт, что у GET: с зашитыми здесь 60 ответ сразу после
+    # отметки оказывался на два дня короче обычного — ровно та поломка,
+    # ради которой дефолт и поднимали до 62
+    return await list_intents(slug, body.device_id, DEFAULT_DAYS, session)
 
 
 @router.delete("/places/{slug}/intents", response_model=IntentsOut)
@@ -126,4 +144,68 @@ async def remove_intent(
         )
     )
     await session.commit()
-    return await list_intents(slug, device_id, 60, session)
+    return await list_intents(slug, device_id, DEFAULT_DAYS, session)
+
+
+@router.post("/places/{slug}/pace", response_model=IntentsOut)
+async def set_pace(slug: str, body: PaceIn, session: AsyncSession = Depends(get_session)):
+    """Как прошёл выход: состоялся ли и разошёлся ли с расчётным временем.
+
+    Приходит вечером дня выхода, когда приложение спрашивает «были?».
+    Требует существующей отметки: поправку присылает тот, кто планировал,
+    и это же не даёт накрутить счётчик с чистого листа.
+
+    Повторный вызов **переносит** голос, а не добавляет второй: человек
+    правит свой ответ тапом по записи в истории, и считаться дважды
+    он не должен.
+    """
+    place_id = await _place_id(slug, session)
+
+    intent = (
+        await session.execute(
+            select(TripIntent).where(
+                TripIntent.place_id == place_id,
+                TripIntent.day == body.date,
+                TripIntent.device_id == body.device_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if intent is None:
+        raise HTTPException(404, "Отметки на этот день нет")
+
+    # Не пошёл — темпа быть не может, каким бы его ни прислали
+    fresh = body.pace if body.went else None
+    was = intent.pace
+
+    intent.went = body.went
+    intent.pace = fresh
+
+    if was != fresh:
+        await _move_vote(place_id, was, fresh, session)
+
+    await session.commit()
+    return await list_intents(slug, body.device_id, DEFAULT_DAYS, session)
+
+
+async def _move_vote(
+    place_id: int, was: str | None, now: str | None, session: AsyncSession
+) -> None:
+    """Снять голос со старого счётчика и добавить новому.
+
+    Строка счётчика заводится при первом обращении: держать её пустой
+    для каждого места незачем — мест сто двадцать шесть, а отвечают
+    далеко не про все.
+    """
+    if now is not None:
+        await session.execute(
+            insert(PlacePaceStats).values(place_id=place_id).on_conflict_do_nothing()
+        )
+
+    for column, delta in ((was, -1), (now, 1)):
+        if column is None:
+            continue
+        await session.execute(
+            update(PlacePaceStats)
+            .where(PlacePaceStats.place_id == place_id)
+            .values({column: getattr(PlacePaceStats, column) + delta})
+        )
