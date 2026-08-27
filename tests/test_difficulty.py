@@ -133,3 +133,42 @@ async def test_remap_refuses_to_invent_overnight(client, tmp_path, capsys):
             ).scalar_one()
             place.difficulty = Difficulty.easy
             await session.commit()
+
+
+async def test_merge_keeps_the_donor_in_the_base(client):
+    """Слияние дублей: поля переезжают, донор уходит из каталога, но не из базы.
+
+    Донора не удаляем: если окажется, что это две разные вершины, вернуть
+    запись будет уже нечем — снимки и треки к тому моменту переехали.
+    """
+    from seed.merge_duplicate import run as merge
+
+    try:
+        await merge("test-peak", "test-lake", ["elevation_m"], apply=True)
+
+        async with SessionLocal() as session:
+            keeper = (
+                await session.execute(select(Place).where(Place.slug == "test-lake"))
+            ).scalar_one()
+            donor = (
+                await session.execute(select(Place).where(Place.slug == "test-peak"))
+            ).scalar_one()
+
+        assert keeper.elevation_m == 3300, "поле из --take не переехало"
+        assert donor.is_published is False, "донор должен уйти из каталога"
+        assert donor.id is not None, "донора удалять нельзя"
+
+        listed = {p["slug"] for p in (await client.get("/api/v1/places")).json()}
+        assert "test-peak" not in listed
+        assert "test-lake" in listed
+    finally:
+        async with SessionLocal() as session:
+            donor = (
+                await session.execute(select(Place).where(Place.slug == "test-peak"))
+            ).scalar_one()
+            keeper = (
+                await session.execute(select(Place).where(Place.slug == "test-lake"))
+            ).scalar_one()
+            donor.is_published = True
+            keeper.elevation_m = 900
+            await session.commit()
