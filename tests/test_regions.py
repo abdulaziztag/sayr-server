@@ -106,4 +106,7 @@ async def test_category_fix_is_idempotent(client):
         place = (
             await session.execute(select(Place).where(Place.slug == "test-lake"))
         ).scalar_one()
-    assert place.category == PlaceCategory.gorge
+        assert place.category == PlaceCategory.gorge
+        # Фикстуры живут всю сессию: озеро должно остаться озером
+        place.category = PlaceCategory.lake
+        await session.commit()

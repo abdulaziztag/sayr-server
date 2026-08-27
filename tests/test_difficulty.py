@@ -78,3 +78,58 @@ async def test_trip_days_empty_without_overnight(client):
     for item in (await client.get("/api/v1/places")).json():
         if item["overnight"] is None:
             assert item["trip_days"] is None, item["slug"]
+
+
+async def test_shipped_map_is_well_formed():
+    """Файл разметки: известные ступени и обоснование у каждого места."""
+    import json
+    from pathlib import Path
+
+    doc = json.loads(Path("seed/data/difficulty_map.json").read_text("utf-8"))
+    for slug, entry in doc["places"].items():
+        assert entry["level"] in Difficulty.__members__, slug
+        assert entry["why"].strip(), slug
+    # Дни ставятся только тем, кто есть в разметке
+    assert set(doc["trip_days"]) <= set(doc["places"])
+
+
+async def test_remap_refuses_to_invent_overnight(client, tmp_path, capsys):
+    """Дни без ночёвки не проставляются.
+
+    От `overnight` зависит и окно выезда, и наклейка на карточке, поэтому
+    выдумывать ночёвку скрипт не вправе — только сказать о ней вслух.
+    """
+    import json
+
+    from seed.apply_difficulty import run as apply_difficulty
+
+    plan = tmp_path / "difficulty.json"
+    plan.write_text(
+        json.dumps(
+            {
+                "places": {"test-waterfall": {"level": "hard", "why": "проверка"}},
+                "trip_days": {"test-waterfall": 3},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    try:
+        await apply_difficulty(plan, apply=True)
+
+        assert "ночёвки в базе нет" in capsys.readouterr().out
+
+        async with SessionLocal() as session:
+            place = (
+                await session.execute(select(Place).where(Place.slug == "test-waterfall"))
+            ).scalar_one()
+        assert place.trip_days is None, "дни проставили месту без ночёвки"
+        assert place.difficulty is Difficulty.hard, "саму ступень при этом менять надо"
+    finally:
+        # Фикстуры живут всю сессию, и правка утекла бы в соседние тесты
+        async with SessionLocal() as session:
+            place = (
+                await session.execute(select(Place).where(Place.slug == "test-waterfall"))
+            ).scalar_one()
+            place.difficulty = Difficulty.easy
+            await session.commit()
