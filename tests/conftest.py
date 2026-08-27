@@ -15,7 +15,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.db import engine
 from app.main import app
-from app.models import Base, Difficulty, Place, PlaceCategory, Region
+from app.models import Base, Difficulty, OvernightType, Place, PlaceCategory, Region
 
 # Ташкент ~ (41.31, 69.28). Гулькам-тест ~85 км, «ближнее озеро» ~60 км, Заамин ~200 км.
 FIXTURES = [
@@ -63,6 +63,22 @@ FIXTURES = [
         short_desc="Озеро недалеко от города",
         name_uz="Test koʻli",
         short_desc_uz="Shahardan uzoq boʻlmagan koʻl",
+    ),
+    dict(
+        # Четвёртая ступень и ночёвка разом: на нём проверяется и то,
+        # что extreme не выезжает наружу, и то, что trip_days доезжает
+        slug="test-alpine-peak",
+        name="Тестовый четырёхтысячник",
+        category=PlaceCategory.peak,
+        difficulty=Difficulty.extreme,
+        lat=41.90,
+        lng=70.60,
+        elevation_m=4200,
+        overnight=OvernightType.tent,
+        trip_days=3,
+        best_seasons=["summer"],
+        kid_friendly=False,
+        short_desc="Ледник и ночёвка на маршруте",
     ),
     dict(
         slug="test-far-plateau",

@@ -2,7 +2,7 @@ async def test_list_all(client):
     resp = await client.get("/api/v1/places")
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data) == 4
+    assert len(data) == 5
     assert data[0]["name"] <= data[1]["name"]  # сортировка по имени без near
 
 
@@ -16,7 +16,11 @@ async def test_filter_multi_category(client):
     resp = await client.get(
         "/api/v1/places", params=[("category", "waterfall"), ("category", "peak")]
     )
-    assert {p["slug"] for p in resp.json()} == {"test-waterfall", "test-peak"}
+    assert {p["slug"] for p in resp.json()} == {
+        "test-waterfall",
+        "test-peak",
+        "test-alpine-peak",
+    }
 
 
 async def test_filter_difficulty_and_season(client):
@@ -72,6 +76,6 @@ async def test_regions_with_counts(client):
     assert resp.status_code == 200
     regions = resp.json()
     assert regions[0]["name"] == "Тестовый регион"
-    assert regions[0]["places_count"] == 3
+    assert regions[0]["places_count"] == 4
     assert regions[1]["name"] == "Дальний регион"
     assert regions[1]["places_count"] == 1

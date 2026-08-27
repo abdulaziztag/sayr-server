@@ -44,9 +44,22 @@ class PlaceCategory(str, enum.Enum):
 
 
 class Difficulty(str, enum.Enum):
+    """Насколько дорого стоит ошибка, а не сколько уйдёт сил.
+
+    Сил стоят часы и километры, они и так на карточке. Ступень
+    определяется худшим участком маршрута, а не средним: десять часов
+    по тропе — легко и долго, сорок минут по живой осыпи над обрывом —
+    коротко и сложно.
+
+    `extreme` наружу не выезжает: старые сборки падают на незнакомой
+    строке и роняют разбор всего списка. Клиенту он приезжает как `hard`
+    плюс отдельный флаг — см. schemas._base_fields
+    """
+
     easy = "easy"
     medium = "medium"
     hard = "hard"
+    extreme = "extreme"
 
 
 class OvernightType(str, enum.Enum):
@@ -122,6 +135,10 @@ class Place(Base):
     overnight: Mapped[OvernightType | None] = mapped_column(
         Enum(OvernightType, name="overnight_type"), nullable=True
     )
+    # Сколько дней занимает выход. Заполняется только вместе с overnight
+    # и уточняет его: два дня — «ночёвка», три и больше — «многодневка».
+    # Пусто значит однодневный, а не ноль
+    trip_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     best_seasons: Mapped[list[str]] = mapped_column(ARRAY(String(16)), default=list)
     kid_friendly: Mapped[bool] = mapped_column(Boolean, default=False)
 

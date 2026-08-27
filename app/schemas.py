@@ -58,6 +58,10 @@ class PlaceListItem(BaseModel):
     season_from: int | None
     season_to: int | None
     overnight: OvernightType | None
+    #: Четвёртая ступень отдельным флагом, а не значением difficulty:
+    #: незнакомая строка уронила бы разбор каталога у старых сборок
+    alpine: bool
+    trip_days: int | None
     best_seasons: list[str]
     kid_friendly: bool
     short_desc: str
@@ -134,7 +138,12 @@ def _base_fields(p: Place, lang: Lang = DEFAULT_LANG) -> dict:
         slug=p.slug,
         name=pick(p.name, p.name_uz, lang),
         category=p.category,
-        difficulty=p.difficulty,
+        # Наружу едут только три исходные ступени. И Swift, и kotlinx
+        # падают на значении, которого нет в их enum, — падает при этом
+        # разбор всего списка, а не одного места, и человек со старой
+        # сборкой остаётся с пустым каталогом. Четвёртая ступень
+        # приезжает как «сложно» и повторяется во флаге ниже
+        difficulty=Difficulty.hard if p.difficulty is Difficulty.extreme else p.difficulty,
         region_id=p.region_id,
         region_name=pick(p.region.name, p.region.name_uz, lang),
         lat=p.lat,
@@ -148,6 +157,8 @@ def _base_fields(p: Place, lang: Lang = DEFAULT_LANG) -> dict:
         season_from=p.season_from,
         season_to=p.season_to,
         overnight=p.overnight,
+        alpine=p.difficulty is Difficulty.extreme,
+        trip_days=p.trip_days,
         best_seasons=list(p.best_seasons or []),
         kid_friendly=p.kid_friendly,
         short_desc=pick(p.short_desc, p.short_desc_uz, lang),

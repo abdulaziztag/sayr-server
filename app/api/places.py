@@ -72,7 +72,15 @@ async def list_places(
     if category:
         stmt = stmt.where(Place.category.in_(category))
     if difficulty:
-        stmt = stmt.where(Place.difficulty.in_(difficulty))
+        wanted = set(difficulty)
+        # Альпинизм уезжает клиенту как «сложно» (schemas._base_fields),
+        # и фильтр обязан отвечать тем же: место, приехавшее с меткой
+        # hard, должно по hard и находиться. Иначе фильтр спорит
+        # с ответом, а старый клиент, который другого слова не знает,
+        # теряет самые серьёзные маршруты каталога
+        if Difficulty.hard in wanted:
+            wanted.add(Difficulty.extreme)
+        stmt = stmt.where(Place.difficulty.in_(wanted))
     if region_id is not None:
         stmt = stmt.where(Place.region_id == region_id)
     if season is not None:
