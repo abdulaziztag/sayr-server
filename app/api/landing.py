@@ -51,6 +51,7 @@ RU = {
     "form_placeholder": "почта Google-аккаунта",
     "form_button": "Получить ссылку",
     "form_note": "Почта нужна только для приглашения — никаких рассылок.",
+    "form_sending": "Отправляем…",
     "form_ok": "Готово! Ссылка придёт на эту почту.",
     "form_fail": "Не отправилось — напишите нам письмом.",
     "blocks": [
@@ -108,6 +109,7 @@ UZ = {
     "form_placeholder": "Google akkaunt pochtasi",
     "form_button": "Havola olish",
     "form_note": "Pochta faqat taklif uchun kerak — hech qanday reklama yoʻq.",
+    "form_sending": "Yuborilmoqda…",
     "form_ok": "Tayyor! Havola shu pochtaga keladi.",
     "form_fail": "Yuborilmadi — bizga xat yozing.",
     "blocks": [
@@ -173,6 +175,11 @@ _PAGE = """<!doctype html>
   --green:#2F5D3F; --terra:#C75B12; --cta:#B04E0C; --on-cta:#FFFFFF;
   --edge:#161A1714; --shadow:#161A1722;
   --step:clamp(3.5rem,9vw,6rem);
+  /* Длительности и кривые — одни на всю страницу. Быстрая для нажатий,
+     обычная для появления; smooth гасит на выходе, sharp — рабочая кривая
+     для откликов на действие */
+  --t-fast:.16s; --t-norm:.38s;
+  --e-smooth:cubic-bezier(.22,1,.36,1); --e-sharp:cubic-bezier(.4,0,.2,1);
 }}
 @media (prefers-color-scheme:dark) {{
   /* На светлой терракоте тёмной темы белый текст давал 2.7:1 — на кнопке
@@ -182,6 +189,8 @@ _PAGE = """<!doctype html>
            --on-cta:#1F0F06; --edge:#EDEAE11F; --shadow:#00000055; }}
 }}
 *,*::before,*::after {{ box-sizing:border-box; }}
+html {{ scroll-behavior:smooth; }}
+@media (prefers-reduced-motion:reduce) {{ html {{ scroll-behavior:auto; }} }}
 body {{ margin:0; background:var(--paper); color:var(--ink);
         font-family:Plex,ui-sans-serif,system-ui,sans-serif; line-height:1.55;
         -webkit-font-smoothing:antialiased; overflow-x:hidden; }}
@@ -215,8 +224,10 @@ h1 {{ font-size:clamp(2.1rem,6vw,3.6rem); line-height:1.06; margin:0 0 1rem;
         background:var(--cta); color:var(--on-cta); text-decoration:none;
         font-weight:600; font-size:1.02rem; padding:.85rem 1.9rem;
         border-radius:12px 12px 12px 26px; min-height:48px;
-        transition:transform .18s ease, filter .18s ease; }}
+        transition:transform var(--t-fast) var(--e-sharp),
+                   filter var(--t-fast) var(--e-sharp); }}
 .btn:hover {{ filter:brightness(1.07); transform:translateY(-1px); }}
+.btn:active {{ transform:translateY(0) scale(.985); transition-duration:var(--t-fast); }}
 .btn svg {{ width:20px; height:20px; flex:none; }}
 /* Android — вторая кнопка, а не ссылка: раньше половина посетителей
    видела свой вариант мельче и бледнее чужого. Зелёная, чтобы пара
@@ -280,10 +291,16 @@ h1 {{ font-size:clamp(2.1rem,6vw,3.6rem); line-height:1.06; margin:0 0 1rem;
 .tform button {{ font:inherit; font-weight:600; font-size:.95rem; cursor:pointer;
           background:var(--green); color:var(--paper); border:0; min-height:44px;
           padding:.8rem 1.5rem; border-radius:11px 11px 11px 22px;
-          transition:filter .18s ease; }}
+          transition:filter var(--t-fast) var(--e-sharp),
+                     transform var(--t-fast) var(--e-sharp); }}
 .tform button:hover {{ filter:brightness(1.1); }}
+.tform button:active {{ transform:scale(.985); }}
+.tform button[disabled] {{ opacity:.6; cursor:progress; }}
+.tform input[type=email] {{ transition:border-color var(--t-fast) var(--e-sharp); }}
+.tform input[type=email]:focus {{ border-color:var(--green); }}
 .tform .tnote {{ margin:.7rem 0 0; font-size:.82rem; color:var(--ink3); }}
-.tform .tok {{ margin:.7rem 0 0; font-size:.94rem; color:var(--green); font-weight:600; }}
+.tform .tok {{ margin:.7rem 0 0; font-size:.94rem; color:var(--green); font-weight:600;
+                animation:rise var(--t-norm) var(--e-smooth); }}
 .hp {{ position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }}
 
 footer {{ margin-top:var(--step); padding-top:1.4rem; border-top:1px solid var(--edge);
@@ -291,6 +308,14 @@ footer {{ margin-top:var(--step); padding-top:1.4rem; border-top:1px solid var(-
           color:var(--ink3); font-size:.85rem; }}
 footer a {{ color:var(--ink3); display:inline-flex; align-items:center; min-height:44px; }}
 footer .made {{ flex-basis:100%; margin:0; }}
+
+/* Форма после перехода по якорю: кнопка «Для Android» уносит страницу
+   вниз, и надо показать, куда именно. Обводка вспыхивает и гаснет */
+.tform {{ position:relative; scroll-margin-top:clamp(1rem,6vh,3rem); }}
+.tform::after {{ content:""; position:absolute; inset:-2px; border-radius:inherit;
+                 border:2px solid var(--green); opacity:0; pointer-events:none; }}
+.tform:target::after {{ animation:notice 1.4s var(--e-smooth) forwards; }}
+@keyframes notice {{ 0% {{ opacity:0; }} 12% {{ opacity:1; }} 100% {{ opacity:0; }} }}
 
 /* Появление первого экрана — чистым CSS, без наблюдателя за прокруткой.
    Скрипт, от которого зависит видимость текста, — это не анимация,
@@ -300,9 +325,24 @@ footer .made {{ flex-basis:100%; margin:0; }}
 .hero > div > *:nth-child(2) {{ animation-delay:.06s; }}
 .hero > div > *:nth-child(3) {{ animation-delay:.12s; }}
 .hero .phone {{ animation:rise .6s .1s ease-out backwards; }}
+/* Появление секций отдано браузеру: у таймлайна прокрутки нет состояния,
+   которое можно «забыть» снять, — в отличие от наблюдателя на скрипте,
+   который однажды уже оставил секцию невидимой навсегда. Где такого
+   таймлайна нет, всё просто видно сразу */
+@supports (animation-timeline:view()) {{
+  @media (prefers-reduced-motion:no-preference) {{
+    .facts, .gallery, .blocks, .tform {{
+      animation:rise .55s var(--e-smooth) both;
+      animation-timeline:view();
+      animation-range:entry 4% cover 20%;
+    }}
+  }}
+}}
+
 @media (prefers-reduced-motion:reduce) {{
   .hero > div > *, .hero .phone {{ animation:none; }}
-  .btn:hover {{ transform:none; }}
+  .btn:hover, .btn:active, .tform button:active {{ transform:none; }}
+  .tform:target::after, .tform .tok {{ animation:none; }}
 }}
 </style>
 </head>
@@ -433,7 +473,7 @@ def _tester_form(t: dict) -> str:
     """
     if settings.play_store_url:
         return ""
-    ok, fail = t["form_ok"], t["form_fail"]
+    ok, fail, sending = t["form_ok"], t["form_fail"], t["form_sending"]
     return f"""
   <form class="tform" id="android" method="post" action="/android-testers">
     <h2>{t["form_head"]}</h2>
@@ -451,18 +491,31 @@ def _tester_form(t: dict) -> str:
   (function () {{
     var f = document.getElementById('android');
     if (!f || !window.fetch) return;
+    var btn = f.querySelector('button');
+    var row = f.querySelector('.row');
+    var note = f.querySelector('[data-note]');
+    var label = btn.textContent;
     f.addEventListener('submit', function (e) {{
       e.preventDefault();
+      // Пока идёт запрос, кнопка говорит об этом сама: без этого между
+      // нажатием и ответом ничего не происходит, и человек жмёт второй раз
+      btn.disabled = true;
+      btn.textContent = {sending!r};
       fetch(f.action, {{ method: 'POST', body: new FormData(f),
                          headers: {{ 'Accept': 'application/json' }} }})
         .then(function (r) {{ if (!r.ok) throw 0; return r.json(); }})
         .then(function () {{
-          f.querySelector('.row').style.display = 'none';
-          var n = f.querySelector('[data-note]');
-          n.textContent = {ok!r}; n.className = 'tok';
+          // Ответ показывается сразу, без requestAnimationFrame: в фоновой
+          // вкладке кадры не идут, и человек, вернувшись, увидел бы форму
+          // навсегда застрявшей на «отправляем»
+          row.hidden = true;
+          note.textContent = {ok!r};
+          note.className = 'tok';
         }})
         .catch(function () {{
-          f.querySelector('[data-note]').textContent = {fail!r};
+          btn.disabled = false;
+          btn.textContent = label;
+          note.textContent = {fail!r};
         }});
     }});
   }})();
