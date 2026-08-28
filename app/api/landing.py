@@ -211,12 +211,18 @@ h1 {{ font-size:clamp(2.1rem,6vw,3.6rem); line-height:1.06; margin:0 0 1rem;
 .lede {{ color:var(--ink2); font-size:clamp(1.02rem,2.2vw,1.18rem); max-width:36ch;
          margin:0 0 1.9rem; }}
 .cta {{ display:flex; flex-wrap:wrap; gap:.9rem; align-items:center; margin-bottom:.85rem; }}
-.btn {{ display:inline-flex; align-items:center; gap:.55rem; background:var(--cta);
-        color:var(--on-cta); text-decoration:none; font-weight:600; font-size:1.05rem;
-        padding:.9rem 2.1rem; border-radius:12px 12px 12px 26px; min-height:44px;
+.btn {{ display:inline-flex; align-items:center; justify-content:center; gap:.6rem;
+        background:var(--cta); color:var(--on-cta); text-decoration:none;
+        font-weight:600; font-size:1.02rem; padding:.85rem 1.9rem;
+        border-radius:12px 12px 12px 26px; min-height:48px;
         transition:transform .18s ease, filter .18s ease; }}
 .btn:hover {{ filter:brightness(1.07); transform:translateY(-1px); }}
-.btn svg {{ width:19px; height:19px; }}
+.btn svg {{ width:20px; height:20px; flex:none; }}
+/* Android — вторая кнопка, а не ссылка: раньше половина посетителей
+   видела свой вариант мельче и бледнее чужого. Зелёная, чтобы пара
+   читалась как выбор платформы, а не как «главное и второстепенное» */
+.btn-android {{ background:var(--green); color:var(--paper); }}
+@media (max-width:26rem) {{ .cta {{ display:grid; grid-template-columns:1fr; }} }}
 .soon {{ display:inline-block; font-family:PlexMono,monospace; font-size:.78rem;
          letter-spacing:.08em; text-transform:uppercase; color:var(--green);
          border:1px solid var(--green); border-radius:10px 10px 10px 22px; padding:.75rem 1.4rem; }}
@@ -318,7 +324,7 @@ footer .made {{ flex-basis:100%; margin:0; }}
     <div class="phone">
       <picture>
         <source srcset="/static/img/shot-catalog.webp" type="image/webp">
-        <img src="/static/img/shot-catalog.jpg" width="560" height="1159"
+        <img src="/static/img/shot-catalog.jpg" width="620" height="1347"
              alt="Каталог мест в приложении Sayr" fetchpriority="high">
       </picture>
     </div>
@@ -366,27 +372,38 @@ _ICONS = (
     'height="10" rx="2.5"/><path d="M8.5 10V7a3.5 3.5 0 017 0v3"/></svg>',
 )
 
-_ARROW = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
-          'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-          '<path d="M12 4v13M6 11l6 6 6-6"/></svg>')
+# Значки платформ — сплошные силуэты, как на кнопках магазинов: контурные
+# рядом с текстом кнопки читаются хуже
+_APPLE = ('<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+          '<path d="M16.4 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.15-2.8.85-3.5.85'
+          '-.7 0-1.85-.83-3.05-.8-1.55.02-3 .9-3.8 2.3-1.63 2.82-.42 7 1.17 9.3.78 1.12 1.7 2.38'
+          ' 2.9 2.33 1.17-.05 1.6-.75 3.02-.75 1.4 0 1.8.75 3.03.73 1.25-.02 2.05-1.14 2.8-2.27'
+          '.9-1.3 1.26-2.56 1.28-2.63-.03-.01-2.45-.94-2.47-3.73zM14.1 5.3c.63-.77 1.06-1.83.94-2.9'
+          '-.9.04-2 .6-2.65 1.36-.58.67-1.1 1.75-.96 2.79 1 .08 2.03-.5 2.67-1.25z"/></svg>')
+
+_ANDROID = ('<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+            '<path d="M17.6 9.5H6.4a.6.6 0 00-.6.6v7.3c0 .6.5 1.1 1.1 1.1h.8v2.4a1.2 1.2 0 002.4 0'
+            'V18.5h3.6v2.4a1.2 1.2 0 002.4 0v-2.4h.8c.6 0 1.1-.5 1.1-1.1v-7.3a.6.6 0 00-.6-.6z'
+            'M3.9 9.4a1.2 1.2 0 00-1.2 1.2v4.9a1.2 1.2 0 002.4 0v-4.9a1.2 1.2 0 00-1.2-1.2z'
+            'M20.1 9.4a1.2 1.2 0 00-1.2 1.2v4.9a1.2 1.2 0 002.4 0v-4.9a1.2 1.2 0 00-1.2-1.2z'
+            'M15.4 3.6l.83-1.5a.25.25 0 00-.44-.24l-.84 1.53a5.9 5.9 0 00-4.9 0L9.2 1.86'
+            'a.25.25 0 10-.44.24l.83 1.5A5.1 5.1 0 006 8.1h12a5.1 5.1 0 00-2.6-4.5z'
+            'M9.4 6.1a.55.55 0 110-1.1.55.55 0 010 1.1zm5.2 0a.55.55 0 110-1.1.55.55 0 010 1.1z"/>'
+            '</svg>')
 
 _SHOT_FILES = ("shot-catalog", "shot-detail", "shot-map")
 
 
-# Кнопка сама выбирает магазин. Без JavaScript обе ссылки всё равно видны
-# текстом ниже: страница обязана работать и с выключенными скриптами
-_SCRIPT = """<script>
-(function () {
-  var a = document.getElementById('install');
-  if (!a) return;
-  var ua = navigator.userAgent || '';
-  if (/iPhone|iPad|iPod/i.test(ua)) a.href = a.dataset.ios;
-  else if (/Android/i.test(ua)) a.href = a.dataset.android;
-})();
-</script>"""
-
-
 def _cta(t: dict) -> tuple[str, str]:
+    """Две кнопки, по одной на платформу.
+
+    Раньше кнопка была одна и сама угадывала систему, а вторая платформа
+    пряталась в текстовую ссылку рядом — то есть половина посетителей
+    видела свой вариант набранным мельче и бледнее, чем чужой.
+
+    Скрипта определения больше нет: обе кнопки видны сразу, и выбирает
+    человек, а не userAgent.
+    """
     ios, android = settings.app_store_url, settings.play_store_url
     if not (ios or android):
         return (
@@ -394,24 +411,16 @@ def _cta(t: dict) -> tuple[str, str]:
             f'<p class="note">{t["soon_note"]}</p>',
             "",
         )
-    first = ios or android
-    links = []
+    buttons = []
     if ios:
-        links.append(f'<a href="{ios}">{t["ios"]}</a>')
-    if android:
-        links.append(f'<a href="{android}">{t["android"]}</a>')
-    else:
-        # В Google Play приложения ещё нет — андроидная половина кнопки
-        # и текстовая ссылка ведут к форме закрытого теста ниже
-        links.append(f'<a href="#android">{t["android"]}</a>')
-    return (
-        f'<div class="cta">'
-        f'<a class="btn" id="install" href="{first}" '
-        f'data-ios="{ios or android}" data-android="{android or "#android"}">'
-        f'{_ARROW}{t["install"]}</a>'
-        f'<span class="stores">{"".join(links)}</span></div>',
-        _SCRIPT,
+        buttons.append(f'<a class="btn" href="{ios}">{_APPLE}{t["ios"]}</a>')
+    # Пока в Google Play нас нет, андроидная кнопка ведёт к форме
+    # закрытого теста ниже по странице
+    buttons.append(
+        f'<a class="btn btn-android" href="{android or "#android"}">'
+        f'{_ANDROID}{t["android"]}</a>'
     )
+    return f'<div class="cta">{"".join(buttons)}</div>', ""
 
 
 def _tester_form(t: dict) -> str:
@@ -475,7 +484,7 @@ def _render(t: dict) -> str:
         f'<figure class="shot">'
         f'<div class="phone"><picture>'
         f'<source srcset="/static/img/{file}.webp" type="image/webp">'
-        f'<img src="/static/img/{file}.jpg" width="560" height="1159"'
+        f'<img src="/static/img/{file}.jpg" width="620" height="1347"'
         f' alt="{head}" loading="lazy"></picture></div>'
         f'<h2>{head}</h2><p>{body}</p></figure>'
         for file, (head, body) in zip(_SHOT_FILES, t["shots"])
