@@ -71,7 +71,7 @@ RU = {
          "Избранное и планы остаются на вашем телефоне."),
     ],
     "facts": [
-        ("121", "место в каталоге"),
+        ("120", "место в каталоге"),
         ("12", "регионов Узбекистана"),
         ("GPX", "треки, записанные людьми"),
         ("0", "рекламы и аккаунтов"),
@@ -128,7 +128,7 @@ UZ = {
          "Saralanganlar va rejalar telefoningizda qoladi."),
     ],
     "facts": [
-        ("121", "joy katalogda"),
+        ("120", "joy katalogda"),
         ("12", "Oʻzbekiston mintaqasi"),
         ("GPX", "odamlar yozgan treklar"),
         ("0", "reklama va akkaunt"),
