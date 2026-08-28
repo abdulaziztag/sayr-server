@@ -22,7 +22,15 @@ except ImportError:  # pragma: no cover
 from . import stats
 from .config import GPX_DIR, SERVER_DIR, settings
 from .db import SessionLocal, engine
-from .models import Place, PlacePhoto, PlaceTrack, Region, Season, photo_storage
+from .models import (
+    Place,
+    PlacePhoto,
+    PlaceTrack,
+    Region,
+    Season,
+    TesterSignup,
+    photo_storage,
+)
 from .services.gpx import recorded_from_target, reverse_track, track_stats
 from .services.images import make_thumbnail, retire_photo, store_upload
 from .services.nearby import rebuild_for_track
@@ -559,6 +567,38 @@ def _render(d: dict) -> str:
 </div></div></body></html>"""
 
 
+class TesterSignupAdmin(ModelView, model=TesterSignup):
+    """Очередь заявок на закрытый тест Android с лендинга.
+
+    Рабочий цикл: открыть, отсортировать по галочке, добавить непозванных
+    в список тестировщиков Play Console, отправить ссылку письмом
+    и поставить `invited`. Без галочки при десятке заявок уже не вспомнить,
+    кому ссылка ушла.
+    """
+
+    name = "Заявка на тест"
+    name_plural = "Тестировщики Android"
+    icon = "fa-solid fa-envelope"
+    column_list = [
+        TesterSignup.email,
+        TesterSignup.lang,
+        TesterSignup.invited,
+        TesterSignup.created_at,
+    ]
+    column_default_sort = ("created_at", True)
+    column_sortable_list = [TesterSignup.invited, TesterSignup.created_at]
+    column_searchable_list = [TesterSignup.email]
+    column_labels = {
+        TesterSignup.email: "Почта",
+        TesterSignup.lang: "Язык",
+        TesterSignup.invited: "Приглашён",
+        TesterSignup.created_at: "Оставлена",
+    }
+    form_columns = [TesterSignup.invited]
+    can_create = False
+    # Удалять можно: спам-адреса чистятся отсюда же
+
+
 def mount_admin(app: FastAPI) -> Admin:
     admin = Admin(
         app,
@@ -581,5 +621,6 @@ def mount_admin(app: FastAPI) -> Admin:
     admin.add_view(PlacePhotoAdmin)
     admin.add_view(PlaceTrackAdmin)
     admin.add_view(RegionAdmin)
+    admin.add_view(TesterSignupAdmin)
     admin.add_view(StatsView)
     return admin

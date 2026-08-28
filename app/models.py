@@ -359,6 +359,36 @@ class PlacePaceStats(Base):
     slower: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
+class TesterSignup(Base):
+    """Заявка на закрытый тест Android с лендинга.
+
+    pytest видит приставку Test* и пытается собрать класс как тестовый —
+    __test__ говорит ему пройти мимо.
+
+    Google Play пускает в тест только адреса из списка в консоли, поэтому
+    вместо ссылки «скачать» на лендинге форма: почта падает сюда, владелец
+    добавляет её в список руками и присылает ссылку. `invited` — галочка
+    «добавил и написал», ставится в админке.
+    """
+
+    __test__ = False
+    __tablename__ = "tester_signups"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True)
+    #: На каком языке была страница — на нём и писать человеку
+    lang: Mapped[str] = mapped_column(String(2), default="ru", server_default="ru")
+    invited: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    def __str__(self) -> str:
+        return self.email
+
+
 class Device(Base):
     """Когда устройство увидели впервые.
 

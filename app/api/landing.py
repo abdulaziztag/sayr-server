@@ -13,12 +13,22 @@
 страница честно говорит «скоро», а не ведёт в никуда.
 """
 
-from fastapi import APIRouter
-from fastapi.responses import HTMLResponse
+import re
+
+from fastapi import APIRouter, Depends, Form, Header, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
+from ..db import get_session
+from ..models import TesterSignup
 
 router = APIRouter(tags=["landing"])
+
+#: Нарочно нестрогая: отсечь мусор, не отвергая живые адреса.
+#: Настоящая проверка одна — дойдёт ли письмо со ссылкой
+_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 SUPPORT_EMAIL = "mannopov481@gmail.com"
 
@@ -34,6 +44,15 @@ RU = {
     "soon_note": "Приложение проходит проверку в магазинах. Загляните через несколько дней.",
     "ios": "Для iPhone",
     "android": "Для Android",
+    "form_head": "Для Android — по приглашению",
+    "form_lede": "Приложение в закрытом тестировании Google Play. Оставьте "
+                 "почту от Google-аккаунта — добавим вас в тестировщики "
+                 "и пришлём ссылку на установку, обычно в течение дня.",
+    "form_placeholder": "почта Google-аккаунта",
+    "form_button": "Получить ссылку",
+    "form_note": "Почта нужна только для приглашения — никаких рассылок.",
+    "form_ok": "Готово! Ссылка придёт на эту почту.",
+    "form_fail": "Не отправилось — напишите нам письмом.",
     "blocks": [
         ("Во сколько выезжать",
          "Приложение берёт закат в координатах места и вычитает дорогу туда "
@@ -68,6 +87,15 @@ UZ = {
     "soon_note": "Ilova doʻkonlarda tekshiruvdan oʻtmoqda. Bir necha kundan keyin qarang.",
     "ios": "iPhone uchun",
     "android": "Android uchun",
+    "form_head": "Android uchun — taklif orqali",
+    "form_lede": "Ilova Google Playʼda yopiq sinovda. Google akkauntingiz "
+                 "pochtasini qoldiring — sizni sinovchilarga qoʻshamiz va "
+                 "oʻrnatish havolasini yuboramiz, odatda bir kun ichida.",
+    "form_placeholder": "Google akkaunt pochtasi",
+    "form_button": "Havola olish",
+    "form_note": "Pochta faqat taklif uchun kerak — hech qanday reklama yoʻq.",
+    "form_ok": "Tayyor! Havola shu pochtaga keladi.",
+    "form_fail": "Yuborilmadi — bizga xat yozing.",
     "blocks": [
         ("Qachon yoʻlga chiqish",
          "Ilova joyning koordinatalari boʻyicha quyoshning botishini oladi va "
@@ -141,6 +169,22 @@ h1 {{ font-size:clamp(2rem,6.5vw,3.4rem); line-height:1.08; margin:0 0 1rem;
 .stores {{ display:flex; gap:1.1rem; font-size:.86rem; }}
 .stores a {{ color:var(--green); }}
 .note {{ color:var(--ink3); font-size:.85rem; margin:.4rem 0 0; }}
+.tform {{ background:var(--surface); border:1px solid var(--edge);
+          border-radius:16px 16px 16px 34px; padding:1.3rem 1.4rem;
+          margin-top:1.6rem; max-width:34rem; }}
+.tform h2 {{ font-size:1.02rem; margin:0 0 .4rem; letter-spacing:-.01em; }}
+.tform p {{ margin:0 0 .9rem; color:var(--ink2); font-size:.92rem; }}
+.tform .row {{ display:flex; flex-wrap:wrap; gap:.6rem; }}
+.tform input[type=email] {{ flex:1 1 14rem; font:inherit; font-size:.95rem;
+          padding:.7rem .9rem; border:1px solid var(--edge); border-radius:10px;
+          background:var(--paper); color:var(--ink); min-width:0; }}
+.tform button {{ font:inherit; font-weight:600; font-size:.95rem; cursor:pointer;
+          background:var(--green); color:var(--paper); border:0;
+          padding:.7rem 1.4rem; border-radius:10px 10px 10px 20px; }}
+.tform button:hover {{ filter:brightness(1.08); }}
+.tform .tnote {{ margin:.6rem 0 0; font-size:.8rem; color:var(--ink3); }}
+.tform .tok {{ margin:.6rem 0 0; font-size:.92rem; color:var(--green); font-weight:600; }}
+.hp {{ position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }}
 .shots {{ display:grid; grid-template-columns:repeat(3,1fr); gap:clamp(.6rem,2vw,1.4rem);
           margin:clamp(2.5rem,8vw,4.5rem) 0; }}
 .shots img {{ width:100%; height:auto; border-radius:16px 16px 16px 34px;
@@ -171,6 +215,7 @@ footer .made {{ flex-basis:100%; margin:0; }}
 
   {cta}
   <p class="note">{honest}</p>
+  {tester_form}
 
   <div class="shots">
     <img src="/static/img/shot1.jpg" alt="" loading="lazy">
@@ -218,17 +263,68 @@ def _cta(t: dict) -> tuple[str, str]:
         links.append(f'<a href="{ios}">{t["ios"]}</a>')
     if android:
         links.append(f'<a href="{android}">{t["android"]}</a>')
+    else:
+        # В Google Play приложения ещё нет — андроидная половина кнопки
+        # и текстовая ссылка ведут к форме закрытого теста ниже
+        links.append(f'<a href="#android">{t["android"]}</a>')
     return (
         f'<div class="cta">'
         f'<a class="btn" id="install" href="{first}" '
-        f'data-ios="{ios or android}" data-android="{android or ios}">{t["install"]}</a>'
+        f'data-ios="{ios or android}" data-android="{android or "#android"}">{t["install"]}</a>'
         f'<span class="stores">{"".join(links)}</span></div>',
         _SCRIPT,
     )
 
 
+def _tester_form(t: dict) -> str:
+    """Форма закрытого теста. Живёт, только пока в Play нас нет: появится
+    ссылка на магазин — форма исчезнет сама, без правок разметки.
+
+    Обычный POST, работающий без JavaScript, плюс перехват сабмита ради
+    ответа без перезагрузки. Скрытое поле-приманка отсеивает ботов,
+    которые заполняют всё подряд: человек его не видит и не трогает.
+    """
+    if settings.play_store_url:
+        return ""
+    ok, fail = t["form_ok"], t["form_fail"]
+    return f"""
+  <form class="tform" id="android" method="post" action="/android-testers">
+    <h2>{t["form_head"]}</h2>
+    <p>{t["form_lede"]}</p>
+    <div class="row">
+      <input type="email" name="email" required maxlength="320"
+             placeholder="{t["form_placeholder"]}" autocomplete="email">
+      <button type="submit">{t["form_button"]}</button>
+    </div>
+    <input class="hp" type="text" name="website" tabindex="-1" autocomplete="off">
+    <input type="hidden" name="lang" value="{t["lang"]}">
+    <p class="tnote" data-note>{t["form_note"]}</p>
+  </form>
+  <script>
+  (function () {{
+    var f = document.getElementById('android');
+    if (!f || !window.fetch) return;
+    f.addEventListener('submit', function (e) {{
+      e.preventDefault();
+      fetch(f.action, {{ method: 'POST', body: new FormData(f),
+                         headers: {{ 'Accept': 'application/json' }} }})
+        .then(function (r) {{ if (!r.ok) throw 0; return r.json(); }})
+        .then(function () {{
+          f.querySelector('.row').style.display = 'none';
+          var n = f.querySelector('[data-note]');
+          n.textContent = {ok!r}; n.className = 'tok';
+        }})
+        .catch(function () {{
+          f.querySelector('[data-note]').textContent = {fail!r};
+        }});
+    }});
+  }})();
+  </script>"""
+
+
 def _render(t: dict) -> str:
     cta, script = _cta(t)
+    tester_form = _tester_form(t)
     blocks = "".join(
         f'<div class="block"><h2>{head}</h2><p>{body}</p></div>' for head, body in t["blocks"]
     )
@@ -241,6 +337,7 @@ def _render(t: dict) -> str:
         other_href=t["other"][0],
         other_label=t["other"][1],
         cta=cta,
+        tester_form=tester_form,
         honest=t["honest"],
         blocks=blocks,
         privacy=t["privacy"],
@@ -248,6 +345,63 @@ def _render(t: dict) -> str:
         email=SUPPORT_EMAIL,
         made=t["made"],
         script=script,
+    )
+
+
+_THANKS = """<!doctype html>
+<html lang="{lang}"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sayr</title>
+<style>body{{margin:0;background:#F3EEE3;color:#161A17;
+font-family:ui-sans-serif,system-ui,sans-serif;display:grid;place-items:center;
+min-height:100vh;padding:2rem}}
+@media (prefers-color-scheme:dark){{body{{background:#141714;color:#EDEAE1}}}}
+main{{max-width:26rem;text-align:center}}h1{{font-size:1.4rem}}
+a{{color:#2F5D3F}}</style></head>
+<body><main><h1>{head}</h1><p>{body}</p><p><a href="{back}">{back_label}</a></p></main>
+</body></html>"""
+
+_THANKS_T = {
+    "ru": ("Готово!", "Ссылка на установку придёт на эту почту, обычно в течение дня.",
+           "/", "На главную"),
+    "uz": ("Tayyor!", "Oʻrnatish havolasi shu pochtaga keladi, odatda bir kun ichida.",
+           "/uz", "Bosh sahifaga"),
+}
+
+
+@router.post("/android-testers")
+async def android_tester_signup(
+    email: str = Form(..., max_length=320),
+    lang: str = Form("ru"),
+    website: str = Form(""),
+    accept: str = Header("", alias="Accept"),
+    session: AsyncSession = Depends(get_session),
+):
+    """Заявка на закрытый тест Android.
+
+    Ответ одинаково спокойный на всё, кроме явно кривого адреса: и на новый,
+    и на повторный, и на пойманного приманкой бота. Разный ответ выдал бы
+    наружу, какие адреса лежат в базе, а боту — что его раскусили.
+    """
+    lang = lang if lang in ("ru", "uz") else "ru"
+    address = email.strip().lower()
+    if not _EMAIL.fullmatch(address):
+        raise HTTPException(422, "это не похоже на почту")
+
+    # Поле-приманка заполнено — человек его не видит, значит это бот.
+    if not website:
+        await session.execute(
+            insert(TesterSignup)
+            .values(email=address, lang=lang)
+            .on_conflict_do_nothing(index_elements=["email"])
+        )
+        await session.commit()
+
+    if "application/json" in accept:
+        return JSONResponse({"ok": True})
+    head, body, back, back_label = _THANKS_T[lang]
+    return HTMLResponse(
+        _THANKS.format(lang=lang, head=head, body=body, back=back, back_label=back_label)
     )
 
 
