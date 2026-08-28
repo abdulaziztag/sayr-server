@@ -84,7 +84,6 @@ RU = {
         ("Карта", "Все места сразу — видно, что рядом, а что на выходные "
                   "с ночёвкой."),
     ],
-    "honest": "Интерфейс приложения пока только на русском.",
     "privacy": "Конфиденциальность",
     "support": "Поддержка",
     "made": "Каталог собран вручную. Нашли неточность — напишите, поправим.",
@@ -141,7 +140,6 @@ UZ = {
         ("Xarita", "Barcha joylar birdan — nima yaqin, nimaga tunab borish "
                    "kerakligi koʻrinadi."),
     ],
-    "honest": "Ilova interfeysi hozircha faqat rus tilida.",
     "privacy": "Maxfiylik",
     "support": "Yordam",
     "made": "Katalog qoʻlda yigʻilgan. Xatolik topsangiz — yozing, tuzatamiz.",
@@ -160,13 +158,25 @@ _PAGE = """<!doctype html>
 <meta name="theme-color" content="#F3EEE3" media="(prefers-color-scheme:light)">
 <meta name="theme-color" content="#141714" media="(prefers-color-scheme:dark)">
 <link rel="icon" href="/static/img/icon.png">
+<link rel="preload" href="/static/fonts/IBMPlexSans-Regular.woff2" as="font"
+      type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/IBMPlexSans-SemiBold.woff2" as="font"
+      type="font/woff2" crossorigin>
 <style>
-@font-face {{ font-family:Plex; src:url(/static/fonts/IBMPlexSans-Regular.ttf) format('truetype');
-              font-weight:400; font-display:swap; }}
-@font-face {{ font-family:Plex; src:url(/static/fonts/IBMPlexSans-SemiBold.ttf) format('truetype');
-              font-weight:600; font-display:swap; }}
-@font-face {{ font-family:PlexMono; src:url(/static/fonts/IBMPlexMono-Medium.ttf) format('truetype');
-              font-weight:500; font-display:swap; }}
+/* woff2 втрое легче ttf, и грузится он с предзагрузкой — до первой отрисовки.
+   display:optional вместо swap потому, что swap переставлял вёрстку уже
+   на глазах: системный шрифт и Plex ломают строки по-разному, и заголовок
+   с кнопками прыгали. С optional браузер либо успевает применить шрифт
+   сразу, либо не подменяет его вовсе — сдвига не будет ни в каком случае */
+@font-face {{ font-family:Plex; font-weight:400; font-display:optional;
+              src:url(/static/fonts/IBMPlexSans-Regular.woff2) format('woff2'),
+                  url(/static/fonts/IBMPlexSans-Regular.ttf) format('truetype'); }}
+@font-face {{ font-family:Plex; font-weight:600; font-display:optional;
+              src:url(/static/fonts/IBMPlexSans-SemiBold.woff2) format('woff2'),
+                  url(/static/fonts/IBMPlexSans-SemiBold.ttf) format('truetype'); }}
+@font-face {{ font-family:PlexMono; font-weight:500; font-display:optional;
+              src:url(/static/fonts/IBMPlexMono-Medium.woff2) format('woff2'),
+                  url(/static/fonts/IBMPlexMono-Medium.ttf) format('truetype'); }}
 :root {{
   /* ink3 темнее приложенческого #8A8272, а кнопка темнее фирменной терракоты:
      на бумаге они давали 3.3:1 и 4.3:1, а мелкому тексту нужно 4.5:1.
@@ -359,7 +369,6 @@ footer .made {{ flex-basis:100%; margin:0; }}
       <h1>{tagline}</h1>
       <p class="lede">{lede}</p>
       {cta}
-      <p class="note">{honest}</p>
     </div>
     <div class="phone">
       <picture>
@@ -554,7 +563,6 @@ def _render(t: dict) -> str:
         tester_form=tester_form,
         facts=facts,
         gallery=gallery,
-        honest=t["honest"],
         blocks=blocks,
         privacy=t["privacy"],
         support=t["support"],
