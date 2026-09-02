@@ -51,7 +51,7 @@
  },
  {
   "slug": "korakiya-sharsharasi",
-  "name": "Коракия шаршараси",
+  "name": "Каракия",
   "source_name": "Qoraqiya sharsharasi",
   "category": "waterfall",
   "region": "Угам-Чаткал",
@@ -87,7 +87,7 @@
  },
  {
   "slug": "oktosh-sharsharasi",
-  "name": "Октош шаршараси",
+  "name": "Акташ",
   "source_name": "Oqtosh sharsharasi",
   "category": "waterfall",
   "region": "Угам-Чаткал",
@@ -137,7 +137,7 @@
  },
  {
   "slug": "tuzkon-kuli",
-  "name": "Тузкон кули",
+  "name": "Тузкан",
   "source_name": "Tuzkon ko'li",
   "category": "lake",
   "region": "Нурата",
@@ -373,7 +373,7 @@
  },
  {
   "slug": "akhsarsoy",
-  "name": "Ахсарсой",
+  "name": "Ахсарсай",
   "source_name": "Axsarsoy",
   "category": "waterfall",
   "region": "Чимган–Чарвак",
@@ -423,7 +423,7 @@
  },
  {
   "slug": "kushpar",
-  "name": "Кушпар",
+  "name": "Кошпар",
   "source_name": "Qoʻshpar",
   "category": "waterfall",
   "region": "Пскем",
@@ -498,7 +498,7 @@
  },
  {
   "slug": "pioner-chukkisi",
-  "name": "Пионер Чуккиси",
+  "name": "Пионерский",
   "source_name": "Pioner Cho'qqisi (2336 m)",
   "category": "peak",
   "region": "Ахангаран",
@@ -523,7 +523,7 @@
  },
  {
   "slug": "chukurak",
-  "name": "Чукурак",
+  "name": "Чукураксу",
   "source_name": "Chuquraq (27 m.) (Kelin Ko'ylak)",
   "category": "waterfall",
   "region": "Чимган–Чарвак",
@@ -548,7 +548,7 @@
  },
  {
   "slug": "temirtosh",
-  "name": "Темиртош",
+  "name": "Темирташ",
   "source_name": "Temirtosh",
   "category": "lake",
   "region": "Пскем",
@@ -573,7 +573,7 @@
  },
  {
   "slug": "korakanish",
-  "name": "Кораканиш",
+  "name": "Караканыш",
   "source_name": "Qoraqanish",
   "category": "lake",
   "region": "Пскем",
@@ -598,7 +598,7 @@
  },
  {
   "slug": "kashkasuv",
-  "name": "Кашкасув",
+  "name": "Кашкасу",
   "source_name": "Qashqasuv",
   "category": "waterfall",
   "region": "Чимган–Чарвак",
@@ -798,7 +798,7 @@
  },
  {
   "slug": "lashkarak-sharsharasi",
-  "name": "Лашкарак шаршараси",
+  "name": "Лашкарак",
   "source_name": "Lashkarak sharsharasi (25m)",
   "category": "waterfall",
   "region": "Ахангаран",
@@ -1059,7 +1059,7 @@
  },
  {
   "slug": "navolisoy",
-  "name": "Наволисой",
+  "name": "Наволисай",
   "source_name": "Navolisoy",
   "category": "waterfall",
   "region": "Чимган–Чарвак",
@@ -1134,7 +1134,7 @@
  },
  {
   "slug": "arashan-kuli",
-  "name": "Арашан кули",
+  "name": "Арашан",
   "source_name": "Arashan ko'li",
   "category": "lake",
   "region": "Чимган–Чарвак",
@@ -1209,7 +1209,7 @@
  },
  {
   "slug": "ispay-gori",
-  "name": "Испай Гори",
+  "name": "Испай",
   "source_name": "Ispay G'ori",
   "category": "cave",
   "region": "Пскем",
@@ -1234,7 +1234,7 @@
  },
  {
   "slug": "ispay-sharsharasi",
-  "name": "Испай Шаршараси",
+  "name": "Испай",
   "source_name": "Ispay Sharsharasi",
   "category": "waterfall",
   "region": "Пскем",

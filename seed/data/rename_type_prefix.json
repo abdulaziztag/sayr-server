@@ -1,0 +1,262 @@
+[
+ {
+  "slug": "oktosh-sharsharasi",
+  "name": "Акташ",
+  "name_uz": "Oqtosh (Oqtoshsoy)"
+ },
+ {
+  "slug": "akhsarsoy",
+  "name": "Ахсарсай",
+  "name_uz": "Axsarsoy"
+ },
+ {
+  "slug": "gazak",
+  "name": "Газак и теснины Карышото",
+  "name_uz": "Gazak va Qarishoto tor darasi"
+ },
+ {
+  "slug": "devsharshara",
+  "name": "Девшаршара",
+  "name_uz": "Devsharshara"
+ },
+ {
+  "slug": "ispay-sharsharasi",
+  "name": "Испай",
+  "name_uz": "Ispay"
+ },
+ {
+  "slug": "kashkasuv",
+  "name": "Кашкасу",
+  "name_uz": "Qashqasuv"
+ },
+ {
+  "slug": "kushpar",
+  "name": "Кошпар",
+  "name_uz": "Qoʻshpar"
+ },
+ {
+  "slug": "kuduk",
+  "name": "Кудук",
+  "name_uz": "Quduq"
+ },
+ {
+  "slug": "kurdupur",
+  "name": "Курдупур",
+  "name_uz": "Qurdupur"
+ },
+ {
+  "slug": "kyzylnavr",
+  "name": "Кызылнавр",
+  "name_uz": "Qizilnavr"
+ },
+ {
+  "slug": "lashkarak-sharsharasi",
+  "name": "Лашкарак",
+  "name_uz": "Lashkarak"
+ },
+ {
+  "slug": "navolisoy",
+  "name": "Наволисай",
+  "name_uz": "Navolisoy"
+ },
+ {
+  "slug": "obi-par",
+  "name": "Оби Пар",
+  "name_uz": "Obi Par"
+ },
+ {
+  "slug": "opar",
+  "name": "Опар",
+  "name_uz": "Opar"
+ },
+ {
+  "slug": "paltau-waterfall",
+  "name": "Пальтау",
+  "name_uz": "Paltogʻ"
+ },
+ {
+  "slug": "suvtushar-waterfall",
+  "name": "Сувтушар",
+  "name_uz": "Suvtushar"
+ },
+ {
+  "slug": "sukok-waterfall",
+  "name": "Сукок",
+  "name_uz": "Soʻqoq"
+ },
+ {
+  "slug": "chukurak",
+  "name": "Чукураксу",
+  "name_uz": "Chuquraqsuv (Kelin koʻylagi)"
+ },
+ {
+  "slug": "yazyk-sharsharasi",
+  "name": "Язык (Аксаката)",
+  "name_uz": "Til (Oqsoqota)"
+ },
+ {
+  "slug": "beldersay",
+  "name": "Мраморная речка",
+  "name_uz": "Marmarsoy"
+ },
+ {
+  "slug": "korakiya-sharsharasi",
+  "name": "Каракия",
+  "name_uz": "Qoraqiya"
+ },
+ {
+  "slug": "tashgul-waterfalls",
+  "name": "Ташгуль",
+  "name_uz": "Toshgul"
+ },
+ {
+  "slug": "yangiabad-waterfalls",
+  "name": "Янгиабад",
+  "name_uz": "Yangiobod"
+ },
+ {
+  "slug": "lednik-ozyorny",
+  "name": "Озёрный",
+  "name_uz": "Ozyorniy"
+ },
+ {
+  "slug": "altynkul",
+  "name": "Алтынкуль (Чодак)",
+  "name_uz": "Oltinkoʻl (Chodak)"
+ },
+ {
+  "slug": "arashan-kuli",
+  "name": "Арашан",
+  "name_uz": "Arashan"
+ },
+ {
+  "slug": "korakanish",
+  "name": "Караканыш",
+  "name_uz": "Qoraqanish"
+ },
+ {
+  "slug": "kattakul",
+  "name": "Каттакуль (Камангаран)",
+  "name_uz": "Kattakoʻl (Kamangaron)"
+ },
+ {
+  "slug": "temirtosh",
+  "name": "Темирташ",
+  "name_uz": "Temirtosh"
+ },
+ {
+  "slug": "tuzkon-kuli",
+  "name": "Тузкан",
+  "name_uz": "Tuzkon"
+ },
+ {
+  "slug": "shovurkul",
+  "name": "Шовуркуль",
+  "name_uz": "Shovurkoʻl"
+ },
+ {
+  "slug": "urungach-lakes",
+  "name": "Урунгач",
+  "name_uz": "Urungʻoch (Nefrit)"
+ },
+ {
+  "slug": "amir-temur-gori-gissar",
+  "name": "Амир Темур (Гиссары)",
+  "name_uz": "Amir Temur (Hisor)"
+ },
+ {
+  "slug": "taragay-gori",
+  "name": "Амир Темур (Тарагай)",
+  "name_uz": "Amir Temur (Taragʻay)"
+ },
+ {
+  "slug": "ispay-gori",
+  "name": "Испай",
+  "name_uz": "Ispay"
+ },
+ {
+  "slug": "kamar-farmon",
+  "name": "Камар-Фармон",
+  "name_uz": "Kamar-Farmon"
+ },
+ {
+  "slug": "kaptarkhona",
+  "name": "Каптархона",
+  "name_uz": "Kaptarxona"
+ },
+ {
+  "slug": "maydan-gori",
+  "name": "Майдан",
+  "name_uz": "Maydan"
+ },
+ {
+  "slug": "suvatar-gori",
+  "name": "Суватар",
+  "name_uz": "Suvatar"
+ },
+ {
+  "slug": "hazrat-daud-cave",
+  "name": "Хазрат Дауд",
+  "name_uz": "Hazrati Dovud"
+ },
+ {
+  "slug": "khoja-zarin",
+  "name": "Ходжа Зарин",
+  "name_uz": "Xoʻja Zarin"
+ },
+ {
+  "slug": "chashma-gori",
+  "name": "Чашма (Сукок)",
+  "name_uz": "Chashma (Soʻqoq)"
+ },
+ {
+  "slug": "khazrat-bashir",
+  "name": "Шейх (Хазрат Башир)",
+  "name_uz": "Shayx (Hazrati Bashir)"
+ },
+ {
+  "slug": "kungirbuka-gori",
+  "name": "Кунгурбуки",
+  "name_uz": "Qoʻngʻirbuqa"
+ },
+ {
+  "slug": "ettikiz-amat-gor",
+  "name": "Еттикиз и Амат-Гор",
+  "name_uz": "Yettiqiz va Amat"
+ },
+ {
+  "slug": "adelunga-peak",
+  "name": "Аделунга",
+  "name_uz": "Adelunga"
+ },
+ {
+  "slug": "beshtor-peak",
+  "name": "Бештор",
+  "name_uz": "Beshtor"
+ },
+ {
+  "slug": "okhotnichiy",
+  "name": "Охотничий (Аукашка)",
+  "name_uz": "Oxotnichiy (Ovqashqa)"
+ },
+ {
+  "slug": "pioner-chukkisi",
+  "name": "Пионерский",
+  "name_uz": "Pioner"
+ },
+ {
+  "slug": "kyzylgaza",
+  "name": "Кызылгаза",
+  "name_uz": "Qizilgʻaza"
+ },
+ {
+  "slug": "maydanak-plateau",
+  "name": "Майданак",
+  "name_uz": "Maydanak"
+ },
+ {
+  "slug": "pulatkhan-plateau",
+  "name": "Пулатхан",
+  "name_uz": "Poʻlatxon"
+ }
+]

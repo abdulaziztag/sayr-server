@@ -106,7 +106,7 @@
     },
     {
       "slug": "pulatkhan-plateau",
-      "name": "Плато Пулатхан",
+      "name": "Пулатхан",
       "category": "plateau",
       "region": "Чимган–Чарвак",
       "lat": 41.4338,
@@ -134,7 +134,7 @@
     },
     {
       "slug": "urungach-lakes",
-      "name": "Озёра Урунгач",
+      "name": "Урунгач",
       "category": "lake",
       "region": "Пскем",
       "lat": 41.9117,
@@ -161,7 +161,7 @@
     },
     {
       "slug": "beldersay",
-      "name": "Водопад на Мраморной речке",
+      "name": "Мраморная речка",
       "category": "waterfall",
       "region": "Чимган–Чарвак",
       "lat": 41.5087,
@@ -246,7 +246,7 @@
     },
     {
       "slug": "yangiabad-waterfalls",
-      "name": "Водопады Янгиабада",
+      "name": "Янгиабад",
       "category": "waterfall",
       "region": "Ахангаран",
       "lat": 41.1565,
@@ -406,7 +406,7 @@
     },
     {
       "slug": "hazrat-daud-cave",
-      "name": "Пещера Хазрат Дауда",
+      "name": "Хазрат Дауд",
       "category": "cave",
       "region": "Самарканд",
       "lat": 39.4988,
@@ -568,7 +568,7 @@
     },
     {
       "slug": "paltau-waterfall",
-      "name": "Водопад Пальтау",
+      "name": "Пальтау",
       "category": "waterfall",
       "region": "Чимган–Чарвак",
       "lat": 41.5714,
@@ -681,7 +681,7 @@
     },
     {
       "slug": "beshtor-peak",
-      "name": "Пик Бештор",
+      "name": "Бештор",
       "category": "peak",
       "region": "Пскем",
       "lat": 42.12333,
@@ -704,7 +704,7 @@
     },
     {
       "slug": "adelunga-peak",
-      "name": "Пик Аделунга",
+      "name": "Аделунга",
       "category": "peak",
       "region": "Пскем",
       "lat": 42.15583,
@@ -727,7 +727,7 @@
     },
     {
       "slug": "sukok-waterfall",
-      "name": "Водопад Сукок",
+      "name": "Сукок",
       "category": "waterfall",
       "region": "Угам-Чаткал",
       "lat": 41.2388,
@@ -842,7 +842,7 @@
     },
     {
       "slug": "tashgul-waterfalls",
-      "name": "Водопады Ташгуль",
+      "name": "Ташгуль",
       "category": "waterfall",
       "region": "Угам-Чаткал",
       "lat": 41.6089,
@@ -887,7 +887,7 @@
     },
     {
       "slug": "suvtushar-waterfall",
-      "name": "Водопад Сувтушар",
+      "name": "Сувтушар",
       "category": "waterfall",
       "region": "Кашкадарья",
       "lat": 38.9503,
@@ -909,7 +909,7 @@
     },
     {
       "slug": "maydanak-plateau",
-      "name": "Плато Майданак",
+      "name": "Майданак",
       "category": "plateau",
       "region": "Кашкадарья",
       "lat": 38.67222,

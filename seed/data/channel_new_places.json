@@ -1,7 +1,7 @@
 {
  "places": [
   {
-   "name": "Пещеры Еттикиз и Амат-Гор",
+   "name": "Еттикиз и Амат-Гор",
    "slug": "ettikiz-amat-gor",
    "category": "cave",
    "files": [
@@ -10,7 +10,7 @@
    ]
   },
   {
-   "name": "Пещера и грот Кунгурбуки",
+   "name": "Кунгурбуки",
    "slug": "kungirbuka-gori",
    "category": "cave",
    "files": [
@@ -45,7 +45,7 @@
    ]
   },
   {
-   "name": "Плато Кызылгаза",
+   "name": "Кызылгаза",
    "slug": "kyzylgaza",
    "category": "plateau",
    "files": [
@@ -55,7 +55,7 @@
    ]
   },
   {
-   "name": "Пещера Амира Темура (Гиссары)",
+   "name": "Амир Темур (Гиссары)",
    "slug": "amir-temur-gori-gissar",
    "category": "cave",
    "files": [
@@ -64,7 +64,7 @@
    ]
   },
   {
-   "name": "Пещера Тимура (Тарагай)",
+   "name": "Амир Темур (Тарагай)",
    "slug": "taragay-gori",
    "category": "cave",
    "files": [
@@ -72,7 +72,7 @@
    ]
   },
   {
-   "name": "Пещера Чашма (Сукок)",
+   "name": "Чашма (Сукок)",
    "slug": "chashma-gori",
    "category": "cave",
    "files": [
@@ -81,7 +81,7 @@
    ]
   },
   {
-   "name": "Пещера Камар-Фармон",
+   "name": "Камар-Фармон",
    "slug": "kamar-farmon",
    "category": "cave",
    "files": [
@@ -89,7 +89,7 @@
    ]
   },
   {
-   "name": "Водопад Язык (Аксаката)",
+   "name": "Язык (Аксаката)",
    "slug": "yazyk-sharsharasi",
    "category": "waterfall",
    "files": [
@@ -105,7 +105,7 @@
    ]
   },
   {
-   "name": "Пещера Суватар",
+   "name": "Суватар",
    "slug": "suvatar-gori",
    "category": "cave",
    "files": [
@@ -121,7 +121,7 @@
    ]
   },
   {
-   "name": "Водопад Девшаршара",
+   "name": "Девшаршара",
    "slug": "devsharshara",
    "category": "waterfall",
    "files": [
@@ -129,7 +129,7 @@
    ]
   },
   {
-   "name": "Озеро Шовуркуль",
+   "name": "Шовуркуль",
    "slug": "shovurkul",
    "category": "lake",
    "files": [
@@ -146,7 +146,7 @@
    ]
   },
   {
-   "name": "Озеро Каттакуль (Камангаран)",
+   "name": "Каттакуль (Камангаран)",
    "slug": "kattakul",
    "category": "lake",
    "files": [
@@ -170,7 +170,7 @@
    ]
   },
   {
-   "name": "Водопад Кызылнавр",
+   "name": "Кызылнавр",
    "slug": "kyzylnavr",
    "category": "waterfall",
    "files": [
@@ -186,7 +186,7 @@
    ]
   },
   {
-   "name": "Ледник Озёрный",
+   "name": "Озёрный",
    "slug": "lednik-ozyorny",
    "category": "other",
    "files": [
@@ -194,7 +194,7 @@
    ]
   },
   {
-   "name": "Озеро Алтынкуль (Чодак)",
+   "name": "Алтынкуль (Чодак)",
    "slug": "altynkul",
    "category": "lake",
    "files": [
@@ -202,7 +202,7 @@
    ]
   },
   {
-   "name": "Водопад Газак и каньон Карышото",
+   "name": "Газак и теснины Карышото",
    "slug": "gazak",
    "category": "waterfall",
    "files": [
@@ -210,7 +210,7 @@
    ]
   },
   {
-   "name": "Пещера Ходжа Зарин",
+   "name": "Ходжа Зарин",
    "slug": "khoja-zarin",
    "category": "cave",
    "files": [
@@ -226,7 +226,7 @@
    ]
   },
   {
-   "name": "Пик Охотничий",
+   "name": "Охотничий (Аукашка)",
    "slug": "okhotnichiy",
    "category": "peak",
    "files": [
@@ -245,7 +245,7 @@
    ]
   },
   {
-   "name": "Пещера Майдан",
+   "name": "Майдан",
    "slug": "maydan-gori",
    "category": "cave",
    "files": [
@@ -253,7 +253,7 @@
    ]
   },
   {
-   "name": "Пещера Хазрат Башир",
+   "name": "Шейх (Хазрат Башир)",
    "slug": "khazrat-bashir",
    "category": "cave",
    "files": [
@@ -261,7 +261,7 @@
    ]
   },
   {
-   "name": "Пещера Каптархона",
+   "name": "Каптархона",
    "slug": "kaptarkhona",
    "category": "cave",
    "files": [
