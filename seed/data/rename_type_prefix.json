@@ -285,23 +285,8 @@
   "name_uz": "Bodoq"
  },
  {
-  "slug": "zaamin-waterfall",
-  "name": "Зааминский водопад",
-  "name_uz": "Zomin"
- },
- {
-  "slug": "sangardak-waterfall",
-  "name": "Сангардакский водопад",
-  "name_uz": "Sangardak"
- },
- {
   "slug": "fozilmon-lake",
   "name": "Фазильман",
   "name_uz": "Fozilmon"
- },
- {
-  "slug": "aksay-waterfall",
-  "name": "Чёрный водопад",
-  "name_uz": "Oqsoy"
  }
 ]
