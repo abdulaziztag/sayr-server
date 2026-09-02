@@ -156,7 +156,7 @@ _PAGE = """<!doctype html>
 <meta property="og:description" content="{lede_plain}">
 <meta property="og:image" content="/static/img/shot-catalog.jpg">
 <meta name="theme-color" content="#F3EEE3" media="(prefers-color-scheme:light)">
-<meta name="theme-color" content="#14231A" media="(prefers-color-scheme:dark)">
+<meta name="theme-color" content="#141714" media="(prefers-color-scheme:dark)">
 <link rel="icon" href="/static/img/icon.png">
 <link rel="preload" href="/static/fonts/IBMPlexSans-Regular.woff2" as="font"
       type="font/woff2" crossorigin>
@@ -194,7 +194,7 @@ _PAGE = """<!doctype html>
 @media (prefers-color-scheme:dark) {{
   /* На светлой терракоте тёмной темы белый текст давал 2.7:1 — на кнопке
      здесь тёмная подпись, как на янтарных плашках в самом приложении */
-  :root {{ --paper:#14231A; --surface:#1C2E24; --ink:#EDEAE1; --ink2:#C6C1B5;
+  :root {{ --paper:#141714; --surface:#1E221E; --ink:#EDEAE1; --ink2:#C6C1B5;
            --ink3:#8E897D; --green:#7FBF95; --terra:#E8843C; --cta:#E8843C;
            --on-cta:#1F0F06; --edge:#EDEAE11F; --shadow:#00000055; }}
 }}
@@ -579,7 +579,7 @@ _THANKS = """<!doctype html>
 <style>body{{margin:0;background:#F3EEE3;color:#161A17;
 font-family:ui-sans-serif,system-ui,sans-serif;display:grid;place-items:center;
 min-height:100vh;padding:2rem}}
-@media (prefers-color-scheme:dark){{body{{background:#14231A;color:#EDEAE1}}}}
+@media (prefers-color-scheme:dark){{body{{background:#141714;color:#EDEAE1}}}}
 main{{max-width:26rem;text-align:center}}h1{{font-size:1.4rem}}
 a{{color:#2F5D3F}}</style></head>
 <body><main><h1>{head}</h1><p>{body}</p><p><a href="{back}">{back_label}</a></p></main>
