@@ -263,5 +263,45 @@
   "slug": "khoja-siddik",
   "name": "Ходжа Сиддик",
   "name_uz": "Xoʻja Siddiq"
+ },
+ {
+  "slug": "amir-temur-chukkisi",
+  "name": "Амир Темур",
+  "name_uz": "Amir Temur"
+ },
+ {
+  "slug": "arashan-chukkisi",
+  "name": "Арашан",
+  "name_uz": "Arashan"
+ },
+ {
+  "slug": "afgon-chukkisi",
+  "name": "Афган",
+  "name_uz": "Afgʻon"
+ },
+ {
+  "slug": "badak-lake",
+  "name": "Бадак",
+  "name_uz": "Bodoq"
+ },
+ {
+  "slug": "zaamin-waterfall",
+  "name": "Зааминский водопад",
+  "name_uz": "Zomin"
+ },
+ {
+  "slug": "sangardak-waterfall",
+  "name": "Сангардакский водопад",
+  "name_uz": "Sangardak"
+ },
+ {
+  "slug": "fozilmon-lake",
+  "name": "Фазильман",
+  "name_uz": "Fozilmon"
+ },
+ {
+  "slug": "aksay-waterfall",
+  "name": "Чёрный водопад",
+  "name_uz": "Oqsoy"
  }
 ]
