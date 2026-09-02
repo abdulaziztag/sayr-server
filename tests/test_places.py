@@ -79,3 +79,12 @@ async def test_regions_with_counts(client):
     assert regions[0]["places_count"] == 4
     assert regions[1]["name"] == "Дальний регион"
     assert regions[1]["places_count"] == 1
+
+
+async def test_collections_field_is_present_and_empty_by_default(client):
+    """Поле едет всегда: старые кэши клиентов декодируют его со значением по умолчанию."""
+    items = (await client.get("/api/v1/places")).json()
+    assert items and all(item["collections"] == [] for item in items)
+    detail = (await client.get(f"/api/v1/places/{items[0]['slug']}")).json()
+    assert detail["collections"] == []
+

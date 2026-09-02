@@ -31,6 +31,8 @@ class RegionOut(BaseModel):
     id: int
     name: str
     places_count: int = 0
+    # Область — для группировки регионов в фильтре; None, пока не проставлена
+    area: str | None = None
 
 
 class PhotoOut(BaseModel):
@@ -44,6 +46,8 @@ class PlaceListItem(BaseModel):
     slug: str
     name: str
     category: PlaceCategory
+    # Коды коллекций «Проекта 21»; пусто у большинства мест
+    collections: list[str] = []
     difficulty: Difficulty
     region_id: int
     region_name: str
@@ -138,6 +142,7 @@ def _base_fields(p: Place, lang: Lang = DEFAULT_LANG) -> dict:
         slug=p.slug,
         name=pick(p.name, p.name_uz, lang),
         category=p.category,
+        collections=list(p.collections or []),
         # Наружу едут только три исходные ступени. И Swift, и kotlinx
         # падают на значении, которого нет в их enum, — падает при этом
         # разбор всего списка, а не одного места, и человек со старой

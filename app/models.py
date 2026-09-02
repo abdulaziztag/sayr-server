@@ -94,6 +94,12 @@ class Region(Base):
     # на различии стоит и фолбэк на русский, и подсчёт готовности в админке
     name_uz: Mapped[str | None] = mapped_column(String(120), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # Область региона: районы Ташкентской области (Чимган, Чарвак, Угам,
+    # Пскем, Паркент, Ахангаран) в фильтре группируются под одной подписью,
+    # целые области стоят сами по себе. Правило группировки — у клиента,
+    # сервер лишь знает, кто чей. Льёт seed/apply_regions.py
+    area: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    area_uz: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
     places: Mapped[list["Place"]] = relationship(back_populates="region")
 
@@ -141,6 +147,12 @@ class Place(Base):
     trip_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     best_seasons: Mapped[list[str]] = mapped_column(ARRAY(String(16)), default=list)
     kid_friendly: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Коллекции клуба «Проект 21»: cascade / horizon / mirage / underground.
+    # Коды, не имена: названия коллекций — имена собственные и не переводятся,
+    # клиент рисует их сам. Состав правится картой seed/data/collections.json
+    collections: Mapped[list[str]] = mapped_column(
+        ARRAY(String(16)), default=list, server_default="{}"
+    )
 
     # Каждый перевод стоит сразу за своим оригиналом: порядок полей формы
     # в админке sqladmin берёт отсюда, и пара языков должна оказаться рядом,

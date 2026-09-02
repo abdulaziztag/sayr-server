@@ -1,0 +1,56 @@
+{
+  "_note": "Коллекции клуба «Проект 21». from_channel — выведено из хэштегов на треках канала (seed/data/channel_parsed.json: тег + ближайшее место, категория обязана совпадать), 2026-09-02. mock — временное дополнение до восьми мест той же категории (первые по порядку региона и имени), на прод НЕ льётся без --with-mock; заменить настоящими списками владельца. Льёт seed/apply_collections.py",
+  "cascade": {
+    "from_channel": [
+      "chukurak",
+      "kashkasuv",
+      "lashkarak-sharsharasi",
+      "navolisoy",
+      "obi-par",
+      "paltau-waterfall",
+      "suvtushar-waterfall",
+      "tashgul-waterfalls"
+    ],
+    "mock": []
+  },
+  "horizon": {
+    "from_channel": [
+      "amir-temur-chukkisi",
+      "babaytag",
+      "bolshoy-chimgan",
+      "devoli-surkh",
+      "ispay-sokhibzhamoli",
+      "korakush",
+      "kyzylnura",
+      "mankent-peak"
+    ],
+    "mock": []
+  },
+  "mirage": {
+    "from_channel": [
+      "achikul-lake",
+      "badak-lake",
+      "fozilmon-lake",
+      "ikhnachkul",
+      "tuzkon-kuli",
+      "urungach-lakes",
+      "uzunkul",
+      "zikrkul"
+    ],
+    "mock": []
+  },
+  "underground": {
+    "from_channel": [
+      "hazrat-daud-cave"
+    ],
+    "mock": [
+      "obi-rakhmat",
+      "kungirbuka-gori",
+      "chashma-gori",
+      "ispay-gori",
+      "amir-temur-gori-gissar",
+      "taragay-gori",
+      "ettikiz-amat-gor"
+    ]
+  }
+}

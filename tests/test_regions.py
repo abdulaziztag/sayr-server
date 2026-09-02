@@ -11,6 +11,7 @@
 места.
 """
 
+import json
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,7 @@ from sqlalchemy import func, select
 
 from app.db import SessionLocal
 from app.models import Place, PlaceCategory, Region
-from seed.apply_regions import NAME_UZ, run
+from seed.apply_regions import AREA_UZ, NAME_UZ, run
 from seed.fix_categories import run as fix_categories
 
 
@@ -110,3 +111,17 @@ async def test_category_fix_is_idempotent(client):
         # Фикстуры живут всю сессию: озеро должно остаться озером
         place.category = PlaceCategory.lake
         await session.commit()
+
+
+async def test_area_is_exposed_and_null_until_seeded(client):
+    regions = (await client.get("/api/v1/regions")).json()
+    assert regions and all("area" in r and r["area"] is None for r in regions)
+
+
+def test_shipped_map_has_area_for_every_region():
+    payload = json.loads((Path(__file__).resolve().parents[1] / "seed" / "data" / "regions_map.json").read_text("utf-8"))
+    assert set(payload["_areas"]) == set(payload["_order"])
+    assert set(payload["_areas"].values()) <= set(AREA_UZ)
+    tashkent = [r for r, a in payload["_areas"].items() if a == "Ташкентская область"]
+    assert sorted(tashkent) == sorted(["Чимган", "Чарвак", "Угам", "Пскем", "Паркент", "Ахангаран"])
+

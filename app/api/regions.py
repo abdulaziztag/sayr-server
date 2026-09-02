@@ -23,6 +23,11 @@ async def list_regions(
     stmt = select(Region, published_count).order_by(Region.sort_order, Region.name)
     rows = (await session.execute(stmt)).all()
     return [
-        RegionOut(id=r.id, name=pick(r.name, r.name_uz, lang), places_count=cnt)
+        RegionOut(
+            id=r.id,
+            name=pick(r.name, r.name_uz, lang),
+            places_count=cnt,
+            area=pick(r.area, r.area_uz, lang) if r.area else None,
+        )
         for r, cnt in rows
     ]

@@ -55,15 +55,36 @@ NAME_UZ = {
     "Сурхандарья": "Surxondaryo",
 }
 
+#: Узбекские названия областей — для раздела `_areas` файла данных
+AREA_UZ = {
+    "Ташкентская область": "Toshkent viloyati",
+    "Наманганская область": "Namangan viloyati",
+    "Джизакская область": "Jizzax viloyati",
+    "Самаркандская область": "Samarqand viloyati",
+    "Кашкадарьинская область": "Qashqadaryo viloyati",
+    "Навоийская область": "Navoiy viloyati",
+    "Сурхандарьинская область": "Surxondaryo viloyati",
+}
+
 
 async def run(path: Path, apply: bool) -> None:
     data = json.loads(path.read_text("utf-8"))
     wanted: dict[str, str] = data["places"]
     order: list[str] = data["_order"]
+    #: Область каждого региона; раздела может не быть в старых файлах —
+    #: тогда области не трогаем
+    areas: dict[str, str] = data.get("_areas", {})
 
     missing_uz = set(order) - set(NAME_UZ)
     if missing_uz:
         raise SystemExit(f"нет узбекских названий для: {', '.join(sorted(missing_uz))}")
+    missing_area_uz = set(areas.values()) - set(AREA_UZ)
+    if missing_area_uz:
+        raise SystemExit(f"нет узбекских названий областей: {', '.join(sorted(missing_area_uz))}")
+    if areas:
+        no_area = sorted(set(order) - set(areas))
+        if no_area:
+            print(f"  ! без области: {', '.join(no_area)}")
 
     async with SessionLocal() as session:
         regions = {
@@ -76,7 +97,13 @@ async def run(path: Path, apply: bool) -> None:
             if name in regions:
                 continue
             print(f"  + регион {name}")
-            region = Region(name=name, name_uz=NAME_UZ[name], sort_order=index)
+            region = Region(
+                name=name,
+                name_uz=NAME_UZ[name],
+                sort_order=index,
+                area=areas.get(name),
+                area_uz=AREA_UZ.get(areas.get(name, "")),
+            )
             session.add(region)
             regions[name] = region
         if apply:
@@ -123,9 +150,15 @@ async def run(path: Path, apply: bool) -> None:
 
         # 4. Порядок
         for index, name in enumerate(order):
+            area = areas.get(name)
+            if area and regions[name].area != area:
+                print(f"  область {name}: {regions[name].area or '—'} → {area}")
             if apply:
                 regions[name].sort_order = index
                 regions[name].name_uz = regions[name].name_uz or NAME_UZ[name]
+                if area:
+                    regions[name].area = area
+                    regions[name].area_uz = AREA_UZ[area]
 
         tail = ""
         if missing:
