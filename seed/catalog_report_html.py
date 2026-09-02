@@ -33,13 +33,13 @@ CSS = """:root {
 }
 @media (prefers-color-scheme:dark) {
   :root:not([data-theme="light"]) {
-    --paper:#141714; --surface:#1E221E; --edge:#EDEAE11F;
+    --paper:#14231A; --surface:#1C2E24; --edge:#EDEAE11F;
     --ink:#EDEAE1; --ink2:#C6C1B5; --ink3:#8E897D;
     --green:#7FBF95; --terra:#E8843C; --terra-soft:#E8843C24; --green-soft:#7FBF9518;
   }
 }
 :root[data-theme="dark"] {
-  --paper:#141714; --surface:#1E221E; --edge:#EDEAE11F;
+  --paper:#14231A; --surface:#1C2E24; --edge:#EDEAE11F;
   --ink:#EDEAE1; --ink2:#C6C1B5; --ink3:#8E897D;
   --green:#7FBF95; --terra:#E8843C; --terra-soft:#E8843C24; --green-soft:#7FBF9518;
 }
