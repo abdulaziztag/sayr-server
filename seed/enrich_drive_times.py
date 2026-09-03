@@ -28,9 +28,9 @@ from datetime import UTC, datetime
 import httpx
 from sqlalchemy import select
 
-from app.cities import CITIES, TASHKENT
+from app.cities import BY_CODE, CITIES, HUBS, TASHKENT
 from app.db import SessionLocal
-from app.models import Place, PlaceDriveTime
+from app.models import CityDriveTime, Place, PlaceDriveTime
 
 Coord = tuple[float, float]  # (lat, lng)
 Cell = tuple[int, float] | None  # (минуты, км) или нет дороги
@@ -145,12 +145,66 @@ async def run(apply: bool, tashkent: bool = False, fn: MatrixFn = matrix, pause:
     return stats
 
 
+async def run_hubs(apply: bool, fn: MatrixFn = matrix, pause: float = 1.1) -> dict[str, int]:
+    """Матрица «город → хаб» — вторым проходом, тем же роутером.
+
+    Пар мало: 28 городов на 13 хабов минус совпадения, один прогон.
+    Совпадения не пишем: до своего хаба ехать некуда.
+    """
+    stats = {"pairs": 0, "added": 0, "changed": 0, "missing": 0}
+    hubs = [BY_CODE[code] for code in HUBS]
+    async with SessionLocal() as session:
+        existing = {
+            (r.origin, r.hub): r
+            for r in (await session.execute(select(CityDriveTime))).scalars().all()
+        }
+        table = compute(
+            [(c.lat, c.lng) for c in CITIES], [(h.lat, h.lng) for h in hubs], fn, pause
+        )
+        now = datetime.now(UTC)
+        for ci, city in enumerate(CITIES):
+            for hi, hub in enumerate(hubs):
+                if city.code == hub.code:
+                    continue
+                cell = table.get((ci, hi))
+                old = existing.get((city.code, hub.code))
+                if cell is None:
+                    stats["missing"] += 1
+                    continue
+                stats["pairs"] += 1
+                minutes, km = cell
+                if old is None:
+                    stats["added"] += 1
+                    if apply:
+                        session.add(
+                            CityDriveTime(
+                                origin=city.code, hub=hub.code,
+                                minutes=minutes, km=km, computed_at=now,
+                            )
+                        )
+                    continue
+                if abs(old.minutes - minutes) > REPORT_DELTA_MIN:
+                    stats["changed"] += 1
+                    print(f"  *  {city.code:12} → {hub.code:12} {old.minutes} → {minutes} мин")
+                if apply and (old.minutes != minutes or old.km != km):
+                    old.minutes, old.km, old.computed_at = minutes, km, now
+        if apply:
+            await session.commit()
+    verb = "записано" if apply else "к записи"
+    print(
+        f"{verb}: городских пар {stats['pairs']}, новых {stats['added']}, "
+        f"изменилось {stats['changed']}, без дороги {stats['missing']}"
+    )
+    return stats
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--apply", action="store_true", help="записать в базу (без флага — только показать)")
     parser.add_argument("--tashkent", action="store_true", help="обновить и поля мест drive_minutes/drive_km из строки Ташкента")
     args = parser.parse_args()
     asyncio.run(run(args.apply, args.tashkent))
+    asyncio.run(run_hubs(args.apply))
 
 
 if __name__ == "__main__":

@@ -10,10 +10,10 @@
 import pytest
 from sqlalchemy import delete, select
 
-from app.cities import CITIES, TASHKENT
+from app.cities import BY_CODE, CITIES, HUBS, TASHKENT, hub_of
 from app.db import SessionLocal
-from app.models import Place, PlaceDriveTime
-from seed.enrich_drive_times import batches, run
+from app.models import CityDriveTime, Place, PlaceDriveTime
+from seed.enrich_drive_times import batches, run, run_hubs
 
 
 def fake(offset: int = 0):
@@ -38,6 +38,7 @@ async def restore_places():
     yield
     async with SessionLocal() as session:
         await session.execute(delete(PlaceDriveTime))
+        await session.execute(delete(CityDriveTime))
         for p in (await session.execute(select(Place))).scalars():
             p.drive_minutes, p.drive_km = before[p.id]
         await session.commit()
@@ -108,3 +109,48 @@ async def test_endpoint_returns_cities_in_both_languages_and_published_matrix(cl
     assert isinstance(cell[0], int) and isinstance(cell[1], float)
     resp = await client.get("/api/v1/drive-times")
     assert "max-age=86400" in resp.headers["cache-control"]
+
+
+# --- Хабы: до какого центра ехать и сколько ---
+
+
+def test_hubs_are_tashkent_and_regional_centres():
+    assert HUBS[0] == "tashkent"
+    # Ташкент плюс двенадцать центров; спутники столицы хабами не бывают
+    assert len(HUBS) == 13
+    assert "chirchiq" not in HUBS and "samarkand" in HUBS
+    assert all(BY_CODE[code].area_ru == "Другие области" for code in HUBS[1:])
+
+
+def test_hub_of_sends_tashkent_region_to_the_capital():
+    # Житель области уже в своём хабе — пересадка ему не предлагается
+    assert hub_of("chirchiq") == "tashkent"
+    assert hub_of("angren") == "tashkent"
+    assert hub_of("tashkent") == "tashkent"
+    # Областной центр сам себе хаб
+    assert hub_of("samarkand") == "samarkand"
+    assert hub_of("termez") == "termez"
+    # Неизвестный код не роняет расчёт
+    assert hub_of("atlantis") == "tashkent"
+
+
+async def test_hub_matrix_skips_self_pairs_and_writes_the_rest():
+    stats = await run_hubs(apply=True, fn=fake(), pause=0)
+    async with SessionLocal() as session:
+        rows = (await session.execute(select(CityDriveTime))).scalars().all()
+    assert stats["added"] == len(rows)
+    # Ни одной пары «город сам в себя»: ехать некуда
+    assert all(r.origin != r.hub for r in rows)
+    # Каждый город доезжает до каждого чужого хаба, кроме пар без дороги
+    assert len(rows) == len(CITIES) * len(HUBS) - len(HUBS) - stats["missing"]
+
+
+async def test_endpoint_exposes_hubs_and_city_matrix(client):
+    await run_hubs(apply=True, fn=fake(), pause=0)
+    body = (await client.get("/api/v1/drive-times")).json()
+    assert body["hubs"] == list(HUBS)
+    # Самаркандец видит, сколько ему до Ташкента, и не видит дороги в себя
+    assert "tashkent" in body["city_matrix"]["samarkand"]
+    assert "samarkand" not in body["city_matrix"].get("samarkand", {})
+    cell = body["city_matrix"]["samarkand"]["tashkent"]
+    assert isinstance(cell[0], int) and isinstance(cell[1], float)

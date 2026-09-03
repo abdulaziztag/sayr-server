@@ -10,9 +10,9 @@ from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..cities import CITIES
+from ..cities import CITIES, HUBS
 from ..db import get_session
-from ..models import Place, PlaceDriveTime
+from ..models import CityDriveTime, Place, PlaceDriveTime
 from ..schemas import DEFAULT_LANG, Lang, pick
 
 router = APIRouter(prefix="/api/v1", tags=["drive-times"])
@@ -34,6 +34,11 @@ async def drive_times(
     matrix: dict[str, dict[str, list]] = {}
     for slug, city, minutes, km in rows:
         matrix.setdefault(slug, {})[city] = [minutes, round(km, 1)]
+    # Дорога до областного хаба: ею нить показывает «накануне доехать до
+    # Ташкента», когда день из своего города не сходится
+    city_matrix: dict[str, dict[str, list]] = {}
+    for row in (await session.execute(select(CityDriveTime))).scalars().all():
+        city_matrix.setdefault(row.origin, {})[row.hub] = [row.minutes, round(row.km, 1)]
     # Сутки кэша: матрица пересчитывается раз в месяц
     response.headers["Cache-Control"] = "public, max-age=86400"
     return {
@@ -48,5 +53,7 @@ async def drive_times(
             }
             for c in CITIES
         ],
+        "hubs": list(HUBS),
         "matrix": matrix,
+        "city_matrix": city_matrix,
     }

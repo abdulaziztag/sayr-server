@@ -224,6 +224,24 @@ class PlaceDriveTime(Base):
     place: Mapped[Place] = relationship(back_populates="drive_times")
 
 
+class CityDriveTime(Base):
+    """Минуты и километры дороги между городом выезда и областным хабом.
+
+    Нужны одной строке нити — «накануне доехать до Ташкента · 4:30».
+    Пар совпадения (город сам себе хаб) в таблице нет: ехать некуда.
+    """
+
+    __tablename__ = "city_drive_times"
+
+    origin: Mapped[str] = mapped_column(String(32), primary_key=True)
+    hub: Mapped[str] = mapped_column(String(32), primary_key=True)
+    minutes: Mapped[int] = mapped_column(Integer)
+    km: Mapped[float] = mapped_column(Float)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class PlaceTrack(Base):
     """Маршрут к месту. Их может быть несколько — разные тропы к одной цели,
     и человек выбирает между ними по имени, длине и набору."""

@@ -79,3 +79,23 @@ CITIES: tuple[City, ...] = (
 TASHKENT = CITIES[0]
 BY_CODE = {c.code: c for c in CITIES}
 assert len(BY_CODE) == len(CITIES), "коды городов должны быть уникальны"
+
+#: Хабы — Ташкент и двенадцать областных центров. До хаба житель другой
+#: области доезжает накануне, а сам день считает как его житель: ехать
+#: полдня в один конец ради дневного выхода — не план.
+HUBS: tuple[str, ...] = tuple(
+    c.code for c in CITIES if c.code == TASHKENT.code or c.area_ru == OTHER_AREA_RU
+)
+
+
+def hub_of(code: str) -> str:
+    """Хаб города выезда.
+
+    Областной центр — сам себе хаб. Город Ташкентской области — Ташкент,
+    и поэтому чирчикцу Ташкент как пересадка никогда не предлагается:
+    он в нём уже. Неизвестный код — Ташкент, как и везде в запасном пути.
+    """
+    city = BY_CODE.get(code)
+    if city is None:
+        return TASHKENT.code
+    return city.code if city.code in HUBS else TASHKENT.code
