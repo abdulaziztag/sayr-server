@@ -1,0 +1,15 @@
+# /etc/systemd/system/sayr-drive-times.service
+#
+# Пересчёт матрицы дороги «город выезда × место» через OSRM. Запускается
+# таймером sayr-drive-times.timer раз в месяц: дороги в OSM правят, и
+# значения плывут. Тот же каталог и venv, что у sayr.service.
+[Unit]
+Description=Sayr: пересчёт времени в дороге (OSRM)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/Projects/sayr-server
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/root/Projects/sayr-server/.venv/bin/python -m seed.enrich_drive_times --apply --tashkent

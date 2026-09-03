@@ -1,0 +1,15 @@
+# /etc/systemd/system/sayr-drive-times.timer
+#
+# Установка один раз, руками:
+#   cp deploy/sayr-drive-times.{service,timer} /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now sayr-drive-times.timer
+[Unit]
+Description=Sayr: пересчёт времени в дороге раз в месяц
+
+[Timer]
+OnCalendar=monthly
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

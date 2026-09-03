@@ -177,6 +177,11 @@ class Place(Base):
     )
 
     region: Mapped[Region] = relationship(back_populates="places")
+    # Дорога от каждого города выезда (app/cities.py); поля drive_minutes /
+    # drive_km выше остаются строкой Ташкента для старых сборок
+    drive_times: Mapped[list["PlaceDriveTime"]] = relationship(
+        back_populates="place", cascade="all, delete-orphan"
+    )
     photos: Mapped[list["PlacePhoto"]] = relationship(
         back_populates="place",
         cascade="all, delete-orphan",
@@ -195,6 +200,28 @@ class Place(Base):
 
     def __str__(self) -> str:
         return self.name
+
+
+class PlaceDriveTime(Base):
+    """Минуты и километры дороги от города выезда до места.
+
+    Строка есть только у пар, которые роутер смог построить; отсутствие
+    строки — сигнал клиенту взять запасной вариант из полей места.
+    """
+
+    __tablename__ = "place_drive_times"
+
+    place_id: Mapped[int] = mapped_column(
+        ForeignKey("places.id", ondelete="CASCADE"), primary_key=True
+    )
+    city: Mapped[str] = mapped_column(String(32), primary_key=True)
+    minutes: Mapped[int] = mapped_column(Integer)
+    km: Mapped[float] = mapped_column(Float)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    place: Mapped[Place] = relationship(back_populates="drive_times")
 
 
 class PlaceTrack(Base):

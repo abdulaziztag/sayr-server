@@ -8,7 +8,7 @@ from sqlalchemy import text
 from starlette.staticfiles import StaticFiles
 
 from .admin import mount_admin
-from .api import intents, landing, legal, places, regions, share
+from .api import intents, landing, legal, places, regions, share, drive_times
 from .config import SERVER_DIR, settings
 from .db import engine
 from .stats import StatsMiddleware, rotate_forever
@@ -58,6 +58,7 @@ app.mount("/media", StaticFiles(directory=settings.media_dir), name="media")
 app.mount("/static", StaticFiles(directory=SERVER_DIR / "static"), name="static")
 app.include_router(places.router)
 app.include_router(regions.router)
+app.include_router(drive_times.router)
 app.include_router(intents.router)
 app.include_router(share.router)
 app.include_router(legal.router)
