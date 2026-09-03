@@ -47,6 +47,7 @@ async def drive_times(
                 "code": c.code,
                 "name": pick(c.name_ru, c.name_uz, lang),
                 "from": pick(c.from_ru, c.from_uz, lang),
+                "to": pick(c.to_ru, c.to_uz, lang),
                 "lat": c.lat,
                 "lng": c.lng,
                 "area": pick(c.area_ru, c.area_uz, lang),

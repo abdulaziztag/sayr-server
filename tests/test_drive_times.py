@@ -100,10 +100,11 @@ async def test_endpoint_returns_cities_in_both_languages_and_published_matrix(cl
     uz = (await client.get("/api/v1/drive-times?lang=uz")).json()
     assert len(ru["cities"]) == len(CITIES) == len(uz["cities"])
     assert ru["cities"][0] == {
-        "code": "tashkent", "name": "Ташкент", "from": "из Ташкента",
+        "code": "tashkent", "name": "Ташкент", "from": "из Ташкента", "to": "до Ташкента",
         "lat": TASHKENT.lat, "lng": TASHKENT.lng, "area": "Ташкентская область",
     }
     assert uz["cities"][0]["from"] == "Toshkentdan" and uz["cities"][0]["area"] == "Toshkent viloyati"
+    assert uz["cities"][0]["to"] == "Toshkentgacha"
     assert "test-waterfall" in ru["matrix"]
     cell = ru["matrix"]["test-waterfall"]["samarkand"]
     assert isinstance(cell[0], int) and isinstance(cell[1], float)
@@ -154,3 +155,17 @@ async def test_endpoint_exposes_hubs_and_city_matrix(client):
     assert "samarkand" not in body["city_matrix"].get("samarkand", {})
     cell = body["city_matrix"]["samarkand"]["tashkent"]
     assert isinstance(cell[0], int) and isinstance(cell[1], float)
+
+
+def test_case_forms_are_derived_for_every_city():
+    """«до Ташкента» выводится из «из Ташкента»: там уже родительный падеж.
+
+    Правило механическое, поэтому проверяем весь справочник — несклоняемые
+    «Навои» и «Карши» тоже обязаны пройти.
+    """
+    for c in CITIES:
+        # «до из Ташкента» — ровно та ошибка, ради которой форма и заведена
+        assert c.to_ru.startswith("до ") and not c.to_ru.startswith("до из")
+        assert c.to_uz.endswith("gacha") and not c.to_uz.endswith("dangacha")
+    assert BY_CODE["navoi"].to_ru == "до Навои"
+    assert BY_CODE["karshi"].to_uz == "Qarshigacha"

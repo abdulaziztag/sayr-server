@@ -34,6 +34,16 @@ class City:
     #: пригороды ближе к районам Ташкента, чем его центр
     radius_km: float = 0.0
 
+    @property
+    def to_ru(self) -> str:
+        """«до Ташкента» — из «из Ташкента»: там уже родительный падеж."""
+        return "до " + self.from_ru.removeprefix("из ")
+
+    @property
+    def to_uz(self) -> str:
+        """«Toshkentgacha» — из аблатива «Toshkentdan»."""
+        return self.from_uz.removesuffix("dan") + "gacha"
+
 
 def _tashkent_area(code, ru, uz, from_ru, from_uz, lat, lng, radius_km=0.0) -> City:
     return City(code, ru, uz, from_ru, from_uz, lat, lng, TASHKENT_AREA_RU, TASHKENT_AREA_UZ, radius_km)
