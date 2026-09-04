@@ -770,25 +770,55 @@
       "how_to_get_md_uz": "Arashan koʻllari tomonidan: choʻponlar qoʻralaridan start olishadi, lagerni taxminan 3300 m balandlikda tikishadi, koʻlga radial koʻtarilishadi. Faqat soʻqmoq boʻylab yurgan maʼqul. Bu yer chegara hududi — kirish yopib qoʻyilishi mumkin."
     },
     "chadak": {
-      "name_uz": "Chodak"
+      "name_uz": "Chodak",
+      "short_desc_uz": "Nanay tepasidagi 3539 m choʻqqi: Padar bilan birga, 2900 m da tunash bilan ikki kunda chiqishadi",
+      "description_md_uz": "Nanay qishlogʻi tepasida, Pskom togʻlaridagi 3539 m choʻqqi, «21 GORIZONT» dasturiga kiradi. Unga qoʻshni Padar bilan birga chiqishadi: choʻqqilar orasi Minjalki dovoni orqali ikki soatlik yoʻl, guruhlar ikkalasiga bir tongda chiqishadi.\n\nChiqish ikki kun oladi. Quduq sharsharasidan keyin shlagbaum turadi: undan nariga daragacha 6,7 km yoʻltanlamas yoʻli bor, lekin har doim ham oʻtkazishmaydi — 2025-yil avgustida guruhni «xususiy hudud» oldidan qaytarishgan, binolar qurilayotgan daragacha piyoda borishgan. U yerdan 2900 m dagi yalanglikkacha koʻtarilish, tunash shu yerda. Tepaga qorongʻida yoʻlga chiqishadi: 2025-yil avgustidagi hisobotda 5:10 da yoʻlga chiqib, yettiga dovonda, sakkizda Chodakda, oʻnda Padarda boʻlishgan va kechki beshga mashinaga qaytishgan.\n\nAsosiy muammo — suv. Oxirgi buloq ancha pastda qoladi, yuqoridagilari esa 2025-yil avgustida butunlay qurib qolgan: suvni qoyalardagi qordan eritishgan. Oxirgi buloqdan keyin kamida uch litr suv olib yurish maslahat beriladi. Tunda lagerga ayiq kelgan — tinch oʻtdi, lekin ovqatni tunga yigʻishtirib qoʻygan maʼqul.\n\nAvgust — sentabrni yoʻl boʻyidagi mevalar — togʻolcha, olma, olxoʻri — tufayli eng yaxshi vaqt deyishadi, lekin tushdan keyingi koʻtarilish jazirama quyosh ostida oʻtadi, 2900 m dagi tun esa yozda ham sovuq.",
+      "how_to_get_md_uz": "Toshkentdan Nanay qishlogʻigacha mashinada; mashinasiz — 7:50 dagi elektrichkada Gʻazalkentgacha va taksida Nanaygacha, UAZlar turadigan maydonchagacha. Keyin Quduq sharsharasi yonidan shlagbaumgacha: undan nariga daragacha yoʻltanlamas yoʻli bor, lekin oʻtish kafolatlanmagan. Shlagbaumdan choʻqqilar ostidagi yalanglikkacha — ryukzaklar bilan bir kun."
     },
     "padar": {
-      "name_uz": "Padar"
+      "name_uz": "Padar",
+      "short_desc_uz": "Nanay tepasidagi 3564 m choʻqqi, Chodak bilan juftlikning ikkinchi yarmi; tepada suv yoʻq",
+      "description_md_uz": "Nanay tepasida, Pskom togʻlaridagi 3564 m choʻqqi, qoʻshni Chodakdan ellik metrcha baland, «21 GORIZONT» dasturiga kiradi. Ikkala choʻqqiga 2900 m dagi lagerdan bir tongda chiqishadi: Minjalki dovoni orqali Chodakka, u yerdan ikki soatda Padarga — 2025-yil avgustidagi hisobotda unda ertalab oʻnda, «atrofga oʻnlab kilometrga» ochiladigan manzara bilan turishgan.\n\nYondashuv Chodak bilan umumiy — Quduq sharsharasidan keyingi shlagbaumdan binolar qurilayotgan dara orqali 2900 m dagi yalanglikkacha. Oʻsha avgustda ikkinchi guruh ogʻir ryukzaklar bilan ikki kun yurib, ikkala choʻqqiga ikkinchi kun kechqurun chiqqan: Padarda 18:20 da boʻlishgan va chodirga quyosh botishi bilan tushishgan. 2900 m da tun juda sovuq boʻlgan, yonbagʻirlardan toshlar tushib turgan.\n\nTepada suv yoʻq: yuqori buloqlar 2025-yil avgustida qurib qolgan, oxirgisi ancha pastda, hamma idishlarni oʻsha yerda toʻldirishadi.",
+      "how_to_get_md_uz": "Chodakdagidek: mashinada yoki elektrichka va taksida Nanaygacha, keyin Quduq sharsharasi yonidan shlagbaumgacha va dara orqali piyoda 2900 m dagi yalanglikkacha. 2025-yil avgustida qurilishdagi GAZ-66 haydovchisi guruhni UAZlar maydonchasigacha pastga olib tushgan — lekin bunga umid qilmagan maʼqul."
     },
     "revash": {
-      "name_uz": "Revash"
+      "name_uz": "Revash",
+      "short_desc_uz": "Angren bilan Oqsoqota orasidagi 3227 m choʻqqi; Alatangadan — uzun kun, Oqtaxtadan — ikki baravar qisqa",
+      "description_md_uz": "Angren tomoni bilan Oqsoqotasoy orasidagi qirradagi 3227 m choʻqqi, «21 GORIZONT» dasturiga kiradi. Unga ikki yondashuv bor.\n\nKatalogdagi trek — Yangiobod tepasidagi Alatangadan: bir tomonga qariyb oʻn olti kilometr va ikki kilometr koʻtarilish, butun kunduz yorugʻligiga chiqish. Shu yoʻldan yurgan forum ishtirokchisi uni ancha ogʻir deb ataydi: 32 kilometr.\n\nIkkinchi yondashuv — Kumushkon va Oqsoqotasoy tomonidan, Oqtaxta dovonidan. Yangi yoʻl boʻylab yoʻltanlamas 2650–2700 m gacha koʻtariladi, mashinadan Revashgacha Anna77 choʻqqisi va Revash dovoni orqali 300–400 m koʻtarilish bilan toʻrt kilometrcha qoladi. 2025-yil mayida bir guruh shu yoʻl bilan uchta uch minglik choʻqqini besh soatdan sal koʻproq vaqtda oʻtgan — kuniga 15,4 km va 1344 m koʻtarilish. Revash dovonining soya tomonida mayda bir necha metr qor yotadi, Muzbel dovonida mavsumiy koʻl turadi, choʻqqidan Boboytogʻ va Qoraqush koʻrinadi.\n\n**Kirish:** Oqsoqotasoy boʻylab yoʻl tor, xavfli joylari bor — faqat tajribali haydovchi bilan yoʻltanlamasda; bahorda u yerga oʻtib boʻlmaydi, eng yaxshi vaqt — iyundan avgustgacha. — 2024-yil sentabr",
+      "how_to_get_md_uz": "Angren tomonidan — Yangiobod orqali Alatangaga, trek shu yerdan boshlanadi. Toshkent tomonidan — Parkent va Kumushkon orqali Oqsoqotasoy boʻylab Oqtaxta dovoniga: yoʻltanlamas 2650–2700 m gacha koʻtariladi, u yerdan Anna77 orqali piyoda."
     },
     "zamok": {
-      "name_uz": "Zamok"
+      "name_uz": "Zamok",
+      "short_desc_uz": "Ispay sirki tepasidagi 3644 m choʻqqi, Devoli Surx va Qoʻytogʻ bilan bitta tugunda; ikki kunlik alpinistik marshrut",
+      "description_md_uz": "Pskom tizmasidagi choʻqqi, OSM maʼlumotiga koʻra 3644 m (klublar 3670 deb yozadi), Ispayning yuqori oqimidagi sirk tepasida. Devoli Surx va Qoʻytogʻ bilan bitta togʻ tugunida turadi: klublar uchchalasini «Pskomning uch soqchisi» nomli uch kunlik marshrut sifatida olib boradi — 32 kilometrcha va 2800 m koʻtarilish, darajasi «juda murakkab». Zamok va Devoli Surx «21 GORIZONT — GORETS» dasturiga kiradi.\n\nTreklar — «GORETS» forumi ishtirokchisi Oleksandr Kotenkoning 2022-yil iyundagi ikki kunlik yozuvlari. Birinchisi — Ispay vodiysidagi yoʻldan (1030 m) choʻqqi ostidagi sirkkacha yondashuv: qariyb oʻn ikki kilometr va 1900 m koʻtarilish, tunash 2900 m da. Ikkinchisi — lagerdan choʻqqiga chiqish: IYaF dovoni orqali koʻtarilish, Matematikov dovoni orqali tushish, 750 m koʻtarilish bilan toʻrt kilometrlik halqa; trek 3640 m belgisidan oʻtadi. Yoʻlga tushish — oʻsha yondashuv boʻylab.\n\n**Muhim:** treklar muallifi ogohlantiradi: Zamok va Piyozakka marshrutlar alpinistik jihozlar va koʻnikmalarni talab qiladi, treklarning oʻzi esa faqat tanishish uchun joylangan va xavfsiz marshrut hisoblanmaydi. — 2022-yil iyun. Klublarning bu tugun uchun jihozlar roʻyxatida — muz tirnoqlari, kaska, baxilalar, issiq uyqu qopi. Sirk haqida batafsil — Devoli Surx kartochkasida: qor, arqonlar bilan ishlash, qor erishi mavsumida tosh koʻchishlari va ayiq.\n\n**Kirish:** chiqishga pasportning aslini olib borishadi — Boʻstonliq tumanida chegarachilar ruxsatnoma soʻray boshlagan. — 2026-yil iyul",
+      "how_to_get_md_uz": "Yondashuv Ispay vodiysidagi yoʻldan, 1030 m atrofidagi balandlikdan boshlanadi — Piyozakka ikki kunlik trek ham shu yerdan ketadi. Zamok ostidagi sirkkacha ryukzaklar bilan bir kun, tunash 2900 m da; klublar Toshkentdan juma kuni ertalab toʻrtda «Niva» va «Treylbleyzer»da yoʻlga chiqib, yakshanba kechki toʻqqizga qaytishadi."
     },
     "kyzylbash": {
-      "name_uz": "Qizilbosh"
+      "name_uz": "Qizilbosh",
+      "short_desc_uz": "Ugom tizmasidagi 3824 m choʻqqi: 33 km va 2,5 km koʻtarilish, ikki kun va chegara hududiga ruxsatnoma",
+      "description_md_uz": "Boʻstonliq tumanidagi Ugom tizmasida, Anaulgen tomonidagi 3824 m choʻqqi, «21 GORIZONT» dasturiga kiradi — klub rejasida u avgustning «hal qiluvchi balandliklari» qatorida turadi. 2A toifadagi marshrut: koʻtarilish va tushish bir yoʻldan, 33 kilometr va ikki yarim kilometrcha koʻtarilish, shuning uchun bir tunash bilan ikki kun yurishadi. Klublar darajasini «juda murakkab» deb belgilaydi, jihozlar roʻyxatida — muz tirnoqlari va kaska.\n\nTrek — @Matvey777 guruhining 2026-yil 1–2 avgustdagi yozuvi.\n\n**Kirish:** marshrut chegara hududidan oʻtadi — Boʻstonliq tumani ruxsatnomasi kerak, pasportni oʻzingiz bilan oling. — 2026-yil iyul",
+      "how_to_get_md_uz": "Toshkentdan Boʻstonliq tumani orqali; klublar «Niva» va «Treylbleyzer»da juma kuni kechki oltida yoʻlga chiqib, yakshanba kechki oʻnga qaytishadi. Chegara hududiga ruxsatnomani oldindan rasmiylashtirishadi."
     },
     "chimbay": {
-      "name_uz": "Chimboy"
+      "name_uz": "Chimboy",
+      "short_desc_uz": "Hisor tizmasida, Qizilgʻaza platosi tepasidagi 3798 m choʻqqi; lagerdan Xoʻja Axcha Burun bilan birga chiqishadi",
+      "description_md_uz": "Hisor tizmasidagi 3798 m choʻqqi, «21 GORIZONT» dasturiga kiradi. Qizilgʻaza platosi tepasida Xoʻja Axcha Burun yonida turadi, klublar ikkalasiga bazaviy lagerdan bir kunda chiqishadi: ertalab beshda yoʻlga, sakkizga Chimboyda, ikki yarimga Axcha Burunda, tushlikdan keyin Chilsim gʻori, olti yarimga lagerga qaytish. Toshkentdan butun safarga uch kun va mingga yaqin kilometr yoʻl ketadi, platoda chodirlarda tunashadi. «Chimyon» klubi 2023-yilda bu yerga UAZlarda jip-tur olib borgan: choʻqqilargacha va orqaga piyoda qismi 10–11 kilometr.\n\nKatalogdagi trek — Axcha Burundan Chimboy orqali pastga, lagergacha yozuv, lagerdan boshlanadigan qilib teskari aylantirilgan. Kartochkadagi raqamlar — Chimboygacha va orqaga, ikkinchi choʻqqisiz.",
+      "how_to_get_md_uz": "Mashinada Qiziltepa qishlogʻi orqali Hisorga, keyin yoʻltanlamasda Qizilgʻaza platosiga: Toshkentdan lagergacha klublar butun kun ajratadi — ertalab toʻrtda yoʻlga, kechki beshga lager. Orqaga Shahrisabz orqali qaytishadi."
     },
     "khoja-akhcha-burun": {
-      "name_uz": "Xoʻja Axcha Burun"
+      "name_uz": "Xoʻja Axcha Burun",
+      "short_desc_uz": "Hisor tizmasidagi 3855 m choʻqqi, dasturning Hisordagi ikkinchi eng baland choʻqqisi; yoʻlda Chilsim gʻori",
+      "description_md_uz": "Hisor tizmasidagi 3855 m choʻqqi, «21 GORIZONT» dasturiga kiradi — dasturning Hisor choʻqqilari ichida undan faqat Xoʻja Buz Barak baland. Qizilgʻaza platosidan koʻtarilishadi: trek 2770 m da boshlanadi, Chilsim gʻori yonidan oʻtadi va oʻn kilometrda koʻtarilish qariyb bir yarim kilometrga yetadi.\n\nKlublar unga qoʻshni Chimboy bilan birga bazaviy lagerdan bir kunda chiqishadi — Chimboyga ertalab sakkizga, Axcha Burunga ikki yarimga, tushlikdan keyin Chilsim gʻoriga — va platoda chodirlarda tunashadi; Toshkentdan butun safar uch kun oladi. «Chimyon» klubi bu choʻqqilardan Hisor tizmasiga ochiladigan manzaralarni va xohlaganlar uchun Xoʻja Gur Gur Otaga ham chiqishni vaʼda qiladi.\n\nIkkinchi trek — choʻqqidan Chimboy orqali lagergacha yozuv, lagerdan boshlanadigan qilib aylantirilgan: shunda ikki choʻqqi bitta chiziq boʻylab oʻtiladi.",
+      "how_to_get_md_uz": "Mashinada Qiziltepa qishlogʻi orqali Hisorga, keyin yoʻltanlamasda Qizilgʻaza platosiga: Toshkentdan lagergacha klublar butun kun ajratadi — ertalab toʻrtda yoʻlga, kechki beshga lager. Orqaga Shahrisabz orqali qaytishadi."
     }
+  },
+  "tracks": {
+    "Чадак-Падар": "Chodak-Padar",
+    "Алатаньга - Реваш": "Alatanga — Revash",
+    "Кызылбаш": "Qizilbosh",
+    "плато Кызылгаза пещера Чильсим вершина Ходжа Ахча Бурун": "Qizilgʻaza platosi — Chilsim gʻori — Xoʻja Axcha Burun choʻqqisi",
+    "Ахча Бурун Чимбай Базовый лагерь": "Axcha Burun — Chimboy — bazaviy lager",
+    "День 1: подход к цирку с Испая": "1-kun: Ispaydan sirkka yondashuv",
+    "День 2: через пер. ИЯФ на вершину, спуск через пер. Математиков": "2-kun: IYaF dovoni orqali choʻqqiga, Matematikov dovoni orqali tushish"
   }
 }

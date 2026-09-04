@@ -348,7 +348,9 @@
     70.3174,
     3644
    ],
-   "difficulty": "hard"
+   "difficulty": "extreme",
+   "overnight": "tent",
+   "trip_days": 2
   },
   {
    "name": "Кызылбаш",
