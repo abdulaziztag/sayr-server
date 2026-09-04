@@ -768,6 +768,27 @@
       "short_desc_uz": "Arashan koʻllari qoʻshnisida, Zikrbobo ostidagi sirkda joylashgan koʻl",
       "description_md_uz": "Toʻrt minglik Zikrbobo choʻqqisi ostidagi sirkda, Arashan koʻllari qoʻshnisida joylashgan baland togʻ koʻli (3662 m).\n\nKoʻlga soʻqmoq olib boradi va undan chiqib ketmagan maʼqul: toʻgʻridan-toʻgʻri qisqa yoʻl izlashga urinish bir guruhning yurishini faqat qiyinlashtirgan. Odatda lagerni taxminan 3300 m balandlikda tikishadi va koʻlga radial chiqish (borib-qaytish) qilishadi — yondashuvdan keyin hatto kechqurun ham ulgurishadi.\n\n---\n**Kirish:** forum xabarlariga koʻra — chegara hududi: avgust oxirida nazorat kuchaytirilgani sababli chegarachilar koʻlga oʻtkazishmagan, chegara chizigʻi boʻylab qirrada patrullar yurgan.",
       "how_to_get_md_uz": "Arashan koʻllari tomonidan: choʻponlar qoʻralaridan start olishadi, lagerni taxminan 3300 m balandlikda tikishadi, koʻlga radial koʻtarilishadi. Faqat soʻqmoq boʻylab yurgan maʼqul. Bu yer chegara hududi — kirish yopib qoʻyilishi mumkin."
+    },
+    "chadak": {
+      "name_uz": "Chodak"
+    },
+    "padar": {
+      "name_uz": "Padar"
+    },
+    "revash": {
+      "name_uz": "Revash"
+    },
+    "zamok": {
+      "name_uz": "Zamok"
+    },
+    "kyzylbash": {
+      "name_uz": "Qizilbosh"
+    },
+    "chimbay": {
+      "name_uz": "Chimboy"
+    },
+    "khoja-akhcha-burun": {
+      "name_uz": "Xoʻja Axcha Burun"
     }
   }
 }

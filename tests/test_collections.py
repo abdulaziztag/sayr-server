@@ -85,4 +85,7 @@ def test_shipped_map_is_consistent():
     for code in codes:
         real, mock = payload[code]["from_channel"], payload[code]["mock"]
         assert real and not set(real) & set(mock)
-        assert len(real) + len(mock) == 8
+        # horizon — полный список владельца, все 21 вершина программы;
+        # остальные пока по хэштегам канала, добитые моком до восьми
+        assert len(real) + len(mock) == (21 if code == "horizon" else 8)
+    assert payload["horizon"]["mock"] == []

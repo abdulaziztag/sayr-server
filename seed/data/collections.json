@@ -1,5 +1,5 @@
 {
-  "_note": "Коллекции клуба «Проект 21». from_channel — выведено из хэштегов на треках канала (seed/data/channel_parsed.json: тег + ближайшее место, категория обязана совпадать), 2026-09-02. mock — временное дополнение до восьми мест той же категории (первые по порядку региона и имени), на прод НЕ льётся без --with-mock; заменить настоящими списками владельца. Льёт seed/apply_collections.py",
+  "_note": "Коллекции клуба «Проект 21». from_channel — выведено из хэштегов на треках канала (seed/data/channel_parsed.json: тег + ближайшее место, категория обязана совпадать), 2026-09-02. mock — временное дополнение до восьми мест той же категории (первые по порядку региона и имени), на прод НЕ льётся без --with-mock; заменить настоящими списками владельца. Льёт seed/apply_collections.py horizon с 2026-09-04 — не хэштеги, а список владельца: 21 вершина программы «21 Горизонт» (совпадает с планом закрытия Lider Hikers от 30.10.2025). Манкент из подборки убран — в августе 2025 его заменили на Мачетли; Красотка (Испай) попала туда по тегу траверса и к программе не относится. Семь вершин пока черновики — в приложении подборка их не покажет до публикации.",
   "cascade": {
     "from_channel": [
       "chukurak",
@@ -16,13 +16,26 @@
   "horizon": {
     "from_channel": [
       "amir-temur-chukkisi",
+      "arashan-chukkisi",
       "babaytag",
       "bolshoy-chimgan",
+      "chadak",
+      "chimbay",
+      "chulbair",
       "devoli-surkh",
-      "ispay-sokhibzhamoli",
+      "khoja-akhcha-burun",
+      "khoja-buz-barak",
+      "khoja-gur-gur-ata",
       "korakush",
+      "kyzylbash",
       "kyzylnura",
-      "mankent-peak"
+      "machetli",
+      "okhotnichiy",
+      "padar",
+      "piyozak",
+      "revash",
+      "tavalgan",
+      "zamok"
     ],
     "mock": []
   },

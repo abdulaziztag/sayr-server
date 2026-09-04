@@ -13,6 +13,19 @@
 от старта — для вершины это вершина, для пещеры вход), высота (если в записи
 есть), регион (по ближайшему месту каталога), длина/время/набор. Категория
 и название — из плана.
+
+Необязательные поля записи плана — то, чего из трека не вывести:
+
+    point      [lat, lng, ele] — точка и высота места. Нужна, когда одна
+               запись идёт на две вершины (Чадак и Падар) или самая дальняя
+               точка записи — не цель. С point запись может быть и без
+               files: место заведётся без трека, цифры маршрута останутся
+               пустыми.
+    reverse    имена файлов, записанных от цели вниз: разворачиваются до
+               подсчёта, иначе стартом станет вершина, а набор — спуском.
+    difficulty, overnight, trip_days — если известны из отчётов; иначе
+               «средне» и однодневный выход, как раньше.
+    credit     автор треков этого места, перекрывает --credit.
 """
 
 import argparse
@@ -31,11 +44,19 @@ except ImportError:  # расположение менялось между ве
 
 from app.config import GPX_DIR
 from app.db import SessionLocal
-from app.models import Difficulty, Place, PlaceCategory, PlaceTrack, gpx_storage
+from app.models import (
+    Difficulty,
+    OvernightType,
+    Place,
+    PlaceCategory,
+    PlaceTrack,
+    gpx_storage,
+)
 from app.services.gpx import (
     clean,
     haversine_m,
     outbound_only,
+    reverse_track,
     track_stats,
 )
 
@@ -77,7 +98,9 @@ def _goal(data: bytes) -> tuple[float, float, int | None]:
     return round(far[0], 6), round(far[1], 6), round(far[2]) if far[2] else None
 
 
-def _prepare(files_dir: Path, slug: str, spec_file: str) -> Candidate | None:
+def _prepare(
+    files_dir: Path, slug: str, spec_file: str, flip: bool = False
+) -> Candidate | None:
     """Файл выгрузки → кандидат с очищенным содержимым, как в import_channel."""
     path = resolve_export_path(files_dir, spec_file)
     if path is None:
@@ -87,6 +110,8 @@ def _prepare(files_dir: Path, slug: str, spec_file: str) -> Candidate | None:
     if raw is None:
         print(f"  ! не разобрался: {spec_file}")
         return None
+    if flip:
+        raw = reverse_track(raw)
     round_trip = track_stats(raw).distance_km
     cut = outbound_only(raw)
     data = clean(cut if cut is not None else raw)
@@ -135,27 +160,42 @@ async def run(apply: bool, credit: str, files_dir: Path) -> None:
                 existed += 1
                 continue
 
+            flip = set(spec.get("reverse", ()))
             candidates = [
-                c for f in spec["files"] if (c := _prepare(files_dir, slug, f))
+                c
+                for f in spec.get("files", ())
+                if (c := _prepare(files_dir, slug, f, flip=f in flip))
             ]
-            if not candidates:
+            point = spec.get("point")
+            if not candidates and not point:
                 print(f"! {spec['name']}: ни один файл не годен — место не заводим")
                 continue
 
-            # Точка места — по самому длинному кандидату: он вернее всего
-            # доходит до самой цели, короткие бывают лишь подходами
-            main = max(candidates, key=lambda c: c.stats.distance_km)
-            lat, lng, ele = _goal(main.data)
+            if point:
+                lat, lng, ele = point[0], point[1], point[2]
+            else:
+                # Точка места — по самому длинному кандидату: он вернее всего
+                # доходит до самой цели, короткие бывают лишь подходами
+                main = max(candidates, key=lambda c: c.stats.distance_km)
+                lat, lng, ele = _goal(main.data)
 
             nearest = min(catalog, key=lambda p: haversine_m(lat, lng, p.lat, p.lng))
-            shortest = min(candidates, key=lambda c: c.round_trip_km)
-            hours = estimate(shortest.round_trip_km, shortest.stats.ascent_m)
+            if candidates:
+                shortest = min(candidates, key=lambda c: c.round_trip_km)
+                distance = shortest.round_trip_km
+                gain = shortest.stats.ascent_m or None
+                hours = estimate(distance, shortest.stats.ascent_m)
+                if hours > MAX_DAY_HOURS:
+                    hours = None
+            else:
+                distance = gain = hours = None
 
             created += 1
             print(
                 f"+ {spec['name'][:30]:30} {spec['category']:9} "
                 f"({lat}, {lng}) {ele or '—':>5} м  регион: {nearest.region.name[:14]:14} "
-                f"треков: {len(candidates)}  {shortest.round_trip_km} км"
+                f"треков: {len(candidates)}  {distance or '—'} км"
+                f"{'  точка из плана' if point else ''}"
             )
             if not apply:
                 continue
@@ -165,14 +205,16 @@ async def run(apply: bool, credit: str, files_dir: Path) -> None:
                 name=spec["name"],
                 category=PlaceCategory(spec["category"]),
                 # Средняя, пока человек не оценил сам: у нас только геометрия
-                difficulty=Difficulty.medium,
+                difficulty=Difficulty(spec.get("difficulty", "medium")),
                 region_id=nearest.region_id,
                 lat=lat,
                 lng=lng,
                 elevation_m=ele,
-                distance_km=shortest.round_trip_km,
-                duration_hours=hours if hours <= MAX_DAY_HOURS else None,
-                elevation_gain_m=shortest.stats.ascent_m or None,
+                distance_km=distance,
+                duration_hours=hours,
+                elevation_gain_m=gain,
+                overnight=OvernightType(spec["overnight"]) if spec.get("overnight") else None,
+                trip_days=spec.get("trip_days"),
                 # Черновик: показывается после названия-описания и публикации
                 is_published=False,
             )
@@ -186,7 +228,7 @@ async def run(apply: bool, credit: str, files_dir: Path) -> None:
                         place_id=place.id,
                         gpx_file=StorageFile(name=cand.gpx_name, storage=gpx_storage),
                         name=cand.title,
-                        gpx_credit=credit,
+                        gpx_credit=spec.get("credit", credit),
                         distance_km=cand.stats.distance_km,
                         ascent_m=cand.stats.ascent_m,
                         start_lat=cand.stats.start_lat,
