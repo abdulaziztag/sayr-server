@@ -604,7 +604,7 @@
     "piyozak": {
       "name_uz": "Piyozak",
       "short_desc_uz": "Pskom tizmasining qoyali choʻqqisi — «21 GORIZONT» dasturidagi eng murakkablardan biri",
-      "description_md_uz": "Pskom tizmasining balandligi 3736 m boʻlgan qoyali choʻqqisi. 2022-yil sentabrda taxtacha oʻrnatilganda uni «21 GORIZONT» dasturining eng yuqori toifali choʻqqilaridan biri deb atashgan. Pastdan, Ispaysoydan, Piyozak qoʻshni Padar bilan birga koʻrinadi; Ispaysoyning oʻzi tizmaning yuqori qismidan — yozda ham qor yotadigan joydan boshlanadi.\n\nChoʻqqiga Ispay darasi orqali chiqishadi — 2025-yil avgustda marshrutni bir kunda oʻtishgan. Marshrut kartochkasidagi raqamlar faqat choʻqqi qismini tasvirlaydi, butun chiqish ancha uzunroq. Tuman — Boʻstonliq, Ugom-Chotqol milliy tabiat bogʻi hududi.\n\n**Kirish:** togʻ qoyali, forumda ochiq ogohlantirishadi: qor yogʻgandan keyin bu yerga koʻtarilmagan maʼqul — choʻqqiga chiqish jihozlar talab qiladi va ancha murakkablashadi. — 2023-yil 7-sentabr",
+      "description_md_uz": "Pskom tizmasining balandligi 3736 m boʻlgan qoyali choʻqqisi. 2022-yil sentabrda taxtacha oʻrnatilganda uni «21 GORIZONT» dasturining eng yuqori toifali choʻqqilaridan biri deb atashgan. Pastdan, Ispaysoydan, Piyozak qoʻshni Padar bilan birga koʻrinadi; Ispaysoyning oʻzi tizmaning yuqori qismidan — yozda ham qor yotadigan joydan boshlanadi.\n\nChoʻqqiga Ispay darasi orqali chiqishadi — 2025-yil avgustda marshrutni bir kunda oʻtishgan. Kartochkadagi raqamlar — butun ikki kunlik chiqish uchun. Tuman — Boʻstonliq, Ugom-Chotqol milliy tabiat bogʻi hududi.\n\nTrek — «GORETS» forumi ishtirokchisi Oleksandr Kotenkoning 2022-yil sentabrdagi ikki kunlik yozuvi, Ispay vodiysidan — Zamokka ham shu yerdan chiqishadi: Piyozak Soxta dovoni orqali 28 kilometr va qariyb uch kilometr koʻtarilish, marshrutda tunash bilan. Muallif ogohlantiradi: Piyozak va Zamokka marshrutlar alpinistik jihozlar va koʻnikmalarni talab qiladi, trek esa faqat tanishish uchun joylangan. «Piyozak Soxta dovonidan» qisqa treki — faqat choʻqqi qismi.\n\n**Kirish:** togʻ qoyali, forumda ochiq ogohlantirishadi: qor yogʻgandan keyin bu yerga koʻtarilmagan maʼqul — choʻqqiga chiqish jihozlar talab qiladi va ancha murakkablashadi. — 2023-yil 7-sentabr",
       "how_to_get_md_uz": ""
     },
     "pulatkhan-plateau": {
@@ -819,6 +819,7 @@
     "плато Кызылгаза пещера Чильсим вершина Ходжа Ахча Бурун": "Qizilgʻaza platosi — Chilsim gʻori — Xoʻja Axcha Burun choʻqqisi",
     "Ахча Бурун Чимбай Базовый лагерь": "Axcha Burun — Chimboy — bazaviy lager",
     "День 1: подход к цирку с Испая": "1-kun: Ispaydan sirkka yondashuv",
-    "День 2: через пер. ИЯФ на вершину, спуск через пер. Математиков": "2-kun: IYaF dovoni orqali choʻqqiga, Matematikov dovoni orqali tushish"
+    "День 2: через пер. ИЯФ на вершину, спуск через пер. Математиков": "2-kun: IYaF dovoni orqali choʻqqiga, Matematikov dovoni orqali tushish",
+    "Испай — Пиёзак через пер. Пиёзак Ложный, два дня": "Ispay — Piyozak, Piyozak Soxta dovoni orqali, ikki kun"
   }
 }
