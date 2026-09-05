@@ -1,6 +1,7 @@
 """Админка для кураторского наполнения каталога: /admin."""
 
 import logging
+import re
 import secrets
 from pathlib import Path
 
@@ -25,6 +26,7 @@ from .db import SessionLocal, engine
 from .models import (
     Announcement,
     AnnouncementStatus,
+    AppUpdate,
     Place,
     PlacePhoto,
     PlaceTrack,
@@ -682,6 +684,49 @@ _STATUS_RU = {
 }
 
 
+class AppUpdateAdmin(ModelView, model=AppUpdate):
+    """Принудительное обновление: порог версии и флаг по платформам.
+
+    Строки две, по одной на платформу, и они только правятся. Флаг без
+    порога ничего не делает: сравнивается версия приложения с `min_version`,
+    и алерт видят только те, кто ниже.
+    """
+
+    name = "Обновление приложения"
+    name_plural = "Обновления приложений"
+    icon = "fa-solid fa-arrow-up-from-bracket"
+    column_list = [
+        AppUpdate.platform,
+        AppUpdate.min_version,
+        AppUpdate.force,
+        AppUpdate.note,
+        AppUpdate.updated_at,
+    ]
+    column_labels = {
+        AppUpdate.platform: "Платформа",
+        AppUpdate.min_version: "Минимальная версия",
+        AppUpdate.force: "Принудительно",
+        AppUpdate.note: "Заметка",
+        AppUpdate.updated_at: "Изменено",
+    }
+    form_columns = [AppUpdate.min_version, AppUpdate.force, AppUpdate.note]
+    form_args = {
+        "min_version": {"description": "Например 1.3.0 — версии ниже получат алерт, если стоит флаг"},
+        "force": {"description": "Без флага порог не действует"},
+    }
+    can_create = False
+    can_delete = False
+
+    async def on_model_change(self, data: dict, model: AppUpdate, is_created: bool, request) -> None:
+        version = (data.get("min_version") or "").strip()
+        if not _VERSION.fullmatch(version):
+            raise ValueError("Версия — числа через точку, например 1.3.0")
+        data["min_version"] = version
+
+
+_VERSION = re.compile(r"\d+(\.\d+){0,3}")
+
+
 class PushTokenAdmin(ModelView, model=PushToken):
     """Установки, зарегистрировавшие пуш-токен. Только смотреть: сколько
     устройств на какой платформе и языке, и какие отвалились."""
@@ -740,5 +785,6 @@ def mount_admin(app: FastAPI) -> Admin:
     admin.add_view(TesterSignupAdmin)
     admin.add_view(AnnouncementAdmin)
     admin.add_view(PushTokenAdmin)
+    admin.add_view(AppUpdateAdmin)
     admin.add_view(StatsView)
     return admin

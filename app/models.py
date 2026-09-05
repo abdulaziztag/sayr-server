@@ -535,3 +535,26 @@ class Announcement(Base):
 
     def __str__(self) -> str:
         return self.title
+
+
+class AppUpdate(Base):
+    """Порог версии по платформе: ниже него приложение показывает алерт
+    «нужно обновить» и не пускает дальше, пока стоит флаг `force`.
+
+    Две строки, по одной на платформу, заводит миграция; в админке они
+    только правятся. Версии сравниваются по числам через точку, а не
+    строками: «1.10.0» новее «1.9.0».
+    """
+
+    __tablename__ = "app_updates"
+
+    platform: Mapped[str] = mapped_column(String(8), primary_key=True)
+    min_version: Mapped[str] = mapped_column(String(16), default="0.0.0", server_default="0.0.0")
+    force: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    note: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    def __str__(self) -> str:
+        return self.platform
