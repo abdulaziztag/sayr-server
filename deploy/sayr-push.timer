@@ -1,0 +1,14 @@
+# /etc/systemd/system/sayr-push.timer
+#
+# Установка один раз, руками:
+#   cp deploy/sayr-push.{service,timer} /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now sayr-push.timer
+[Unit]
+Description=Sayr: пуши по расписанию, проверка раз в минуту
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

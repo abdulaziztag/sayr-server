@@ -165,3 +165,24 @@ uv run pytest
   аккаунтов нет. Накрутить счётчик «кто ещё идёт» можно скриптом — при росте
   трафика понадобится rate-limit по IP.
 - Кэш погоды живёт в памяти процесса: при нескольких воркерах каждый греет свой.
+
+## Пуши по расписанию
+
+Раздел «Уведомления» в админке: заголовок, текст, время по Ташкенту,
+необязательный slug места. Раз в минуту `sayr-push.timer` запускает
+`python -m app.push.send_due`: созревшие объявления уходят всем живым
+токенам из `push_tokens` — iPhone напрямую в APNs, Android через FCM.
+Спека: `docs/superpowers/specs/2026-09-05-push-announcements-design.md`.
+
+Ключи — в `.env` (см. `.env.example`): `SAYR_APNS_KEY_PATH` + `SAYR_APNS_KEY_ID`
+для Apple, `SAYR_FCM_SERVICE_ACCOUNT_PATH` для Firebase. Платформа без ключей
+не роняет прогон: её устройства попадают в «не дошло», причина — в `last_error`.
+
+Таймер ставится один раз, руками:
+
+```bash
+cp deploy/sayr-push.{service,timer} /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now sayr-push.timer
+journalctl -u sayr-push.service -n 20     # что ушло на последнем тике
+```
+

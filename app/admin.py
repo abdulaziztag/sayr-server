@@ -23,9 +23,12 @@ from . import stats
 from .config import GPX_DIR, SERVER_DIR, settings
 from .db import SessionLocal, engine
 from .models import (
+    Announcement,
+    AnnouncementStatus,
     Place,
     PlacePhoto,
     PlaceTrack,
+    PushToken,
     Region,
     Season,
     TesterSignup,
@@ -599,6 +602,119 @@ class TesterSignupAdmin(ModelView, model=TesterSignup):
     # Удалять можно: спам-адреса чистятся отсюда же
 
 
+class AnnouncementAdmin(ModelView, model=Announcement):
+    """Пуши по расписанию: заголовок, текст, время — и всем установкам.
+
+    Время — по Ташкенту, как записано; планировщик (sayr-push.timer, раз
+    в минуту) сам переведёт. Правится только запланированное: отправленное
+    не трогаем, заводится новое. Счётчики и last_error показывают, дошло ли.
+    """
+
+    name = "Уведомление"
+    name_plural = "Уведомления"
+    icon = "fa-solid fa-bell"
+    column_list = [
+        Announcement.title,
+        Announcement.send_at,
+        Announcement.status,
+        Announcement.sent_count,
+        Announcement.failed_count,
+        Announcement.place_slug,
+    ]
+    column_details_exclude_list = [Announcement.audience_lang, Announcement.audience_city]
+    column_default_sort = ("send_at", True)
+    column_sortable_list = [Announcement.send_at, Announcement.status]
+    column_searchable_list = [Announcement.title]
+    column_labels = {
+        Announcement.title: "Заголовок",
+        Announcement.body: "Текст",
+        Announcement.send_at: "Когда (Ташкент)",
+        Announcement.place_slug: "Место (slug)",
+        Announcement.status: "Статус",
+        Announcement.sent_count: "Дошло",
+        Announcement.failed_count: "Не дошло",
+        Announcement.last_error: "Ошибки",
+        Announcement.sent_at: "Отправлено",
+        Announcement.created_at: "Заведено",
+    }
+    column_formatters = {
+        Announcement.send_at: lambda m, a: m.send_at.strftime("%d.%m.%Y %H:%M") if m.send_at else "",
+        Announcement.status: lambda m, a: _STATUS_RU.get(m.status, m.status),
+    }
+    form_columns = [
+        Announcement.title,
+        Announcement.body,
+        Announcement.send_at,
+        Announcement.place_slug,
+    ]
+    form_args = {
+        "send_at": {"description": "По Ташкенту. Планировщик проверяет раз в минуту"},
+        "place_slug": {"description": "Необязательно: по тапу откроется это место"},
+    }
+
+    async def on_model_change(self, data: dict, model: Announcement, is_created: bool, request) -> None:
+        if not is_created and model.status != AnnouncementStatus.scheduled.value:
+            raise ValueError("Уже отправлено или отправляется — заведите новое уведомление")
+        title = (data.get("title") or "").strip()
+        body = (data.get("body") or "").strip()
+        if not title or not body:
+            raise ValueError("Нужны и заголовок, и текст")
+        data["title"], data["body"] = title, body
+        slug = (data.get("place_slug") or "").strip() or None
+        data["place_slug"] = slug
+        if slug:
+            async with SessionLocal() as session:
+                exists = await session.scalar(select(Place.id).where(Place.slug == slug))
+            if exists is None:
+                raise ValueError(f"Места «{slug}» нет в каталоге")
+
+    async def on_model_delete(self, model: Announcement, request) -> None:
+        if model.status == AnnouncementStatus.sending.value:
+            raise ValueError("Сейчас отправляется — подождите минуту")
+
+
+_STATUS_RU = {
+    "scheduled": "запланировано",
+    "sending": "отправляется",
+    "sent": "отправлено",
+    "failed": "не ушло",
+    "cancelled": "отменено",
+}
+
+
+class PushTokenAdmin(ModelView, model=PushToken):
+    """Установки, зарегистрировавшие пуш-токен. Только смотреть: сколько
+    устройств на какой платформе и языке, и какие отвалились."""
+
+    name = "Установка с пушами"
+    name_plural = "Устройства с пушами"
+    icon = "fa-solid fa-mobile-screen"
+    column_list = [
+        PushToken.platform,
+        PushToken.lang,
+        PushToken.city,
+        PushToken.app_version,
+        PushToken.last_seen,
+        PushToken.disabled_at,
+    ]
+    column_default_sort = ("last_seen", True)
+    column_sortable_list = [PushToken.platform, PushToken.last_seen, PushToken.disabled_at]
+    column_searchable_list = [PushToken.device]
+    column_labels = {
+        PushToken.platform: "Платформа",
+        PushToken.lang: "Язык",
+        PushToken.city: "Город выезда",
+        PushToken.app_version: "Версия",
+        PushToken.last_seen: "Видели",
+        PushToken.disabled_at: "Погашен",
+        PushToken.disabled_reason: "Почему",
+        PushToken.device: "Устройство",
+        PushToken.created_at: "Впервые",
+    }
+    can_create = False
+    can_edit = False
+
+
 def mount_admin(app: FastAPI) -> Admin:
     admin = Admin(
         app,
@@ -622,5 +738,7 @@ def mount_admin(app: FastAPI) -> Admin:
     admin.add_view(PlaceTrackAdmin)
     admin.add_view(RegionAdmin)
     admin.add_view(TesterSignupAdmin)
+    admin.add_view(AnnouncementAdmin)
+    admin.add_view(PushTokenAdmin)
     admin.add_view(StatsView)
     return admin

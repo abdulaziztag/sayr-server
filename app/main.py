@@ -8,7 +8,7 @@ from sqlalchemy import text
 from starlette.staticfiles import StaticFiles
 
 from .admin import mount_admin
-from .api import intents, landing, legal, places, regions, share, drive_times
+from .api import intents, landing, legal, places, regions, share, drive_times, push
 from .config import SERVER_DIR, settings
 from .db import engine
 from .stats import StatsMiddleware, rotate_forever
@@ -62,6 +62,7 @@ app.include_router(drive_times.router)
 app.include_router(intents.router)
 app.include_router(share.router)
 app.include_router(legal.router)
+app.include_router(push.router)
 # Лендинг последним: его "/" не должен перехватывать ничего выше
 app.include_router(landing.router)
 mount_admin(app)

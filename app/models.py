@@ -458,3 +458,80 @@ class Device(Base):
 
     device: Mapped[str] = mapped_column(String(64), primary_key=True)
     first_seen: Mapped[date] = mapped_column(Date, index=True)
+
+
+class PushToken(Base):
+    """Установка приложения, готовая принимать пуши.
+
+    Строка на токен. Протухший токен гасится, а не удаляется: по `disabled_at`
+    видно, сколько установок отвалилось и когда. Язык и город лежат с первого
+    дня — фильтры «кому слать» обещаны позже, и миграции ради них не будет
+    (спека 2026-09-05-push-announcements-design.md).
+    """
+
+    __tablename__ = "push_tokens"
+
+    token: Mapped[str] = mapped_column(String(512), primary_key=True)
+    # ios / android строкой, а не enum в базе: enum в Postgres дорого расширять
+    platform: Mapped[str] = mapped_column(String(8), index=True)
+    # X-Device-Id из статистики — чтобы связать установку с её событиями
+    device: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    lang: Mapped[str] = mapped_column(String(2), default="ru", server_default="ru")
+    city: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    app_version: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_seen: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    disabled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    disabled_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class AnnouncementStatus(str, enum.Enum):
+    """Жизнь объявления: scheduled → sending → sent | failed; cancelled — руками."""
+
+    scheduled = "scheduled"
+    sending = "sending"
+    sent = "sent"
+    failed = "failed"
+    cancelled = "cancelled"
+
+
+class Announcement(Base):
+    """Уведомление из админки: заголовок, текст и когда отправить.
+
+    `send_at` — по Ташкенту и без зоны: владелец думает во времени Ташкента,
+    и форма показывает ровно то, что записано. В UTC переводит планировщик
+    (app/push/sender.py), и только он.
+    """
+
+    __tablename__ = "announcements"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(120))
+    body: Mapped[str] = mapped_column(Text)
+    # По тапу открывается место — тем же путём, что напоминания
+    place_slug: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    send_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), index=True)
+    status: Mapped[str] = mapped_column(
+        String(16), default=AnnouncementStatus.scheduled.value, index=True
+    )
+    # Аудитория. Пусто — всем; в форму пока не выведено
+    audience_lang: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    audience_city: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    sent_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    failed_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    def __str__(self) -> str:
+        return self.title

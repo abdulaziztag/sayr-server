@@ -1,0 +1,15 @@
+# /etc/systemd/system/sayr-push.service
+#
+# Один тик планировщика пушей: созревшие объявления из админки уходят
+# всем живым установкам. Запускается таймером sayr-push.timer. Тот же
+# каталог и venv, что у sayr.service; ключи APNs и FCM — в .env.
+[Unit]
+Description=Sayr: отправка пушей по расписанию
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/Projects/sayr-server
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/root/Projects/sayr-server/.venv/bin/python -m app.push.send_due

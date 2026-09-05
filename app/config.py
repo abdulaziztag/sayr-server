@@ -38,6 +38,19 @@ class Settings(BaseSettings):
     # означали бы, что в одном из мест мы врём
     stats_retention_days: int = 30
 
+    # Пуши. Пустой путь — платформа не настроена: планировщик пропустит её
+    # устройства и запишет это в last_error объявления, а не упадёт целиком.
+    # APNs — ключ .p8 из Apple Developer и его Key ID; тема — bundle id
+    apns_key_path: Path | None = None
+    apns_key_id: str = ""
+    apns_team_id: str = "Z39Z5TJZCG"
+    apns_topic: str = "uz.sayr.ios"
+    # Песочница APNs принимает токены только debug-сборок из Xcode;
+    # TestFlight и App Store ходят в боевой
+    apns_sandbox: bool = False
+    # FCM — сервисный ключ проекта Firebase (JSON)
+    fcm_service_account_path: Path | None = None
+
     model_config = {"env_file": SERVER_DIR / ".env", "env_prefix": "SAYR_"}
 
 
