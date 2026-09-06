@@ -169,3 +169,30 @@ async def test_nobody_to_send_is_not_a_failure():
         done = await run_once(session, {}, now=now)
     assert done[0].status == AnnouncementStatus.sent.value
     assert done[0].sent_count == 0 and done[0].failed_count == 0
+
+
+async def test_prune_forgets_tokens_disabled_a_month_ago():
+    now = datetime.now().astimezone()
+    async with SessionLocal() as session:
+        session.add_all(
+            [
+                PushToken(
+                    token=TOKEN_A, platform="ios",
+                    disabled_at=now - timedelta(days=31), disabled_reason="apns 410 Unregistered",
+                ),
+                PushToken(
+                    token=TOKEN_B, platform="ios",
+                    disabled_at=now - timedelta(days=29), disabled_reason="apns 410 Unregistered",
+                ),
+                PushToken(token=TOKEN_C, platform="android"),
+            ]
+        )
+        await session.commit()
+
+    async with SessionLocal() as session:
+        assert await run_once(session, {}) == []
+
+    # Месяц прошёл — стёрт (/privacy это обещает); свежепогашенный и живой на месте
+    assert await _token(TOKEN_A) is None
+    assert (await _token(TOKEN_B)).disabled_at is not None
+    assert (await _token(TOKEN_C)).disabled_at is None

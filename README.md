@@ -177,6 +177,8 @@ uv run pytest
 Ключи — в `.env` (см. `.env.example`): `SAYR_APNS_KEY_PATH` + `SAYR_APNS_KEY_ID`
 для Apple, `SAYR_FCM_SERVICE_ACCOUNT_PATH` для Firebase. Платформа без ключей
 не роняет прогон: её устройства попадают в «не дошло», причина — в `last_error`.
+Погашенные токены (Apple или Google ответили, что установки больше нет)
+стираются через 30 дней тем же тиком — `/privacy` это обещает.
 
 Таймер ставится один раз, руками:
 

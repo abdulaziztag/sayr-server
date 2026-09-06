@@ -9,10 +9,10 @@
 import asyncio
 from collections import Counter
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import Announcement, AnnouncementStatus, PushToken
@@ -24,6 +24,9 @@ Transport = Callable[[str, str, str, str | None], Awaitable[SendResult]]
 # Сколько запросов держим в воздухе разом: и APNs, и FCM спокойно берут больше,
 # но нам важнее не упереться в лимиты соединений на маленьком VPS
 CONCURRENCY = 32
+# Погашенный токен держим месяц — по нему видно, сколько установок отвалилось
+# и когда, — а дальше стираем: /privacy обещает ровно это
+PRUNE_AFTER = timedelta(days=30)
 
 
 def now_tashkent() -> datetime:
@@ -117,4 +120,13 @@ async def run_once(
     due = await due_announcements(session, now or now_tashkent())
     for announcement in due:
         await send_announcement(session, announcement, transports)
+    await prune_tokens(session)
     return due
+
+
+async def prune_tokens(session: AsyncSession, now: datetime | None = None) -> int:
+    """Стереть токены, погашенные дольше PRUNE_AFTER назад. Возвращает, сколько."""
+    cutoff = (now or datetime.now(timezone.utc)) - PRUNE_AFTER
+    result = await session.execute(delete(PushToken).where(PushToken.disabled_at < cutoff))
+    await session.commit()
+    return result.rowcount or 0
