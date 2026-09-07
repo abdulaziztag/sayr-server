@@ -86,7 +86,8 @@ RU = {
     ],
     "privacy": "Конфиденциальность",
     "support": "Поддержка",
-    "made": "Каталог собран вручную. Нашли неточность — напишите, поправим.",
+    "made": "Каталог собран вручную. Нашли неточность — "
+            '<a href="/report">напишите</a>, поправим.',
 }
 
 UZ = {
@@ -142,7 +143,8 @@ UZ = {
     ],
     "privacy": "Maxfiylik",
     "support": "Yordam",
-    "made": "Katalog qoʻlda yigʻilgan. Xatolik topsangiz — yozing, tuzatamiz.",
+    "made": "Katalog qoʻlda yigʻilgan. Xatolik topsangiz — "
+            '<a href="/uz/report">yozing</a>, tuzatamiz.',
 }
 
 _PAGE = """<!doctype html>

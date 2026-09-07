@@ -558,3 +558,65 @@ class AppUpdate(Base):
 
     def __str__(self) -> str:
         return self.platform
+
+
+class ReportStatus(str, enum.Enum):
+    """Что стало с заявкой: new → taken → fixed | rejected."""
+
+    new = "new"
+    taken = "taken"
+    fixed = "fixed"
+    rejected = "rejected"
+
+
+class PlaceReport(Base):
+    """Сообщение о неточности в карточке места — с формы /report.
+
+    Каталог собран руками по отчётам и трекам, и часть цифр в нём заведомо
+    приблизительная. Дешевле всего их правит тот, кто только что сходил:
+    он и присылает сюда, что не сошлось.
+
+    `place_id` может быть пуст, и это не поломка: человек мог не найти своё
+    место в списке — тогда он вписывает его словами в `place_note`, и заявка
+    всё равно доходит. По той же причине пуст бывает и контакт: неверная
+    координата остаётся неверной, даже если ответить автору некуда.
+
+    Имя места не дублируется в строку заявки: место живёт в каталоге,
+    а не в архиве обращений, и переименование должно быть видно и здесь.
+    Удаление места оставляет заявку сиротой (ON DELETE SET NULL) —
+    из двух зол потерять привязку лучше, чем потерять текст.
+    """
+
+    __tablename__ = "place_reports"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    place_id: Mapped[int | None] = mapped_column(
+        ForeignKey("places.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    #: Что человек вписал руками, когда места в списке не нашлось
+    place_note: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: Коды тем из app/reports.py: что именно не сходится
+    topics: Mapped[list[str]] = mapped_column(
+        ARRAY(String(24)), default=list, server_default="{}"
+    )
+    comment: Mapped[str] = mapped_column(Text, default="", server_default="")
+    #: Ник в телеграме (`@name`), почта или телефон — как оставили
+    contact: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    #: Язык страницы, с которой пришли: на нём и отвечать
+    lang: Mapped[str] = mapped_column(String(2), default="ru", server_default="ru")
+    #: Откуда заявка. Пока только web; ручка та же и для приложения
+    source: Mapped[str] = mapped_column(String(16), default="web", server_default="web")
+    status: Mapped[str] = mapped_column(
+        String(16), default=ReportStatus.new.value, server_default="new", index=True
+    )
+    #: Пометки владельца: что проверил, что поправил
+    admin_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+    place: Mapped["Place | None"] = relationship(lazy="selectin")
+
+    def __str__(self) -> str:
+        where = self.place.name if self.place else (self.place_note or "без места")
+        return f"{where} · {self.created_at:%d.%m.%Y}" if self.created_at else where

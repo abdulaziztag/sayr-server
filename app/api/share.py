@@ -42,6 +42,11 @@ _PAGE = """<!doctype html>
             padding: 15px; border-radius: 16px; text-decoration: none;
             font-weight: 600; margin-top: 22px; }}
   .hint {{ text-align: center; color: #8A8272; font-size: 12px; margin-top: 10px; }}
+  /* Ссылка на форму: сообщают о неточности с той же страницы,
+     где её и заметили — место в форме подставится само */
+  .report {{ text-align: center; margin-top: 26px; padding-top: 16px;
+             border-top: 1px solid #DCD4C4; font-size: 13px; }}
+  .report a {{ color: #57524A; }}
 </style>
 </head>
 <body>
@@ -52,6 +57,7 @@ _PAGE = """<!doctype html>
   <p>{desc}</p>
   <a class="open" href="sayr://place/{slug}">{open_label}</a>
   <div class="hint">{hint}</div>
+  <div class="report"><a href="{report_href}">{report_label}</a></div>
 </div>
 </body>
 </html>"""
@@ -82,6 +88,10 @@ _HINT = {
     "uz": "Sayr ilovasi oʻrnatilgan boʻlsa ishlaydi",
 }
 _ELEVATION = {"ru": "м", "uz": "m"}
+_REPORT = {
+    "ru": "Нашли неточность? Напишите",
+    "uz": "Xatolik topdingizmi? Yozing",
+}
 
 
 @router.get("/p/{slug}", response_class=HTMLResponse)
@@ -120,4 +130,7 @@ async def share_page(
         og_image=og_image,
         open_label=_OPEN_LABEL[lang],
         hint=_HINT[lang],
+        report_href=("/report" if lang == "ru" else "/uz/report")
+        + f"?place={place.slug}",
+        report_label=_REPORT[lang],
     )

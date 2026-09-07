@@ -3,6 +3,7 @@
 import logging
 import re
 import secrets
+from html import escape
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -13,7 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
-from wtforms import SelectMultipleField
+from markupsafe import Markup
+from wtforms import SelectField, SelectMultipleField
 
 try:  # расположение менялось между версиями пакета
     from fastapi_storages import StorageFile
@@ -29,13 +31,16 @@ from .models import (
     AppUpdate,
     Place,
     PlacePhoto,
+    PlaceReport,
     PlaceTrack,
     PushToken,
     Region,
+    ReportStatus,
     Season,
     TesterSignup,
     photo_storage,
 )
+from .reports import STATUS_RU, telegram_url, topic_names
 from .services.gpx import recorded_from_target, reverse_track, track_stats
 from .services.images import make_thumbnail, retire_photo, store_upload
 from .services.nearby import rebuild_for_track
@@ -604,6 +609,151 @@ class TesterSignupAdmin(ModelView, model=TesterSignup):
     # Удалять можно: спам-адреса чистятся отсюда же
 
 
+
+def _report_where(model, attribute, request=None) -> str:
+    """Место заявки: из каталога, вписанное руками или ничего."""
+    if model.place:
+        return model.place.name
+    return model.place_note or "—"
+
+
+def _report_excerpt(model, attribute, request=None) -> str:
+    """Начало текста: в списке нужен повод открыть, а не весь рассказ."""
+    text = (model.comment or "").replace("\n", " ").strip()
+    return text if len(text) <= 140 else text[:139] + "…"
+
+
+def _report_contact(model, attribute, request=None):
+    """Телеграм — сразу ссылкой на переписку: разбор заявки кончается тем,
+    что владелец пишет автору, и лишний copy-paste здесь ни к чему.
+
+    Почта и телефон остаются текстом. HTML собираем руками, поэтому
+    и ник, и адрес экранируем: контакт пришёл из формы, а не от нас.
+    """
+    contact = model.contact
+    if not contact:
+        return "—"
+    url = telegram_url(contact)
+    if not url:
+        return contact
+    return Markup(
+        f'<a href="{escape(url, quote=True)}" target="_blank" '
+        f'rel="noopener">{escape(contact)}</a>'
+    )
+
+
+class PlaceReportAdmin(ModelView, model=PlaceReport):
+    """Очередь сообщений о неточностях с формы /report.
+
+    Рабочий цикл: сверху новые, открыл, проверил по треку или отчёту,
+    поправил карточку, поставил статус, написал автору — ссылка
+    на переписку стоит прямо в списке.
+
+    Отбор по статусу — адресом: `/admin/place-report/list?status=new`.
+    Своих фильтров у sqladmin нет, а заводить ради одного целую вьюху
+    незачем. Фильтр учтён и в счётчике страниц, иначе постраничная
+    навигация обещала бы строки, которых на странице нет.
+
+    Правится только то, что принадлежит владельцу, — статус и заметка.
+    Сам текст заявки не наш: это чужие слова, и переписывать их нельзя,
+    иначе через месяц не понять, что человек говорил на самом деле.
+    """
+
+    name = "Заявка"
+    name_plural = "Заявки о неточностях"
+    icon = "fa-solid fa-flag"
+    column_list = [
+        PlaceReport.created_at,
+        PlaceReport.place,
+        PlaceReport.topics,
+        PlaceReport.comment,
+        PlaceReport.contact,
+        PlaceReport.status,
+    ]
+    column_details_list = [
+        PlaceReport.id,
+        PlaceReport.created_at,
+        PlaceReport.place,
+        PlaceReport.place_note,
+        PlaceReport.topics,
+        PlaceReport.comment,
+        PlaceReport.contact,
+        PlaceReport.lang,
+        PlaceReport.source,
+        PlaceReport.status,
+        PlaceReport.admin_note,
+    ]
+    column_default_sort = ("created_at", True)
+    column_sortable_list = [PlaceReport.created_at, PlaceReport.status]
+    column_searchable_list = [
+        PlaceReport.comment,
+        PlaceReport.contact,
+        PlaceReport.place_note,
+    ]
+    column_labels = {
+        PlaceReport.created_at: "Пришла",
+        PlaceReport.place: "Место",
+        PlaceReport.place_note: "Вписано руками",
+        PlaceReport.topics: "Что не так",
+        PlaceReport.comment: "Текст",
+        PlaceReport.contact: "Связь",
+        PlaceReport.lang: "Язык",
+        PlaceReport.source: "Откуда",
+        PlaceReport.status: "Статус",
+        PlaceReport.admin_note: "Заметка",
+    }
+    column_formatters = {
+        PlaceReport.created_at: lambda m, a: (
+            m.created_at.strftime("%d.%m %H:%M") if m.created_at else ""
+        ),
+        PlaceReport.place: _report_where,
+        PlaceReport.topics: lambda m, a: topic_names(m.topics),
+        PlaceReport.comment: _report_excerpt,
+        PlaceReport.contact: _report_contact,
+        PlaceReport.status: lambda m, a: STATUS_RU.get(m.status, m.status),
+    }
+    column_formatters_detail = {
+        PlaceReport.created_at: lambda m, a: (
+            m.created_at.strftime("%d.%m.%Y %H:%M") if m.created_at else ""
+        ),
+        PlaceReport.place: _report_where,
+        PlaceReport.topics: lambda m, a: topic_names(m.topics),
+        PlaceReport.contact: _report_contact,
+        PlaceReport.status: lambda m, a: STATUS_RU.get(m.status, m.status),
+    }
+    form_columns = [PlaceReport.status, PlaceReport.admin_note]
+    form_overrides = {"status": SelectField}
+    form_args = {
+        "status": {
+            "label": "Статус",
+            "choices": [(s.value, STATUS_RU[s.value]) for s in ReportStatus],
+            "coerce": str,
+        },
+        "admin_note": {
+            "label": "Заметка",
+            "description": "Что проверил и что поправил — для себя же через месяц",
+        },
+    }
+    # Высота поля — в widget_args: form_args уходят прямо в конструктор
+    # wtforms-поля, и «rows» там роняет форму
+    form_widget_args = {"admin_note": {"rows": 4}}
+    can_create = False
+    # Удалять можно: спам чистится отсюда же
+
+    def list_query(self, request: Request) -> Select:
+        return self._only_status(select(self.model), request)
+
+    def count_query(self, request: Request) -> Select:
+        return self._only_status(super().count_query(request), request)
+
+    @staticmethod
+    def _only_status(stmt: Select, request: Request) -> Select:
+        status = request.query_params.get("status", "")
+        if status in STATUS_RU:
+            return stmt.where(PlaceReport.status == status)
+        return stmt
+
+
 class AnnouncementAdmin(ModelView, model=Announcement):
     """Пуши по расписанию: заголовок, текст, время — и всем установкам.
 
@@ -782,6 +932,7 @@ def mount_admin(app: FastAPI) -> Admin:
     admin.add_view(PlacePhotoAdmin)
     admin.add_view(PlaceTrackAdmin)
     admin.add_view(RegionAdmin)
+    admin.add_view(PlaceReportAdmin)
     admin.add_view(TesterSignupAdmin)
     admin.add_view(AnnouncementAdmin)
     admin.add_view(PushTokenAdmin)
