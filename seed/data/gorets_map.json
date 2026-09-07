@@ -514,5 +514,15 @@
    "ascent": 2789,
    "day": false
   }
+ ],
+ "surkhat": [
+  {
+   "file": "surkhat-gorets-1.gpx",
+   "name": "Муллала — вершина Сурхат",
+   "credit": "«ГОРЕЦ»",
+   "km": 8.7,
+   "ascent": 2395,
+   "day": true
+  }
  ]
 }

@@ -2546,5 +2546,34 @@
    }
   ]
  },
- "_site_note": "2026-09-07: снимки с gorets.uz — страницы программ «21 …» (по одному кадру на пункт, подписи с номерами), страницы установки табличек, обзор пещер программы и страницы призёров (подпись автора — участник). Файлы в папке --photos под site/, поле source — исходный URL."
+ "_site_note": "2026-09-07: снимки с gorets.uz — страницы программ «21 …» (по одному кадру на пункт, подписи с номерами), страницы установки табличек, обзор пещер программы и страницы призёров (подпись автора — участник). Файлы в папке --photos под site/, поле source — исходный URL.",
+ "surkhat": {
+  "name": "Сурхат",
+  "photos": [
+   {
+    "path": "site/surkhat-gorets-site.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "surkhat-gorets-site.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2026/08/surhat.jpg"
+   },
+   {
+    "path": "site/surkhat-gorets-tabl.jpg",
+    "credit": "Фото: Эльмира, «ГОРЕЦ»",
+    "name": "surkhat-gorets-tabl.jpg",
+    "source": "teletype.in/@ellichka/njVS35BliTu"
+   },
+   {
+    "path": "site/surkhat-gorets-top.jpg",
+    "credit": "Фото: Эльмира, «ГОРЕЦ»",
+    "name": "surkhat-gorets-top.jpg",
+    "source": "teletype.in/@ellichka/njVS35BliTu"
+   },
+   {
+    "path": "site/surkhat-gorets-cirk.jpg",
+    "credit": "Фото: Эльмира, «ГОРЕЦ»",
+    "name": "surkhat-gorets-cirk.jpg",
+    "source": "teletype.in/@ellichka/njVS35BliTu"
+   }
+  ]
+ }
 }
