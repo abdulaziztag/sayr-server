@@ -534,5 +534,15 @@
    "ascent": 2969,
    "day": true
   }
+ ],
+ "paltau-cave": [
+  {
+   "file": "paltau-cave-gorets-1.gpx",
+   "name": "Пальтау — Оби-Рахмат",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 13.3,
+   "ascent": 1414,
+   "day": true
+  }
  ]
 }
