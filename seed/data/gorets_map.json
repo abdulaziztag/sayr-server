@@ -396,5 +396,123 @@
    "ascent": 2923,
    "day": false
   }
+ ],
+ "arashan-cascade": [
+  {
+   "file": "arashan-cascade-gorets-1.gpx",
+   "name": "От верхней точки к подножью каскада",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 1.0,
+   "ascent": 21,
+   "day": true
+  }
+ ],
+ "kaptar-kumush-waterfall": [
+  {
+   "file": "kaptar-kumush-waterfall-gorets-1.gpx",
+   "name": "От дороги у Испая по Каптар-Кумыш-саю к водопаду",
+   "credit": "Tulqin · «ГОРЕЦ» форум",
+   "km": 15.2,
+   "ascent": 1676,
+   "day": true
+  }
+ ],
+ "zambat-waterfall": [
+  {
+   "file": "zambat-waterfall-channel-1.gpx",
+   "name": "По Коксу до Замбатсая и к водопаду",
+   "credit": "Go on Foot",
+   "km": 15.9,
+   "ascent": 1548,
+   "day": true
+  }
+ ],
+ "tomchi-osmon-kul": [
+  {
+   "file": "tomchi-osmon-kul-gorets-1.gpx",
+   "name": "От стоянки под перевалом Бадаксай через Спокойный и Ложный к озеру",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 15.7,
+   "ascent": 1606,
+   "day": true
+  }
+ ],
+ "medvezhye-lake": [
+  {
+   "file": "medvezhye-lake-gorets-1.gpx",
+   "name": "От Шовуркуля через брод к озеру",
+   "credit": "Ярослав Шеломенцев · «ГОРЕЦ» форум",
+   "km": 5.1,
+   "ascent": 582,
+   "day": true
+  }
+ ],
+ "kelimchik-lakes": [
+  {
+   "file": "kelimchik-lakes-gorets-1.gpx",
+   "name": "От стоянки под перевалом Тойпан к озёрам и на перевал ТИЭС",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 11.9,
+   "ascent": 1635,
+   "day": true
+  }
+ ],
+ "toypan-lakes": [
+  {
+   "file": "toypan-lakes-gorets-1.gpx",
+   "name": "К перевалу ТИЭС, откуда видны озёра, от стоянки под Тойпаном",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 11.9,
+   "ascent": 1635,
+   "day": true
+  }
+ ],
+ "kievskaya": [
+  {
+   "file": "kievskaya-gorets-1.gpx",
+   "name": "Кольцо: Каттакуль и вход в Киевскую",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 12.3,
+   "ascent": 1379,
+   "day": true
+  },
+  {
+   "file": "kievskaya-gorets-2.gpx",
+   "name": "К Каттакулю и входу в Киевскую, туда и обратно",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 15.8,
+   "ascent": 1693,
+   "day": true
+  }
+ ],
+ "katta-edzh": [
+  {
+   "file": "katta-edzh-gorets-1.gpx",
+   "name": "От машины к главной пещере",
+   "credit": "«ГОРЕЦ» форум",
+   "km": 1.1,
+   "ascent": 204,
+   "day": true
+  }
+ ],
+ "chilsim": [
+  {
+   "file": "chilsim-channel-1.gpx",
+   "name": "С плато Кызылгаза к пещере",
+   "credit": "Go on Foot",
+   "km": 7.0,
+   "ascent": 892,
+   "day": true
+  }
+ ],
+ "zaidman-cave": [
+  {
+   "file": "zaidman-cave-gorets-1.gpx",
+   "name": "Нуреката — Пулатхан до родника",
+   "credit": "Ярослав Шеломенцев · «ГОРЕЦ» форум",
+   "km": 34.5,
+   "ascent": 2789,
+   "day": false
+  }
  ]
 }

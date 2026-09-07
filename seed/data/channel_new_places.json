@@ -407,6 +407,220 @@
    "difficulty": "hard",
    "overnight": "tent",
    "trip_days": 3
+  },
+  {
+   "name": "Арашанский каскад",
+   "slug": "arashan-cascade",
+   "category": "waterfall",
+   "point": [
+    41.26539,
+    70.54718,
+    1988
+   ],
+   "difficulty": "hard"
+  },
+  {
+   "name": "Каптар-Кумыш",
+   "slug": "kaptar-kumush-waterfall",
+   "category": "waterfall",
+   "point": [
+    41.80668,
+    70.38051,
+    2193
+   ],
+   "difficulty": "medium"
+  },
+  {
+   "name": "Замбат",
+   "slug": "zambat-waterfall",
+   "category": "waterfall",
+   "point": [
+    41.65946,
+    70.22448,
+    1534
+   ],
+   "difficulty": "hard"
+  },
+  {
+   "name": "Бычий нос",
+   "slug": "khukiz-burun",
+   "category": "waterfall",
+   "point": [
+    38.73302,
+    67.28803,
+    2380
+   ],
+   "difficulty": "hard",
+   "files": [
+    "Пещера_Амира_Тимура_водопад_Хукиз_Бурун.gpx"
+   ]
+  },
+  {
+   "name": "Канбешбулак",
+   "slug": "kanbeshbulak",
+   "category": "lake",
+   "point": [
+    38.08201,
+    66.72613,
+    1669
+   ],
+   "difficulty": "easy"
+  },
+  {
+   "name": "Верхнее Сарыкамское",
+   "slug": "sarykamysh-upper",
+   "category": "lake",
+   "point": [
+    41.77794,
+    70.47049,
+    2144
+   ],
+   "difficulty": "hard",
+   "overnight": "tent",
+   "trip_days": 3
+  },
+  {
+   "name": "Томчи Осмон Куль",
+   "slug": "tomchi-osmon-kul",
+   "category": "lake",
+   "point": [
+    41.86554,
+    70.51192,
+    3390
+   ],
+   "difficulty": "hard",
+   "files": [
+    "верхний_Ихначкуль_пер_Василёк_пер_Ложный_теснины_Бадаксая.gpx"
+   ],
+   "overnight": "tent",
+   "trip_days": 3
+  },
+  {
+   "name": "Медвежье",
+   "slug": "medvezhye-lake",
+   "category": "lake",
+   "point": [
+    42.22676,
+    71.14988,
+    3291
+   ],
+   "difficulty": "hard",
+   "files": [
+    "Шовуркуль_Оз_Медвежье_лагерь_у_чистого_ручья.gpx"
+   ],
+   "overnight": "tent",
+   "trip_days": 3
+  },
+  {
+   "name": "Озёра Келимчика",
+   "slug": "kelimchik-lakes",
+   "category": "lake",
+   "point": [
+    41.29542,
+    70.40623,
+    3510
+   ],
+   "difficulty": "medium"
+  },
+  {
+   "name": "Озёра Тойпана",
+   "slug": "toypan-lakes",
+   "category": "lake",
+   "point": [
+    41.29887,
+    70.38851,
+    3513
+   ],
+   "difficulty": "hard"
+  },
+  {
+   "name": "Пешагор",
+   "slug": "peshagor",
+   "category": "cave",
+   "point": [
+    39.86034,
+    68.03114,
+    1210
+   ],
+   "difficulty": "easy",
+   "files": [
+    "Пешагор_грунтовка_от_шлагбаума.gpx"
+   ]
+  },
+  {
+   "name": "Киевская",
+   "slug": "kievskaya",
+   "category": "cave",
+   "point": [
+    39.34213,
+    67.12595,
+    2398
+   ],
+   "difficulty": "medium",
+   "files": [
+    "Камангаран_оз_Каттакуль_пещ_Киевская.gpx"
+   ]
+  },
+  {
+   "name": "Бой-Булок",
+   "slug": "boy-bulok",
+   "category": "cave",
+   "point": [
+    38.3844,
+    67.5017,
+    2647
+   ],
+   "difficulty": "hard",
+   "overnight": "tent",
+   "trip_days": 2
+  },
+  {
+   "name": "Катта Эдж",
+   "slug": "katta-edzh",
+   "category": "cave",
+   "point": [
+    40.64826,
+    66.57364,
+    898
+   ],
+   "difficulty": "medium"
+  },
+  {
+   "name": "Чильсим",
+   "slug": "chilsim",
+   "category": "cave",
+   "point": [
+    38.71145,
+    67.33955,
+    3363
+   ],
+   "difficulty": "hard",
+   "overnight": "tent",
+   "trip_days": 3
+  },
+  {
+   "name": "Зайдмана",
+   "slug": "zaidman-cave",
+   "category": "cave",
+   "point": [
+    41.42923,
+    70.16922,
+    2783
+   ],
+   "difficulty": "hard",
+   "overnight": "tent",
+   "trip_days": 3
+  },
+  {
+   "name": "Заркентская",
+   "slug": "zarkent-cave",
+   "category": "cave",
+   "point": [
+    41.26662,
+    69.87976,
+    1924
+   ],
+   "difficulty": "hard"
   }
  ],
  "extra_attach": {
@@ -444,5 +658,6 @@
   "водопад_на_Аксакате_Язык_Чирчикская_трасса.gpx": "дубль подъезда к Языку от трассы",
   "До-водопада.kmz": "короткий подъезд к Девшаршаре"
  },
- "_note_21": "Семь вершин «21 Горизонта» добавлены 2026-09-04 по списку владельца. Точки и высоты — OSM (Реваш, Чадак, Падар, Замок, Кызылбаш); у Чимбая и Ахча Буруна OSM пуст — точки из треков, высоты из программы клуба. Один файл на две вершины (Чадак-Падар, Ахча Бурун-Чимбай) — поэтому point, а не дальняя точка записи. Замок без трека: единственная запись через него — траверс Пскема в 51 км."
+ "_note_21": "Семь вершин «21 Горизонта» добавлены 2026-09-04 по списку владельца. Точки и высоты — OSM (Реваш, Чадак, Падар, Замок, Кызылбаш); у Чимбая и Ахча Буруна OSM пуст — точки из треков, высоты из программы клуба. Один файл на две вершины (Чадак-Падар, Ахча Бурун-Чимбай) — поэтому point, а не дальняя точка записи. Замок без трека: единственная запись через него — траверс Пскема в 51 км.",
+ "_note_21_programs": "2026-09-07: 17 мест программ «21 КАСКАД», «21 МИРАЖ», «21 ПОДЗЕМЕЛЬЕ» по спискам gorets.uz. Точки — OSM/треки/SRTM, у всех задан point; файлы канала только там, где запись доходит до места. Треки из выгрузки форума ГОРЦА — через gorets_map.json. Цифры маршрутов ставит place_metrics_fix.json (односторонние записи удвоены). Двух объектов списков в каталоге уже было под другими именами: «самый большой водопад Таваксая» = tashgul-waterfalls, «Крылья Ангела» = kyzylnavr — им дописаны карточки."
 }

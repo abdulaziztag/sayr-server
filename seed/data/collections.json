@@ -1,69 +1,106 @@
 {
-  "_note": "Коллекции клуба «Проект 21». from_channel — выведено из хэштегов на треках канала (seed/data/channel_parsed.json: тег + ближайшее место, категория обязана совпадать), 2026-09-02. mock — временное дополнение до восьми мест той же категории (первые по порядку региона и имени), на прод НЕ льётся без --with-mock; заменить настоящими списками владельца. Льёт seed/apply_collections.py horizon с 2026-09-04 — не хэштеги, а список владельца: 21 вершина программы «21 Горизонт» (совпадает с планом закрытия Lider Hikers от 30.10.2025). Манкент из подборки убран — в августе 2025 его заменили на Мачетли; Красотка (Испай) попала туда по тегу траверса и к программе не относится. Семь вершин пока черновики — в приложении подборка их не покажет до публикации.",
-  "cascade": {
-    "from_channel": [
-      "chukurak",
-      "kashkasuv",
-      "lashkarak-sharsharasi",
-      "navolisoy",
-      "obi-par",
-      "paltau-waterfall",
-      "suvtushar-waterfall",
-      "tashgul-waterfalls"
-    ],
-    "mock": []
-  },
-  "horizon": {
-    "from_channel": [
-      "amir-temur-chukkisi",
-      "arashan-chukkisi",
-      "babaytag",
-      "bolshoy-chimgan",
-      "chadak",
-      "chimbay",
-      "chulbair",
-      "devoli-surkh",
-      "khoja-akhcha-burun",
-      "khoja-buz-barak",
-      "khoja-gur-gur-ata",
-      "korakush",
-      "kyzylbash",
-      "kyzylnura",
-      "machetli",
-      "okhotnichiy",
-      "padar",
-      "piyozak",
-      "revash",
-      "tavalgan",
-      "zamok"
-    ],
-    "mock": []
-  },
-  "mirage": {
-    "from_channel": [
-      "achikul-lake",
-      "badak-lake",
-      "fozilmon-lake",
-      "ikhnachkul",
-      "tuzkon-kuli",
-      "urungach-lakes",
-      "uzunkul",
-      "zikrkul"
-    ],
-    "mock": []
-  },
-  "underground": {
-    "from_channel": [
-      "hazrat-daud-cave"
-    ],
-    "mock": [
-      "obi-rakhmat",
-      "kungirbuka-gori",
-      "chashma-gori",
-      "ispay-gori",
-      "amir-temur-gori-gissar",
-      "taragay-gori",
-      "ettikiz-amat-gor"
-    ]
-  }
+ "_note": "Коллекции клуба «Проект 21». from_channel — выведено из хэштегов на треках канала (seed/data/channel_parsed.json: тег + ближайшее место, категория обязана совпадать), 2026-09-02. mock — временное дополнение до восьми мест той же категории (первые по порядку региона и имени), на прод НЕ льётся без --with-mock; заменить настоящими списками владельца. Льёт seed/apply_collections.py horizon с 2026-09-04 — не хэштеги, а список владельца: 21 вершина программы «21 Горизонт» (совпадает с планом закрытия Lider Hikers от 30.10.2025). Манкент из подборки убран — в августе 2025 его заменили на Мачетли; Красотка (Испай) попала туда по тегу траверса и к программе не относится. Семь вершин пока черновики — в приложении подборка их не покажет до публикации. С 2026-09-07 cascade, mirage и underground — тоже списки владельца по страницам gorets.uz/21-kaskad, /21-mirazh, /21-podzemele: по 21 объекту; 17 новых мест заведены черновиками в тот же день; «самый большой водопад Таваксая» — это tashgul-waterfalls (точка каталога стоит на нём), «Крылья Ангела» — kyzylnavr (форум: второе имя того же водопада). Мохнатый = akhsarsoy, Термиташ = temirtosh, пещера Пальтау = грот Оби-Рахмат (вход рядом), «Радужный грот Испай» (п. 20) не отождествлён — координат нет, ждём ГОРЦА, потому underground из 20; грот и пещера Сукок = chashma-gori, Ледник Озёрный = lednik-ozyorny.",
+ "cascade": {
+  "from_channel": [
+   "tashgul-waterfalls",
+   "zaamin-waterfall",
+   "ispay-sharsharasi",
+   "obi-par",
+   "arashan-cascade",
+   "kyzylnavr",
+   "kashkasuv",
+   "chukurak",
+   "akhsarsoy",
+   "kaptar-kumush-waterfall",
+   "yazyk-sharsharasi",
+   "zambat-waterfall",
+   "gulkam-tesniny",
+   "navolisoy",
+   "khukiz-burun",
+   "sangardak-waterfall",
+   "gazak",
+   "suvtushar-waterfall",
+   "khoja-siddik",
+   "devsharshara",
+   "lashkarak-sharsharasi"
+  ],
+  "mock": []
+ },
+ "horizon": {
+  "from_channel": [
+   "amir-temur-chukkisi",
+   "arashan-chukkisi",
+   "babaytag",
+   "bolshoy-chimgan",
+   "chadak",
+   "chimbay",
+   "chulbair",
+   "devoli-surkh",
+   "khoja-akhcha-burun",
+   "khoja-buz-barak",
+   "khoja-gur-gur-ata",
+   "korakush",
+   "kyzylbash",
+   "kyzylnura",
+   "machetli",
+   "okhotnichiy",
+   "padar",
+   "piyozak",
+   "revash",
+   "tavalgan",
+   "zamok"
+  ],
+  "mock": []
+ },
+ "mirage": {
+  "from_channel": [
+   "tuzkon-kuli",
+   "ikhnachkul",
+   "altynkul",
+   "kanbeshbulak",
+   "kattakul",
+   "arashan-kuli",
+   "sarykamysh-upper",
+   "achikul-lake",
+   "badak-lake",
+   "tomchi-osmon-kul",
+   "shovurkul",
+   "korakanish",
+   "medvezhye-lake",
+   "temirtosh",
+   "zikrkul",
+   "fozilmon-lake",
+   "kelimchik-lakes",
+   "kichkinkul",
+   "urungach-lakes",
+   "toypan-lakes",
+   "lednik-ozyorny"
+  ],
+  "mock": []
+ },
+ "underground": {
+  "from_channel": [
+   "amir-temur-gori-gissar",
+   "peshagor",
+   "teshik-tash",
+   "kievskaya",
+   "khazrat-bashir",
+   "obi-rakhmat",
+   "boy-bulok",
+   "ettikiz-amat-gor",
+   "suvatar-gori",
+   "kaptarkhona",
+   "chashma-gori",
+   "katta-edzh",
+   "kungirbuka-gori",
+   "chilsim",
+   "khoja-zarin",
+   "zaidman-cave",
+   "maydan-gori",
+   "kamar-farmon",
+   "zarkent-cave",
+   "taragay-gori"
+  ],
+  "mock": []
+ }
 }
