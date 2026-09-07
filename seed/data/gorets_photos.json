@@ -2143,5 +2143,408 @@
     "name": "chulbair-gorets-99b610.jpg"
    }
   ]
- }
+ },
+ "arashan-cascade": {
+  "name": "Арашанский каскад",
+  "photos": [
+   {
+    "path": "site/arashan-cascade-gorets-db52de.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "arashan-cascade-gorets-db52de.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2025/05/photo_2025-04-23_22-46-34.jpg"
+   },
+   {
+    "path": "site/arashan-cascade-gorets-2095ac.jpg",
+    "credit": "Фото: Абдували Абдумаликов, «ГОРЕЦ»",
+    "name": "arashan-cascade-gorets-2095ac.jpg",
+    "source": "https://img4.teletype.in/files/3b/34/3b340fe5-801b-4f22-892f-7e5a82139e52.jpeg"
+   }
+  ]
+ },
+ "kaptar-kumush-waterfall": {
+  "name": "Каптар-Кумыш",
+  "photos": [
+   {
+    "path": "site/kaptar-kumush-waterfall-gorets-7e6eb6.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "kaptar-kumush-waterfall-gorets-7e6eb6.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2025/08/kaptar.jpg"
+   }
+  ]
+ },
+ "zambat-waterfall": {
+  "name": "Замбат",
+  "photos": [
+   {
+    "path": "site/zambat-waterfall-gorets-ef8cb0.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "zambat-waterfall-gorets-ef8cb0.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2026/08/zambat.jpg"
+   }
+  ]
+ },
+ "khukiz-burun": {
+  "name": "Бычий нос",
+  "photos": [
+   {
+    "path": "site/khukiz-burun-gorets-172bf7.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "khukiz-burun-gorets-172bf7.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2025/05/2025-05-12-12.40.30.jpg"
+   },
+   {
+    "path": "site/khukiz-burun-gorets-acab14.jpg",
+    "credit": "Фото: Абдували Абдумаликов, «ГОРЕЦ»",
+    "name": "khukiz-burun-gorets-acab14.jpg",
+    "source": "https://img4.teletype.in/files/7b/81/7b817dbd-83ea-4dbf-9e08-4715679beed3.jpeg"
+   },
+   {
+    "path": "site/khukiz-burun-gorets-efc610.jpg",
+    "credit": "Фото: Абу Бакр Абдунабиев, «ГОРЕЦ»",
+    "name": "khukiz-burun-gorets-efc610.jpg",
+    "source": "https://img2.teletype.in/files/58/bd/58bdc39b-4210-4902-817d-23a8239ad80d.jpeg"
+   }
+  ]
+ },
+ "kanbeshbulak": {
+  "name": "Канбешбулак",
+  "photos": [
+   {
+    "path": "site/kanbeshbulak-gorets-9b9df9.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "kanbeshbulak-gorets-9b9df9.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/07/33c30f207eea05877185e.jpeg"
+   },
+   {
+    "path": "site/kanbeshbulak-gorets-02f12f.jpg",
+    "credit": "Фото: Анвар Нигманов, «ГОРЕЦ»",
+    "name": "kanbeshbulak-gorets-02f12f.jpg",
+    "source": "https://img4.teletype.in/files/f1/3f/f13fac2c-7251-4012-8b03-c55d8a30f615.jpeg"
+   }
+  ]
+ },
+ "sarykamysh-upper": {
+  "name": "Верхнее Сарыкамское",
+  "photos": [
+   {
+    "path": "site/sarykamysh-upper-gorets-266246.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "sarykamysh-upper-gorets-266246.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/08/8cb3911ec0ab634b50dbb.jpeg"
+   },
+   {
+    "path": "site/sarykamysh-upper-gorets-571462.jpg",
+    "credit": "Фото: Шароф Эгамбердиев, «ГОРЕЦ»",
+    "name": "sarykamysh-upper-gorets-571462.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/08/eae5d5e13766161407075.jpeg"
+   },
+   {
+    "path": "site/sarykamysh-upper-gorets-c08bfd.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "sarykamysh-upper-gorets-c08bfd.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/08/verhnee_sarikamskoe_ozero_uzbekistan_proekt_gorec_1.jpg"
+   }
+  ]
+ },
+ "tomchi-osmon-kul": {
+  "name": "Томчи Осмон Куль",
+  "photos": [
+   {
+    "path": "site/tomchi-osmon-kul-gorets-ed9524.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "tomchi-osmon-kul-gorets-ed9524.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/07/c4f5c79957fd5d1bddcae.jpeg"
+   }
+  ]
+ },
+ "medvezhye-lake": {
+  "name": "Медвежье",
+  "photos": [
+   {
+    "path": "site/medvezhye-lake-gorets-ba2aec.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "medvezhye-lake-gorets-ba2aec.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2023/10/2.jpg"
+   },
+   {
+    "path": "site/medvezhye-lake-gorets-84316b.jpg",
+    "credit": "Фото: Анвар Нигманов, «ГОРЕЦ»",
+    "name": "medvezhye-lake-gorets-84316b.jpg",
+    "source": "https://img2.teletype.in/files/52/55/52557904-76fb-4de3-b27b-40f63539f69d.jpeg"
+   }
+  ]
+ },
+ "kelimchik-lakes": {
+  "name": "Озёра Келимчика",
+  "photos": [
+   {
+    "path": "site/kelimchik-lakes-gorets-e48bd1.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "kelimchik-lakes-gorets-e48bd1.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/07/photo_2022-07-03-19.56.32.jpeg"
+   },
+   {
+    "path": "site/kelimchik-lakes-gorets-795bdb.jpg",
+    "credit": "Фото: Анвар Нигманов, «ГОРЕЦ»",
+    "name": "kelimchik-lakes-gorets-795bdb.jpg",
+    "source": "https://img1.teletype.in/files/81/47/81479d3c-0027-4d6f-a2d3-300865cfeec8.jpeg"
+   },
+   {
+    "path": "site/kelimchik-lakes-gorets-b64820.jpg",
+    "credit": "Фото: Шароф Эгамбердиев, «ГОРЕЦ»",
+    "name": "kelimchik-lakes-gorets-b64820.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/08/4fedf81e4349fb17fdef0.jpeg"
+   }
+  ]
+ },
+ "toypan-lakes": {
+  "name": "Озёра Тойпана",
+  "photos": [
+   {
+    "path": "site/toypan-lakes-gorets-908ff4.jpg",
+    "credit": "Фото: Рамиля Янгаева, «ГОРЕЦ»",
+    "name": "toypan-lakes-gorets-908ff4.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/07/60370c8940ce4f475bd71.jpeg"
+   },
+   {
+    "path": "site/toypan-lakes-gorets-065673.jpg",
+    "credit": "Фото: Анвар Нигманов, «ГОРЕЦ»",
+    "name": "toypan-lakes-gorets-065673.jpg",
+    "source": "https://img4.teletype.in/files/b6/cf/b6cf1082-3d7d-47a6-a7a8-a96b08a4247c.jpeg"
+   },
+   {
+    "path": "site/toypan-lakes-gorets-15f2d7.jpg",
+    "credit": "Фото: Шароф Эгамбердиев, «ГОРЕЦ»",
+    "name": "toypan-lakes-gorets-15f2d7.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/08/71db437e4556af710f504.jpeg"
+   }
+  ]
+ },
+ "peshagor": {
+  "name": "Пешагор",
+  "photos": [
+   {
+    "path": "site/peshagor-gorets-c3a8bc.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "peshagor-gorets-c3a8bc.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/10/2.jpeg"
+   },
+   {
+    "path": "site/peshagor-gorets-6ed913.jpg",
+    "credit": "Фото: обзор пещер программы «ГОРЕЦ», gorets.uz",
+    "name": "peshagor-gorets-6ed913.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2023/08/5ac1fe7137c0b2602f1db.jpg"
+   }
+  ]
+ },
+ "kievskaya": {
+  "name": "Киевская",
+  "photos": [
+   {
+    "path": "site/kievskaya-gorets-e52808.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "kievskaya-gorets-e52808.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2023/10/9.jpg"
+   }
+  ]
+ },
+ "boy-bulok": {
+  "name": "Бой-Булок",
+  "photos": [
+   {
+    "path": "site/boy-bulok-gorets-a60e46.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "boy-bulok-gorets-a60e46.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2023/10/10.jpg"
+   },
+   {
+    "path": "site/boy-bulok-gorets-0a781c.jpg",
+    "credit": "Фото: обзор пещер программы «ГОРЕЦ», gorets.uz",
+    "name": "boy-bulok-gorets-0a781c.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2023/08/4d6cce95fc1acfedaeefd.jpg"
+   },
+   {
+    "path": "site/boy-bulok-gorets-de6e01.jpg",
+    "credit": "Фото: обзор пещер программы «ГОРЕЦ», gorets.uz",
+    "name": "boy-bulok-gorets-de6e01.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2023/08/9a18f4c3f0744ab358e4b.jpg"
+   }
+  ]
+ },
+ "katta-edzh": {
+  "name": "Катта Эдж",
+  "photos": [
+   {
+    "path": "site/katta-edzh-gorets-3726fc.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "katta-edzh-gorets-3726fc.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2026/01/2026-01-17-21.13.00.jpg"
+   }
+  ]
+ },
+ "chilsim": {
+  "name": "Чильсим",
+  "photos": [
+   {
+    "path": "site/chilsim-gorets-8df907.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "chilsim-gorets-8df907.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2023/04/photo_2023-04-01-07.47.04.jpeg"
+   },
+   {
+    "path": "site/chilsim-gorets-935466.jpg",
+    "credit": "Фото: обзор пещер программы «ГОРЕЦ», gorets.uz",
+    "name": "chilsim-gorets-935466.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2023/08/d4c12a8e62c17e331ffc5.jpg"
+   },
+   {
+    "path": "site/chilsim-gorets-279a26.jpg",
+    "credit": "Фото: обзор пещер программы «ГОРЕЦ», gorets.uz",
+    "name": "chilsim-gorets-279a26.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2023/08/d5b5962a4a3c1e9672eb9.jpg"
+   }
+  ]
+ },
+ "zaidman-cave": {
+  "name": "Зайдмана",
+  "photos": [
+   {
+    "path": "site/zaidman-cave-gorets-addea0.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "zaidman-cave-gorets-addea0.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/10/fcfdbedf884a88e07e89a.jpg"
+   },
+   {
+    "path": "site/zaidman-cave-gorets-4eb280.jpg",
+    "credit": "Фото: обзор пещер программы «ГОРЕЦ», gorets.uz",
+    "name": "zaidman-cave-gorets-4eb280.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2023/08/c0c3860f57548731008e9.jpg"
+   }
+  ]
+ },
+ "zarkent-cave": {
+  "name": "Заркентская",
+  "photos": [
+   {
+    "path": "site/zarkent-cave-gorets-42e6f6.jpg",
+    "credit": "Фото: обзор пещер программы «ГОРЕЦ», gorets.uz",
+    "name": "zarkent-cave-gorets-42e6f6.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2023/08/d0ca6810d1516c7c6d662.jpg"
+   },
+   {
+    "path": "site/zarkent-cave-gorets-46ac72.jpg",
+    "credit": "Фото: обзор пещер программы «ГОРЕЦ», gorets.uz",
+    "name": "zarkent-cave-gorets-46ac72.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2023/08/5355199d4080fdee14bd9.jpg"
+   },
+   {
+    "path": "site/zarkent-cave-gorets-4874e7.jpg",
+    "credit": "Фото: обзор пещер программы «ГОРЕЦ», gorets.uz",
+    "name": "zarkent-cave-gorets-4874e7.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2023/08/4a07aa479aa97849d228e.jpg"
+   }
+  ]
+ },
+ "chadak": {
+  "name": "Чадак",
+  "photos": [
+   {
+    "path": "site/chadak-gorets-1f300d.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "chadak-gorets-1f300d.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/06/vershina_gory_chadak_3539_m_1.jpg"
+   },
+   {
+    "path": "site/chadak-gorets-ec9b01.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "chadak-gorets-ec9b01.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/06/vershina_gory_chadak_3539_m_2.jpg"
+   }
+  ]
+ },
+ "padar": {
+  "name": "Падар",
+  "photos": [
+   {
+    "path": "site/padar-gorets-54b24a.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "padar-gorets-54b24a.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/06/vershina_gory_padar_3564_m_1.jpg"
+   },
+   {
+    "path": "site/padar-gorets-a894e8.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "padar-gorets-a894e8.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/06/vershina_gory_padar_3564_m_2.jpg"
+   }
+  ]
+ },
+ "revash": {
+  "name": "Реваш",
+  "photos": [
+   {
+    "path": "site/revash-gorets-96bb31.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "revash-gorets-96bb31.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/07/photo_2022-07-26-15.39.25.jpeg"
+   }
+  ]
+ },
+ "zamok": {
+  "name": "Замок",
+  "photos": [
+   {
+    "path": "site/zamok-gorets-72ee7b.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "zamok-gorets-72ee7b.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2023/10/2-1.jpg"
+   },
+   {
+    "path": "site/zamok-gorets-fc3ce5.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "zamok-gorets-fc3ce5.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/06/vershina_gory_zamok_3670_m_uzbekistan_1.jpg"
+   },
+   {
+    "path": "site/zamok-gorets-2e1c6f.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "zamok-gorets-2e1c6f.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/06/vershina_gory_zamok_3670_m_uzbekistan_2.jpg"
+   }
+  ]
+ },
+ "kyzylbash": {
+  "name": "Кызылбаш",
+  "photos": [
+   {
+    "path": "site/kyzylbash-gorets-a39f4c.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "kyzylbash-gorets-a39f4c.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2025/08/kizilbash.jpg"
+   }
+  ]
+ },
+ "chimbay": {
+  "name": "Чимбай",
+  "photos": [
+   {
+    "path": "site/chimbay-gorets-1cdfc6.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "chimbay-gorets-1cdfc6.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/07/photo_2022-07-26-15.40.33.jpeg"
+   }
+  ]
+ },
+ "khoja-akhcha-burun": {
+  "name": "Ходжа Ахча Бурун",
+  "photos": [
+   {
+    "path": "site/khoja-akhcha-burun-gorets-fd0a03.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "khoja-akhcha-burun-gorets-fd0a03.jpg",
+    "source": "https://gorets.uz/wp-content/uploads/2022/07/photo_2022-07-26-15.40.00.jpeg"
+   }
+  ]
+ },
+ "_site_note": "2026-09-07: снимки с gorets.uz — страницы программ «21 …» (по одному кадру на пункт, подписи с номерами), страницы установки табличек, обзор пещер программы и страницы призёров (подпись автора — участник). Файлы в папке --photos под site/, поле source — исходный URL."
 }
