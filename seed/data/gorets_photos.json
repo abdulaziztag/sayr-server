@@ -2598,5 +2598,16 @@
     "source": "teletype.in/@sergey-discovery/UkVfJI5PssO"
    }
   ]
+ },
+ "paltau-cave": {
+  "name": "Пещера Пальтау",
+  "photos": [
+   {
+    "path": "site/paltau-cave-gorets-1.jpg",
+    "credit": "Фото: проект «ГОРЕЦ», gorets.uz",
+    "name": "paltau-cave-gorets-1.jpg",
+    "source": "https://gorets.uz/21-podzemele/"
+   }
+  ]
  }
 }
