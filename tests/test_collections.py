@@ -85,7 +85,6 @@ def test_shipped_map_is_consistent():
     for code in codes:
         real, mock = payload[code]["from_channel"], payload[code]["mock"]
         assert real and not set(real) & set(mock)
-        # Все четыре — полные списки владельца со страниц gorets.uz, мок
-        # больше не нужен. По 21 объекту, кроме «21 Подземелья»: у «Радужного
-        # грота Испай» нет координат, и места под него в каталоге пока нет
-        assert len(real) == (20 if code == "underground" else 21) and mock == [], code
+        # Все четыре — полные списки владельца со страниц gorets.uz:
+        # по 21 объекту в программе, мок больше не нужен
+        assert len(real) == 21 and mock == [], code

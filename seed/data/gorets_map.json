@@ -524,5 +524,15 @@
    "ascent": 2395,
    "day": true
   }
+ ],
+ "raduzhny-grot": [
+  {
+   "file": "raduzhny-grot-gorets-1.gpx",
+   "name": "Испайское кольцо: грот, водопад, урочище Сурхат и Красавец",
+   "credit": "Сергей Денисенко · «ГОРЕЦ»",
+   "km": 26.0,
+   "ascent": 2969,
+   "day": true
+  }
  ]
 }

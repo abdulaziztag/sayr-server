@@ -2575,5 +2575,28 @@
     "source": "teletype.in/@ellichka/njVS35BliTu"
    }
   ]
+ },
+ "raduzhny-grot": {
+  "name": "Радужный грот",
+  "photos": [
+   {
+    "path": "site/raduzhny-grot-gorets-1.jpg",
+    "credit": "Фото: Сергей Денисенко, «ГОРЕЦ»",
+    "name": "raduzhny-grot-gorets-1.jpg",
+    "source": "teletype.in/@sergey-discovery/UkVfJI5PssO"
+   },
+   {
+    "path": "site/raduzhny-grot-gorets-2.jpg",
+    "credit": "Фото: Сергей Денисенко, «ГОРЕЦ»",
+    "name": "raduzhny-grot-gorets-2.jpg",
+    "source": "teletype.in/@sergey-discovery/UkVfJI5PssO"
+   },
+   {
+    "path": "site/raduzhny-grot-gorets-3.jpg",
+    "credit": "Фото: Сергей Денисенко, «ГОРЕЦ»",
+    "name": "raduzhny-grot-gorets-3.jpg",
+    "source": "teletype.in/@sergey-discovery/UkVfJI5PssO"
+   }
+  ]
  }
 }
