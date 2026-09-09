@@ -10,7 +10,7 @@ from starlette.staticfiles import StaticFiles
 from .admin import mount_admin
 from .api import (intents, landing, legal, places, regions, report, share,
                   drive_times, push, app_update)
-from .config import SERVER_DIR, settings
+from .config import GPX_DIR, PHOTOS_DIR, SERVER_DIR, THUMBS_DIR, settings
 from .db import engine
 from .stats import StatsMiddleware, rotate_forever
 
@@ -53,7 +53,13 @@ async def media_cache_headers(request, call_next):
 # пишется по итоговому статусу ответа — включая 304 от StaticFiles
 app.add_middleware(StatsMiddleware)
 
-app.mount("/media", StaticFiles(directory=settings.media_dir), name="media")
+# Три каталога поимённо, а не media_dir целиком. Рядом с ними на том же
+# томе лежит media/reports — файлы, приложенные к заявкам с формы. Это
+# чужие снимки, присланные незнакомыми людьми, и монтирование корня
+# раздавало бы их по прямой ссылке всякому, кто её угадает
+app.mount("/media/photos", StaticFiles(directory=PHOTOS_DIR), name="media-photos")
+app.mount("/media/thumbs", StaticFiles(directory=THUMBS_DIR), name="media-thumbs")
+app.mount("/media/gpx", StaticFiles(directory=GPX_DIR), name="media-gpx")
 # Шрифты и картинки лендинга. Отдельно от media: то — пользовательский
 # контент, это — часть страницы, и живёт вместе с кодом
 app.mount("/static", StaticFiles(directory=SERVER_DIR / "static"), name="static")

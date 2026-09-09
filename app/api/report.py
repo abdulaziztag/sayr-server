@@ -16,16 +16,18 @@
 import time
 from html import escape
 
-from fastapi import APIRouter, Depends, Form, Header, HTTPException, Query, Request
+from fastapi import (APIRouter, Depends, File, Form, Header, HTTPException,
+                     Query, Request, UploadFile)
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..db import get_session
-from ..models import Place, PlaceReport
+from ..models import Place, PlaceReport, PlaceReportFile
 from ..reports import CATEGORY, TOPIC_CODES, TOPICS, normalize_contact
 from ..schemas import Lang, pick
+from ..services import attachments
 
 router = APIRouter(tags=["report"])
 
@@ -52,6 +54,15 @@ RU = {
     "contact_ph": "@username",
     "contact_hint": "Не обязательно, но если понадобится уточнить — писать "
                     "будет некуда. Ник виден только нам.",
+    "files_label": "Фото или файл",
+    "files_button": "Выбрать файлы",
+    "files_hint": "Снимок развилки, скриншот часов, свой трек GPX — что угодно, "
+                  "что объясняет быстрее слов. До четырёх файлов по 8 МБ.",
+    "files_types": "Фото, PDF или GPX",
+    "too_many": "Больше четырёх файлов за раз не принимаем.",
+    "too_big": "«{name}» тяжелее 8 МБ. Пришлите кадр поменьше — читаемости хватит.",
+    "too_heavy": "Вместе файлы тяжелее 16 МБ. Пришлите самое важное.",
+    "bad_type": "«{name}» не открылось. Подойдут фото (JPEG, PNG, HEIC, WebP), PDF и GPX.",
     "submit": "Отправить",
     "sending": "Отправляем…",
     "empty": "Отметьте тему или напишите, что не так.",
@@ -60,8 +71,9 @@ RU = {
                "когда понадобятся подробности.",
     "fail": "Не отправилось. Попробуйте ещё раз или напишите на почту.",
     "too_often": "Слишком много заявок с этого адреса за час. Напишите на почту — разберёмся.",
-    "keep": "Что написали и контакт храним, пока разбираем заявку, "
-            "потом удаляем. Больше они ни для чего не нужны.",
+    "keep": "Что написали, контакт и файлы храним, пока разбираем заявку, "
+            "потом удаляем. Больше они ни для чего не нужны, и никуда, "
+            "кроме нас, не попадают.",
     "back": "На главную",
     "back_href": "/",
 }
@@ -88,6 +100,16 @@ UZ = {
     "contact_hint": "Majburiy emas, lekin aniqlashtirish kerak boʻlsa, "
                     "yozadigan joy qolmaydi. Nikni faqat biz koʻramiz.",
     "contact_ph": "@username",
+    "files_label": "Surat yoki fayl",
+    "files_button": "Fayl tanlash",
+    "files_hint": "Ayrilish surati, soat ekrani, oʻzingiz yozgan GPX trek — "
+                  "soʻzdan tez tushuntiradigan hamma narsa. Toʻrttagacha fayl, "
+                  "har biri 8 MB gacha.",
+    "files_types": "Surat, PDF yoki GPX",
+    "too_many": "Bir vaqtda toʻrttadan koʻp fayl qabul qilinmaydi.",
+    "too_big": "«{name}» 8 MB dan ogʻir. Kichikroq surat yuboring — oʻqishga yetadi.",
+    "too_heavy": "Fayllar birgalikda 16 MB dan ogʻir. Eng kerakligini yuboring.",
+    "bad_type": "«{name}» ochilmadi. Surat (JPEG, PNG, HEIC, WebP), PDF va GPX boʻladi.",
     "submit": "Yuborish",
     "sending": "Yuborilmoqda…",
     "empty": "Mavzuni belgilang yoki nima notoʻgʻriligini yozing.",
@@ -96,8 +118,9 @@ UZ = {
                "tafsilot kerak boʻlganda yozamiz.",
     "fail": "Yuborilmadi. Yana urinib koʻring yoki pochtaga yozing.",
     "too_often": "Bir soatda bu manzildan juda koʻp ariza keldi. Pochtaga yozing — koʻrib chiqamiz.",
-    "keep": "Yozganingiz va kontaktingiz ariza koʻrib chiqilguncha saqlanadi, "
-            "keyin oʻchiriladi. Ular boshqa hech narsaga kerak emas.",
+    "keep": "Yozganingiz, kontaktingiz va fayllaringiz ariza koʻrib chiqilguncha "
+            "saqlanadi, keyin oʻchiriladi. Ular boshqa hech narsaga kerak emas "
+            "va bizdan boshqa hech kimga koʻrinmaydi.",
     "back": "Bosh sahifaga",
     "back_href": "/uz",
 }
@@ -191,6 +214,40 @@ textarea {{ min-height:8.5rem; resize:vertical; line-height:1.5; }}
 .chip input:focus-visible + span {{ outline:2px solid var(--terra); outline-offset:2px; }}
 @media (hover:hover) {{ .chip:hover span {{ border-color:var(--green); }} }}
 
+/* Поле файлов. Настоящий input лежит поверх рамки прозрачным слоем:
+   так остаются и клик по всей площадке, и клавиатура, и «выбрать файл»
+   от озвучки — а рисуем мы своё */
+.drop {{ position:relative; display:flex; align-items:center; gap:.7rem;
+         min-height:56px; padding:.8rem 1rem; border:1px dashed var(--line);
+         border-radius:14px; background:var(--paper); color:var(--ink2);
+         cursor:pointer; transition:border-color var(--t-fast) var(--e-sharp),
+                                    color var(--t-fast) var(--e-sharp); }}
+.drop input {{ position:absolute; inset:0; width:100%; height:100%; opacity:0;
+               cursor:pointer; }}
+.drop svg {{ flex:none; width:20px; height:20px; stroke:currentColor;
+             stroke-width:1.6; fill:none; stroke-linecap:round;
+             stroke-linejoin:round; }}
+.drop b {{ font-weight:600; color:var(--ink); white-space:nowrap; }}
+.drop em {{ font-style:normal; margin-left:auto; font-family:PlexMono,monospace;
+            font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
+            white-space:nowrap; color:var(--ink3); }}
+/* На узком экране приписка про типы ломала кнопку на две строки. Она и
+   не нужна: подсказка под полем называет то же самое словами, а выбор
+   в самом проводнике уже сужен атрибутом accept */
+@media (max-width:30rem) {{ .drop em {{ display:none; }} }}
+.drop input:focus-visible + .face {{ outline:2px solid var(--terra);
+                                     outline-offset:4px; border-radius:10px; }}
+.face {{ display:flex; align-items:center; gap:.7rem; width:100%; }}
+@media (hover:hover) {{ .drop:hover {{ border-color:var(--green); color:var(--ink); }} }}
+
+.picked {{ list-style:none; margin:.7rem 0 0; padding:0; display:grid; gap:.45rem; }}
+.picked li {{ display:flex; align-items:baseline; gap:.6rem; font-size:.9rem;
+              color:var(--ink2); }}
+.picked li span {{ flex:1; overflow:hidden; text-overflow:ellipsis;
+                   white-space:nowrap; }}
+.picked li em {{ font-style:normal; font-family:PlexMono,monospace;
+                 font-size:.76rem; color:var(--ink3); }}
+
 .send {{ display:flex; flex-wrap:wrap; align-items:center; gap:1rem; }}
 button {{ font:inherit; font-weight:600; font-size:1rem; cursor:pointer;
           background:var(--cta); color:var(--on-cta); border:0; min-height:48px;
@@ -226,7 +283,7 @@ footer a {{ color:var(--ink3); display:inline-flex; align-items:center; min-heig
   <h1>{h1}</h1>
   <p class="lede">{lede}</p>
 
-  <form id="report" method="post" action="/report">
+  <form id="report" method="post" action="/report" enctype="multipart/form-data">
     <div class="field">
       <label class="lab" for="place">{place_label}</label>
       <input type="text" id="place" name="place" list="places" maxlength="200"
@@ -245,6 +302,22 @@ footer a {{ color:var(--ink3); display:inline-flex; align-items:center; min-heig
       <label class="lab" for="comment">{comment_label}</label>
       <textarea id="comment" name="comment" maxlength="2000"
                 placeholder="{comment_ph}"></textarea>
+    </div>
+
+    <div class="field">
+      <span class="lab">{files_label}</span>
+      <label class="drop">
+        <input type="file" id="files" name="files" multiple
+               accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,application/pdf,.gpx">
+        <span class="face">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path
+            d="M20 11.5 12.4 19a4.6 4.6 0 0 1-6.5-6.5l7.6-7.6a3.1 3.1 0 0 1 4.4 4.4l-7.6 7.6a1.5 1.5 0 0 1-2.2-2.2l7-7"/></svg>
+          <b>{files_button}</b>
+          <em>{files_types}</em>
+        </span>
+      </label>
+      <ul class="picked" data-picked hidden></ul>
+      <p class="hint">{files_hint}</p>
     </div>
 
     <div class="field">
@@ -276,14 +349,68 @@ footer a {{ color:var(--ink3); display:inline-flex; align-items:center; min-heig
   var btn = f.querySelector('button');
   var err = f.querySelector('[data-err]');
   var label = btn.textContent;
+  var files = f.elements.files;
+  var list = f.querySelector('[data-picked]');
+  var MAX_FILES = {max_files}, MAX_BYTES = {max_bytes}, MAX_TOTAL = {max_total};
+
+  function size(n) {{
+    return n < 1048576 ? Math.max(1, Math.round(n / 1024)) + ' KB'
+                       : (n / 1048576).toFixed(1) + ' MB';
+  }}
+
+  // Выбранное показываем сразу: браузер сам пишет только «файлов: 3»,
+  // и по этой строке не видно, тот ли кадр приложен
+  function show() {{
+    list.textContent = '';
+    var chosen = files.files;
+    for (var i = 0; i < chosen.length; i++) {{
+      var li = document.createElement('li');
+      var name = document.createElement('span');
+      var bytes = document.createElement('em');
+      name.textContent = chosen[i].name;
+      bytes.textContent = size(chosen[i].size);
+      li.appendChild(name);
+      li.appendChild(bytes);
+      list.appendChild(li);
+    }}
+    list.hidden = !chosen.length;
+  }}
+
+  // Пределы те же, что на сервере. Здесь — чтобы человек узнал о лишнем
+  // файле до того, как восемь мегабайт уедут по мобильному интернету
+  function heavy() {{
+    var chosen = files.files, total = 0;
+    if (chosen.length > MAX_FILES) return {too_many!r};
+    for (var i = 0; i < chosen.length; i++) {{
+      if (chosen[i].size > MAX_BYTES) {{
+        return {too_big!r}.replace('{{name}}', chosen[i].name);
+      }}
+      total += chosen[i].size;
+    }}
+    return total > MAX_TOTAL ? {too_heavy!r} : '';
+  }}
+
+  if (files && list) files.addEventListener('change', function () {{
+    show();
+    err.hidden = true;
+  }});
+
   f.addEventListener('submit', function (e) {{
     var comment = f.comment.value.trim();
     var picked = f.querySelectorAll('.chip input:checked').length;
+    var attached = files && files.files ? files.files.length : 0;
     // Пустую заявку разворачиваем здесь же: сервер ответит то же самое,
     // но человеку не придётся ждать ответа, чтобы это узнать
-    if (!comment && !picked) {{
+    if (!comment && !picked && !attached) {{
       e.preventDefault();
       err.textContent = {empty!r};
+      err.hidden = false;
+      return;
+    }}
+    var tooMuch = attached ? heavy() : '';
+    if (tooMuch) {{
+      e.preventDefault();
+      err.textContent = tooMuch;
       err.hidden = false;
       return;
     }}
@@ -424,6 +551,9 @@ def _render(t: dict, rows: list[tuple[Place, str]], place_value: str) -> str:
     return _PAGE.format(
         options=options,
         chips=chips,
+        max_files=attachments.MAX_FILES,
+        max_bytes=attachments.MAX_BYTES,
+        max_total=attachments.MAX_TOTAL,
         place_value=escape(place_value, quote=True),
         other_href=t["other"][0],
         other_label=t["other"][1],
@@ -458,6 +588,69 @@ async def _form(lang: Lang, place: str, session: AsyncSession) -> str:
     return _render(_T[lang], rows, prefill)
 
 
+async def _attached(files: list[UploadFile], t: dict) -> list[PlaceReportFile]:
+    """Присланные файлы — на диск, строками к заявке.
+
+    Отказ объясняем словами и с именем файла: человек приложил четыре
+    кадра, и «слишком тяжело» без имени не говорит, какой из них убрать.
+
+    Общий вес считаем по ходу чтения, а не после: смысл предела в том,
+    чтобы не держать в памяти чужие сто мегабайт. Настоящая же оборона
+    от такого стоит раньше — `client_max_body_size` у nginx, который
+    обрывает толстое тело, не доводя его до приложения.
+    """
+    if len(files) > attachments.MAX_FILES:
+        raise HTTPException(422, t["too_many"])
+
+    rows: list[PlaceReportFile] = []
+    written: list[str] = []
+    total = 0
+    try:
+        for upload in files:
+            named = upload.filename or ""
+            # Толстый файл разворачиваем, не читая: сюда он уже доехал,
+            # но незачем ещё и поднимать его в память целиком
+            if upload.size is not None and upload.size > attachments.MAX_BYTES:
+                raise attachments.Rejected("too_big", named)
+            data = await upload.read()
+            total += len(data)
+            if total > attachments.MAX_TOTAL:
+                raise HTTPException(422, t["too_heavy"])
+            name, mime, size, fresh = attachments.save(data, named)
+            if fresh:
+                written.append(name)
+            rows.append(
+                PlaceReportFile(
+                    name=name,
+                    original_name=named[:200],
+                    content_type=mime,
+                    size=size,
+                )
+            )
+    except attachments.Rejected as no:
+        _forget(written)
+        # «Пустой файл» отдельного разговора не стоит: браузер присылает
+        # такое, когда файл читается не до конца
+        reason = "bad_type" if no.reason == "empty" else no.reason
+        raise HTTPException(422, t[reason].format(name=no.filename)) from no
+    except HTTPException:
+        # Отказ на третьем файле не повод оставлять на диске два первых:
+        # заявки не будет, а байты остались бы навсегда
+        _forget(written)
+        raise
+    return rows
+
+
+def _forget(names: list[str]) -> None:
+    """Убирает то, что успели записать до отказа.
+
+    Только записанное этой отправкой (`fresh`): имя файла — хеш его
+    содержимого, и тот же кадр мог прийти раньше в чужой заявке.
+    """
+    for name in names:
+        attachments.drop(name)
+
+
 @router.post("/report")
 async def report_submit(
     request: Request,
@@ -467,6 +660,7 @@ async def report_submit(
     contact: str = Form(""),
     lang: str = Form("ru"),
     website: str = Form(""),
+    files: list[UploadFile] = File([]),
     accept: str = Header("", alias="Accept"),
     session: AsyncSession = Depends(get_session),
 ):
@@ -474,14 +668,18 @@ async def report_submit(
 
     Пойманный приманкой бот получает ровно тот же ответ, что и человек:
     узнав, что его раскусили, он бы просто перестал заполнять ловушку.
-    А вот отказы по делу — пустая заявка и упёршийся предел — объясняются
-    словами: их читает человек, и молчание он примет за отправку.
+    А вот отказы по делу — пустая заявка, упёршийся предел, непринятый
+    файл — объясняются словами: их читает человек, и молчание он примет
+    за отправку.
     """
     lang = lang if lang in ("ru", "uz") else "ru"
     t = _T[lang]
     comment = comment.strip()[:2000]
     picked = [code for code in topics if code in TOPIC_CODES]
-    if not comment and not picked:
+    # Пустое поле формы браузер всё равно присылает — частью без имени
+    sent = [f for f in files if f is not None and f.filename]
+    # Один снимок развилки — уже заявка: он объясняет больше, чем абзац
+    if not comment and not picked and not sent:
         raise HTTPException(422, t["empty"])
 
     # Приманка отвечает боту как всем: разный ответ подсказал бы ему,
@@ -502,6 +700,7 @@ async def report_submit(
                 comment=comment,
                 contact=normalize_contact(contact)[:120] or None,
                 lang=lang,
+                files=await _attached(sent, t),
             )
         )
         await session.commit()

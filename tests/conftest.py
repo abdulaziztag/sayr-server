@@ -130,3 +130,25 @@ async def client():
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as c:
             yield c
+
+
+@pytest.fixture
+async def admin_client():
+    """Клиент с открытой сессией админки.
+
+    Адрес https, а не http: cookie сессии помечена Secure
+    (`SAYR_ADMIN_COOKIE_SECURE` по умолчанию включён), и по http клиент
+    её не сохранит — все запросы после входа уходили бы неавторизованными.
+    """
+    from app.config import settings
+
+    async with LifespanManager(app):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="https://test") as c:
+            entered = await c.post(
+                "/admin/login",
+                data={"username": settings.admin_username,
+                      "password": settings.admin_password},
+            )
+            assert entered.status_code in (200, 302, 303), entered.text[:200]
+            yield c

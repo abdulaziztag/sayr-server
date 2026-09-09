@@ -609,6 +609,20 @@ class PlaceReport(Base):
     status: Mapped[str] = mapped_column(
         String(16), default=ReportStatus.new.value, server_default="new", index=True
     )
+    #: Владелец прочитал заявку и подтвердил: так и есть, чиню.
+    #:
+    #: Отдельно от статуса, потому что это разные вопросы. Статус говорит,
+    #: где заявка в работе; флаг — верю ли я ей вообще. Пишет их один
+    #: человек, но в разное время: сначала он просматривает очередь и
+    #: отмечает то, что похоже на правду, и только потом садится править.
+    #: Отмеченное и есть список работ — по нему заявки и выбираются
+    #: (`/admin/place-report/list?verified=1`).
+    #:
+    #: Неотмеченная заявка — не «плохая», а всего лишь непросмотренная:
+    #: разобранное и не подтвердившееся уходит в статус rejected
+    verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
     #: Пометки владельца: что проверил, что поправил
     admin_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -616,7 +630,52 @@ class PlaceReport(Base):
     )
 
     place: Mapped["Place | None"] = relationship(lazy="selectin")
+    files: Mapped[list["PlaceReportFile"]] = relationship(
+        back_populates="report",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        order_by="PlaceReportFile.id",
+    )
 
     def __str__(self) -> str:
         where = self.place.name if self.place else (self.place_note or "без места")
         return f"{where} · {self.created_at:%d.%m.%Y}" if self.created_at else where
+
+
+class PlaceReportFile(Base):
+    """Файл, приложенный к заявке: снимок развилки, скриншот, трек.
+
+    Отдельной таблицей, а не колонкой-массивом: к одной заявке прикладывают
+    и три кадра подряд, и у каждого своё имя, свой размер и свой тип, а
+    массив строк заставил бы хранить это склейкой и разбирать её обратно.
+
+    На диске лежит то, что прислали, байт в байт. Пережимать нечего:
+    приложенное — это доказательство, и скриншот, потерявший читаемость
+    после второго JPEG, доказывать перестаёт. Имя файла — от содержимого,
+    поэтому один и тот же кадр, присланный дважды, копий не плодит.
+
+    Каталог (`config.REPORTS_DIR`) наружу не отдаётся. Удаление заявки
+    уносит и строку (CASCADE), и файл с диска — так обещано на /privacy.
+    """
+
+    __tablename__ = "place_report_files"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    report_id: Mapped[int] = mapped_column(
+        ForeignKey("place_reports.id", ondelete="CASCADE"), index=True
+    )
+    #: Имя на диске: хеш содержимого плюс расширение по настоящему типу
+    name: Mapped[str] = mapped_column(String(80))
+    #: Как файл назывался у человека — чтобы отдать его обратно с тем же
+    #: именем и чтобы в админке было видно «трек.gpx», а не хеш
+    original_name: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    content_type: Mapped[str] = mapped_column(String(60), default="", server_default="")
+    size: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    report: Mapped[PlaceReport] = relationship(back_populates="files")
+
+    def __str__(self) -> str:
+        return self.original_name or self.name
