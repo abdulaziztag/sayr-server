@@ -642,6 +642,47 @@ class PlaceReport(Base):
         return f"{where} · {self.created_at:%d.%m.%Y}" if self.created_at else where
 
 
+class SeasonVote(Base):
+    """Ответ игрока в игре «когда сюда идти»: дуга по кругу года.
+
+    Сезон места собирается толпой: на сайте человеку показывают карточку
+    и круг из двенадцати месяцев, он ставит два маркера — и это строка
+    здесь. К месту сезон применяется не отсюда, а после одобрения
+    проверяющим (спека 2026-09-11-season-game-design.md).
+
+    Месяцы пусты — это «не знаю». Такая строка не идёт ни в подсчёт, ни
+    в порог: три «не знаю» — не знание о месте. Но она остаётся, и место
+    этому устройству больше не выпадает — иначе колода ходила бы по кругу.
+
+    `voter` — случайный номер из cookie, не человек: имени, почты и входа
+    в игре нет вовсе. Пара «место + номер» уникальна, поэтому второй ответ
+    с того же телефона перезаписывает первый, а не добавляется.
+    """
+
+    __tablename__ = "season_votes"
+    __table_args__ = (UniqueConstraint("place_id", "voter", name="uq_season_vote"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    place_id: Mapped[int] = mapped_column(
+        ForeignKey("places.id", ondelete="CASCADE"), index=True
+    )
+    #: Концы дуги, 1–12; пусто — «не знаю»
+    from_month: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    to_month: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Номер устройства из cookie
+    voter: Mapped[str] = mapped_column(String(40), index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    place: Mapped["Place"] = relationship()
+
+    def __str__(self) -> str:
+        if self.from_month is None:
+            return "не знаю"
+        return f"{self.from_month}–{self.to_month}"
+
+
 class PlaceReportFile(Base):
     """Файл, приложенный к заявке: снимок развилки, скриншот, трек.
 
