@@ -17,7 +17,7 @@ from html import escape
 from ..reports import CATEGORY
 from ..seasons import (DEFAULT_ARC, FROM_RU, FULL_RU_UP, FULL_UZ_UP, LIMIT_CODES,
                        LIMITS, MONTHS_UZ, SHORT_RU, SHORT_UZ, arc_text, centre_lines,
-                       median)
+                       median, touches_winter)
 
 # Круг: 300 × 300, середина 150. Дорожка радиусом 104 и толщиной 24,
 # подписи месяцев — внутри, по 76; слова сезонов — снаружи, по 138.
@@ -277,7 +277,7 @@ function dial(root, onChange, start) {
   var pips = { from: svg.querySelector('[data-pip=from]'),
                to: svg.querySelector('[data-pip=to]') };
   var labels = svg.querySelectorAll('[data-mon]');
-  var MID = 150, R = 104, CAP = 12 / 104 * 180 / Math.PI, dragging = null;
+  var MID = 150, R = 104, CAP = 12 / 104 * 180 / Math.PI, drag = null;
   var state = start ? { from: start[0], to: start[1] } : { from: 0, to: 0 };
 
   // Угол — по часовой от верха. Январь наверху, месяцы идут против часовой
@@ -287,8 +287,6 @@ function dial(root, onChange, start) {
     return (MID + R * Math.sin(r)).toFixed(1) + ' ' + (MID - R * Math.cos(r)).toFixed(1);
   }
   function span(a, b) { return ((b - a + 12) % 12) + 1; }
-  // Расстояние между месяцами по кругу: от декабря до января — один шаг
-  function gap(a, b) { var d = Math.abs(a - b) % 12; return Math.min(d, 12 - d); }
   function inside(m) { return ((m - state.from + 12) % 12) < span(state.from, state.to); }
 
   function draw() {
@@ -319,19 +317,59 @@ function dial(root, onChange, start) {
     });
   }
 
-  // Где палец: месяц под ним и насколько далеко он от середины круга
+  // Где палец — в месяцах: 1 — середина января, 2 — февраля, дальше
+  // против часовой; дробная часть — насколько он ушёл от середины месяца.
+  // Угол нужен, чтобы копить поворот, расстояние — чтобы не слушать середину
   function locate(event) {
     var box = svg.getBoundingClientRect();
     var size = Math.min(box.width, box.height);
     var x = (event.clientX - box.left - box.width / 2) / size * 300;
     var y = (event.clientY - box.top - box.height / 2) / size * 300;
-    var cw = Math.atan2(x, -y) * 180 / Math.PI;
-    var ccw = ((-cw) % 360 + 360) % 360;
-    return { month: Math.floor((ccw + 15) / 30) % 12 + 1,
-             dist: Math.sqrt(x * x + y * y) };
+    var ccw = ((-Math.atan2(x, -y) * 180 / Math.PI) % 360 + 360) % 360;
+    return { at: ccw / 30 + 1, deg: ccw, dist: Math.sqrt(x * x + y * y) };
+  }
+  // Разница по кругу, приведённая к промежутку от −half до half
+  function turn(d, half) { return ((d + half) % (2 * half) + 2 * half) % (2 * half) - half; }
+  // Ручка стоит у края месяца, на CAP внутрь дуги, — в тех же единицах
+  function knob(key) {
+    return key === 'from' ? state.from - 0.5 + CAP / 30 : state.to + 0.5 - CAP / 30;
+  }
+  function nearest(at) {
+    return Math.abs(turn(knob('from') - at, 6)) < Math.abs(turn(knob('to') - at, 6))
+      ? 'from' : 'to';
   }
 
   function notify() { if (onChange) onChange(state.from, state.to); }
+
+  // Край ходит только в своих пределах: дуга не короче месяца и не длиннее
+  // года. Дойдя до соседней, ручка упирается в неё, а не перескакивает —
+  // раньше «один месяц» от лёгкого поворота пальца оборачивался «круглым
+  // годом». Поэтому палец не ставит месяц напрямую, а копит поворот:
+  // u — его положение без обрыва на декабре, и край идёт следом, пока
+  // не упрётся
+  function take(key, at, deg, tap) {
+    var lo = key === 'to' ? state.from : state.to - 11;
+    var u;
+    if (tap) {
+      // Касание переносит край в месяц под пальцем — годится любой,
+      // нужна лишь развёртка, где этот месяц попадает в пределы
+      u = at + 12 * Math.ceil((lo - Math.floor(at + 0.5)) / 12);
+    } else {
+      // Палец уже у ручки: развёртка, где он к ней ближе всего
+      var now = lo + ((state[key] - lo) % 12 + 12) % 12;
+      u = at + 12 * Math.round((now - at) / 12);
+    }
+    drag = { key: key, lo: lo, u: u, deg: deg };
+    follow();
+  }
+  function follow() {
+    var v = Math.min(drag.lo + 11, Math.max(drag.lo, Math.floor(drag.u + 0.5)));
+    var m = ((v - 1) % 12 + 12) % 12 + 1;
+    if (m === state[drag.key]) return;
+    state[drag.key] = m;
+    draw();
+    notify();
+  }
 
   svg.addEventListener('pointerdown', function (e) {
     var hit = locate(e);
@@ -341,27 +379,55 @@ function dial(root, onChange, start) {
     e.preventDefault();
     svg.setPointerCapture(e.pointerId);
     if (!state.from) {
-      state.from = state.to = hit.month;
-      dragging = 'to';
-    } else {
-      // Двигается БЛИЖАЙШИЙ край дуги, а не начинается выбор заново:
-      // промах мимо ручки на телефоне — норма, и сбрасывать из-за него
-      // уже поставленную дугу значило бы наказывать за неточный палец
-      dragging = gap(hit.month, state.from) < gap(hit.month, state.to) ? 'from' : 'to';
-      state[dragging] = hit.month;
+      state.from = state.to = Math.floor(hit.at + 0.5) % 12 || 12;
+      draw();
+      notify();
     }
-    draw();
-    notify();
+    var n = span(state.from, state.to);
+    var mid = knob('from') + turn(knob('to') - knob('from'), 6) / 2;
+    if ((n === 1 || n === 12) && Math.abs(turn(hit.at - mid, 6)) < 1) {
+      // Ручки слились — в один месяц или в круглый год. Какую тянут,
+      // скажет первое движение пальца, а не лишний градус касания
+      drag = { wait: true, at: hit.at, deg: hit.deg, moved: 0 };
+      return;
+    }
+    // Двигается БЛИЖАЙШИЙ край дуги, а не начинается выбор заново:
+    // промах мимо ручки на телефоне — норма, и сбрасывать из-за него
+    // уже поставленную дугу значило бы наказывать за неточный палец
+    take(nearest(hit.at), hit.at, hit.deg, true);
   });
   svg.addEventListener('pointermove', function (e) {
-    if (!dragging) return;
-    var month = locate(e).month;
-    if (month === state[dragging]) return;
-    state[dragging] = month;
-    draw();
-    notify();
+    if (!drag) return;
+    var hit = locate(e);
+    if (hit.dist < 40) return;
+    var step = turn(hit.deg - drag.deg, 180);
+    drag.deg = hit.deg;
+    if (drag.wait) {
+      drag.moved += step;
+      if (Math.abs(drag.moved) < 3) return;
+      // Месяц растёт туда, куда ведут палец: вперёд — конец, назад —
+      // начало. Круглый год может только укоротиться — с того края,
+      // от которого палец уходит
+      var one = span(state.from, state.to) === 1;
+      take(one === (drag.moved > 0) ? 'to' : 'from', hit.at, hit.deg, false);
+      return;
+    }
+    if (Math.abs(step) > 90) {
+      // Палец пересёк середину круга — такой поворот не копим, а берём
+      // ручку заново там, где палец теперь
+      take(drag.key, hit.at, hit.deg, false);
+      return;
+    }
+    drag.u += step / 30;
+    follow();
   });
-  function release() { dragging = null; }
+  function release(e) {
+    // Коснулись слитых ручек и отпустили, не сдвинув: обычное касание
+    if (drag && drag.wait && e.type === 'pointerup') {
+      take(nearest(drag.at), drag.at, drag.deg, true);
+    }
+    drag = null;
+  }
   svg.addEventListener('pointerup', release);
   svg.addEventListener('pointercancel', release);
 
@@ -387,7 +453,10 @@ function centreText(svg, from, to, t) {
 #: Необязательное в игре: зимняя шкала под кругом и шторка с остальным.
 #: Главный вопрос остаётся одним касанием — всё здесь можно не трогать
 GAME_CSS = """
-.winter { flex:none; border:0; margin:0; padding:0; min-width:0; }
+/* Место под шкалу держится всегда, даже пока она не нужна: иначе круг
+   прыгал бы, когда она появляется, — и прямо под пальцем, посреди движения */
+.winter { flex:none; border:0; margin:0; padding:0; min-width:0; transition:opacity .18s; }
+.js .winter.off { opacity:0; visibility:hidden; transition:opacity .18s, visibility 0s .18s; }
 .winter legend, .lab { display:block; padding:0; margin:0 0 .35rem; font-weight:600;
                        font-size:.86rem; color:var(--ink); }
 .winter legend em, .lab em { font-style:normal; font-weight:400; font-size:.74rem;
@@ -544,6 +613,7 @@ _PAGE = """<!doctype html>
 <link rel="icon" href="/static/img/icon.png">
 <link rel="preload" href="/static/fonts/IBMPlexSans-Regular.woff2" as="font"
       type="font/woff2" crossorigin>
+<script>document.documentElement.classList.add('js')</script>
 <style>
 %%css%%
 </style>
@@ -579,7 +649,7 @@ _PAGE = """<!doctype html>
       </div>
     </div>
 
-    <fieldset class="winter" data-winter>
+    <fieldset class="winter%%winter_off%%" data-winter>
       <legend>%%snow_label%% <em>%%snow_hint%%</em></legend>
       <div class="scale">%%snow_scale%%</div>
     </fieldset>
@@ -615,7 +685,6 @@ _PAGE = """<!doctype html>
   </div>
 </div>
 <script>
-document.documentElement.classList.add('js');
 %%circle_js%%
 (function () {
   var form = document.getElementById('game');
@@ -644,7 +713,7 @@ document.documentElement.classList.add('js');
   }
   function showWinter(from, to) {
     var on = touchesWinter(from, to);
-    winter.hidden = !on;
+    winter.classList.toggle('off', !on);
     if (!on) winter.querySelectorAll('input').forEach(function (r) {
       r.checked = false; r.dataset.was = '';
     });
@@ -815,6 +884,7 @@ def render_page(lang: str, deck: list[dict], left: int, mine: int) -> str:
                         centre=centre_lines(*DEFAULT_ARC, lang=t["lang"])),
         css=SHARED_CSS + CIRCLE_CSS + GAME_CSS,
         circle_js=CIRCLE_JS,
+        winter_off="" if touches_winter(*DEFAULT_ARC) else " off",
         snow_label=escape(t["snow"]),
         snow_hint=escape(t["snow_hint"]),
         snow_scale=_scale("snow_load"),

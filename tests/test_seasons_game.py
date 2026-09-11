@@ -380,6 +380,7 @@ async def test_игра_спрашивает_необязательное(client
     assert "Тропёжка зимой" in page
     assert 'name="snow_load"' in page and 'name="danger"' in page
     assert "Погранзона" in page and 'name="note"' in page
+    assert 'class="winter off"' in page, "место под шкалу держится, пока она не видна"
     uz = (await client.get("/uz/seasons")).text
     assert "Chegara hududi" in uz
 
