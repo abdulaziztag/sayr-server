@@ -13,7 +13,7 @@ import math
 from html import escape
 
 from ..reports import CATEGORY
-from ..seasons import FROM_RU, MONTHS_UZ, SHORT_RU, SHORT_UZ
+from ..seasons import DEFAULT_ARC, FROM_RU, MONTHS_UZ, SHORT_RU, SHORT_UZ, arc_text
 
 # Круг: 280 × 280, середина 140, кольцо радиусом 96, подписи по 122.
 # Месяцы идут по часовой стрелке, граница декабря и января — наверху,
@@ -43,9 +43,12 @@ def arc_path(start: int, end: int, radius: int = _RING) -> str:
     span = (end - start) % 12 + 1
     ax, ay = edge((start - 1) * 30)
     if span == 12:
-        # Замкнутое кольцо одной дугой не нарисовать: концы совпадают
-        return (f"M{ax:.1f} {ay:.1f}A{radius} {radius} 0 1 1 {_MID - radius} {_MID}"
-                f"A{radius} {radius} 0 1 1 {ax:.1f} {ay:.1f}")
+        # Замкнутое кольцо одной дугой не нарисовать: концы совпадают.
+        # Две ровные половины через противоположную точку — у полуокружности
+        # радиус однозначен, и полоса не вылезает за кольцо
+        ox, oy = 2 * _MID - ax, 2 * _MID - ay
+        return (f"M{ax:.1f} {ay:.1f}A{radius} {radius} 0 0 1 {ox:.1f} {oy:.1f}"
+                f"A{radius} {radius} 0 0 1 {ax:.1f} {ay:.1f}")
     bx, by = edge(end * 30)
     big = 1 if span > 6 else 0
     return f"M{ax:.1f} {ay:.1f}A{radius} {radius} 0 {big} 1 {bx:.1f} {by:.1f}"
@@ -112,9 +115,9 @@ def circle_svg(
         f'<path class="band" data-band d="{arc_path(*band) if ready else ""}"/>'
         f'{"".join(ticks)}{"".join(labels)}{words}'
         f'<circle class="grip" data-grip="from" cx="{grip_from[0]:.1f}" '
-        f'cy="{grip_from[1]:.1f}" r="13"{off}/>'
+        f'cy="{grip_from[1]:.1f}" r="15"{off}/>'
         f'<circle class="grip" data-grip="to" cx="{grip_to[0]:.1f}" '
-        f'cy="{grip_to[1]:.1f}" r="13"{off}/>'
+        f'cy="{grip_to[1]:.1f}" r="15"{off}/>'
         f"</svg>"
     )
 
@@ -216,6 +219,12 @@ button:active { transform:scale(.985); }
 CIRCLE_CSS = """
 .dial { width: min(72vw, 300px); height: auto; touch-action: none;
         display: block; margin: 0 auto; }
+/* Круг тянут пальцем: без этого подписи месяцев выделяются синим,
+   а долгое нажатие открывает меню «скопировать». Инпутов здесь нет,
+   поэтому запрет безопасен — на странице входа он не стоит */
+.dialbox, .dial, .card, .send, .arc, .votes {
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 .dial .ring { fill: none; stroke: var(--line); stroke-width: 26; }
 .dial .band { fill: none; stroke: var(--green); stroke-width: 26;
               stroke-linecap: butt; }
@@ -237,17 +246,17 @@ CIRCLE_CSS = """
 #: берёт тот же скрипт: разъехавшись, они начали бы считать месяцы
 #: по-разному, а сверять их было бы нечем
 CIRCLE_JS = """
-function dial(root, onChange) {
+function dial(root, onChange, start) {
   var svg = root.querySelector('[data-dial]');
   var band = svg.querySelector('[data-band]');
   var grips = { from: svg.querySelector('[data-grip=from]'),
                 to: svg.querySelector('[data-grip=to]') };
-  var MID = 140, R = 96, state = { from: 0, to: 0 }, dragging = null;
+  var MID = 140, R = 96, dragging = null;
+  var state = start ? { from: start[0], to: start[1] } : { from: 0, to: 0 };
 
-  function pos(month, radius) {
-    var a = (month - 0.5) * 30 - 90;
-    var r = a * Math.PI / 180;
-    return [MID + radius * Math.cos(r), MID + radius * Math.sin(r)];
+  function pos(month) {
+    var r = ((month - 0.5) * 30 - 90) * Math.PI / 180;
+    return [MID + R * Math.cos(r), MID + R * Math.sin(r)];
   }
   // Дуга закрашивается целыми месяцами: от начала первого до конца
   // последнего, иначе край полосы врезался бы в середину подписи
@@ -255,20 +264,35 @@ function dial(root, onChange) {
     var r = (deg - 90) * Math.PI / 180;
     return [MID + R * Math.cos(r), MID + R * Math.sin(r)];
   }
-  function months(from, to) { return ((to - from + 12) % 12) + 1; }
+  function span(from, to) { return ((to - from + 12) % 12) + 1; }
+  // Расстояние между месяцами по кругу: от декабря до января — один шаг
+  function gap(a, b) { var d = Math.abs(a - b) % 12; return Math.min(d, 12 - d); }
 
   function draw() {
-    if (!state.from) { band.setAttribute('d', ''); return; }
-    var n = months(state.from, state.to);
-    var a = edge((state.from - 1) * 30), b = edge(state.to * 30);
-    // Целый год одной дугой не рисуется — концы совпадают; рисуем двумя
-    var d = n === 12
-      ? 'M' + a[0] + ' ' + a[1] + 'A' + R + ' ' + R + ' 0 1 1 ' + (MID - R) + ' ' + MID +
-        'A' + R + ' ' + R + ' 0 1 1 ' + a[0] + ' ' + a[1]
-      : 'M' + a[0] + ' ' + a[1] + 'A' + R + ' ' + R + ' 0 ' + (n > 6 ? 1 : 0) + ' 1 ' + b[0] + ' ' + b[1];
+    if (!state.from) {
+      band.setAttribute('d', '');
+      grips.from.setAttribute('hidden', '');
+      grips.to.setAttribute('hidden', '');
+      return;
+    }
+    var n = span(state.from, state.to);
+    var a = edge((state.from - 1) * 30), d;
+    if (n === 12) {
+      // Целый год одной дугой не нарисовать: концы совпадают. Две ровные
+      // половины через противоположную точку — у полуокружности радиус
+      // однозначен. Прежний вариант строил вторую дугу не на той окружности,
+      // и полоса вылезала за кольцо
+      var o = [2 * MID - a[0], 2 * MID - a[1]];
+      d = 'M' + a[0] + ' ' + a[1] + 'A' + R + ' ' + R + ' 0 0 1 ' + o[0] + ' ' + o[1] +
+          'A' + R + ' ' + R + ' 0 0 1 ' + a[0] + ' ' + a[1];
+    } else {
+      var b = edge(state.to * 30);
+      d = 'M' + a[0] + ' ' + a[1] + 'A' + R + ' ' + R + ' 0 ' + (n > 6 ? 1 : 0) +
+          ' 1 ' + b[0] + ' ' + b[1];
+    }
     band.setAttribute('d', d);
     ['from', 'to'].forEach(function (key) {
-      var p = pos(state[key], R);
+      var p = pos(state[key]);
       grips[key].setAttribute('cx', p[0]);
       grips[key].setAttribute('cy', p[1]);
       // Через атрибут, а не через .hidden: у SVG-элементов такого
@@ -277,43 +301,52 @@ function dial(root, onChange) {
     });
   }
 
-  function monthAt(event) {
+  // Где палец: месяц под ним и насколько далеко он от середины круга
+  function locate(event) {
     var box = svg.getBoundingClientRect();
     var x = (event.clientX - box.left) / box.width * 280 - MID;
     var y = (event.clientY - box.top) / box.height * 280 - MID;
     var deg = (Math.atan2(y, x) * 180 / Math.PI + 90 + 360) % 360;
-    return Math.floor(deg / 30) + 1;
+    return { month: Math.floor(deg / 30) + 1, dist: Math.sqrt(x * x + y * y) };
   }
 
-  function apply(month) {
-    if (dragging === 'from') state.from = month;
-    else if (dragging === 'to') state.to = month;
-    else { state.from = month; state.to = month; dragging = 'to'; }
-    draw();
-    if (onChange) onChange(state.from, state.to);
-  }
+  function notify() { if (onChange) onChange(state.from, state.to); }
 
   svg.addEventListener('pointerdown', function (e) {
+    var hit = locate(e);
+    // Середина круга ничего не значит: угол там скачет от малейшего
+    // движения, и касание у надписи «ЛЕТО» дёргало бы край дуги
+    if (hit.dist < 50) return;
+    e.preventDefault();
     svg.setPointerCapture(e.pointerId);
-    var month = monthAt(e);
-    // Попали в маркер — тянем его; мимо — начинаем новый выбор
-    dragging = state.from && month === state.from ? 'from'
-             : state.from && month === state.to ? 'to' : null;
-    apply(month);
+    if (!state.from) {
+      state.from = state.to = hit.month;
+      dragging = 'to';
+    } else {
+      // Двигается БЛИЖАЙШИЙ конец дуги, а не начинается выбор заново:
+      // промах мимо маркера на телефоне — норма, и сбрасывать из-за него
+      // уже поставленную дугу значило бы наказывать за неточный палец
+      dragging = gap(hit.month, state.from) < gap(hit.month, state.to) ? 'from' : 'to';
+      state[dragging] = hit.month;
+    }
+    draw();
+    notify();
   });
   svg.addEventListener('pointermove', function (e) {
-    if (e.buttons) apply(monthAt(e));
+    if (!dragging) return;
+    var month = locate(e).month;
+    if (month === state[dragging]) return;
+    state[dragging] = month;
+    draw();
+    notify();
   });
-  svg.addEventListener('pointerup', function () { dragging = null; });
+  function release() { dragging = null; }
+  svg.addEventListener('pointerup', release);
+  svg.addEventListener('pointercancel', release);
 
+  draw();
   return {
     set: function (from, to) { state.from = from; state.to = to; draw(); },
-    clear: function () {
-      state = { from: 0, to: 0 };
-      band.setAttribute('d', '');
-      grips.from.setAttribute('hidden', '');
-      grips.to.setAttribute('hidden', '');
-    },
     get: function () { return [state.from, state.to]; }
   };
 }
@@ -411,12 +444,12 @@ _PAGE = """<!doctype html>
 
     <div class="dialbox">
       %%dial%%
-      <p class="arc empty" data-arc>%%pick%%</p>
+      <p class="arc" data-arc>%%arc%%</p>
     </div>
 
     <div class="plain">
-      <label>%%from_label%% <select name="from_month">%%options%%</select></label>
-      <label>%%to_label%% <select name="to_month">%%options%%</select></label>
+      <label>%%from_label%% <select name="from_month">%%options_from%%</select></label>
+      <label>%%to_label%% <select name="to_month">%%options_to%%</select></label>
     </div>
 
     <input type="hidden" name="slug" data-slug value="%%slug%%">
@@ -446,13 +479,11 @@ document.documentElement.classList.add('js');
   var arc = document.querySelector('[data-arc]');
   var go = document.querySelector('[data-go]');
   var picks = form.querySelectorAll('select');
-  go.disabled = true;
+  var DEF = %%default%%;
   var knob = dial(document.querySelector('.dialbox'), function (from, to) {
     picks[0].value = from; picks[1].value = to;
     arc.textContent = words(from, to);
-    arc.classList.remove('empty');
-    go.disabled = false;
-  });
+  }, DEF);
 
   function words(from, to) {
     if (from === to) return full[from - 1];
@@ -467,10 +498,11 @@ document.documentElement.classList.add('js');
     var img = form.querySelector('[data-thumb]');
     if (card.thumb) { img.src = card.thumb; img.hidden = false; }
     else { img.removeAttribute('src'); img.hidden = true; }
-    knob.clear();
-    arc.textContent = %%pick_js%%;
-    arc.classList.add('empty');
-    go.disabled = true;
+    // Каждая карточка начинает с одной и той же дуги: иначе ответ на
+    // прошлое место подсказывал бы ответ на следующее
+    knob.set(DEF[0], DEF[1]);
+    picks[0].value = DEF[0]; picks[1].value = DEF[1];
+    arc.textContent = words(DEF[0], DEF[1]);
     counter.textContent = %%left_word%% + ' ' + left;
   }
 
@@ -511,7 +543,6 @@ document.documentElement.classList.add('js');
     if (!window.fetch) return;
     e.preventDefault();
     var skipped = e.submitter && e.submitter.name === 'skip';
-    if (!skipped && go.disabled) return;
     var body = new FormData();
     body.append('slug', form.querySelector('[data-slug]').value);
     body.append('lang', lang);
@@ -547,10 +578,12 @@ def render_page(lang: str, deck: list[dict], left: int, mine: int) -> str:
     t = _T[lang if lang in _T else "ru"]
     cards = [dict(card, meta=_meta(card)) for card in deck]
     first = cards[0] if cards else None
-    options = "".join(
-        f'<option value="{index + 1}">{escape(name)}</option>'
-        for index, name in enumerate(t["full"])
-    )
+    def options(selected: int) -> str:
+        return "".join(
+            f'<option value="{index + 1}"'
+            f'{" selected" if index + 1 == selected else ""}>{escape(name)}</option>'
+            for index, name in enumerate(t["full"])
+        )
     done_head = t["thanks_head"] if mine else t["empty_head"]
     done_body = (t["thanks_body"] if mine else t["empty_body"]).replace(
         "{n}", str(mine)
@@ -566,13 +599,15 @@ def render_page(lang: str, deck: list[dict], left: int, mine: int) -> str:
         back=escape(t["back"]),
         back_href=t["back_href"],
         left_text=f"{t['left']} {left}" if first else "",
-        pick=escape(t["pick"]),
         skip=escape(t["skip"]),
         send=escape(t["send"]),
         from_label=escape(t["from"]),
         to_label=escape(t["to"]),
-        options=options,
-        dial=circle_svg(t["months"], t["seasons"]),
+        options_from=options(DEFAULT_ARC[0]),
+        options_to=options(DEFAULT_ARC[1]),
+        dial=circle_svg(t["months"], t["seasons"], band=DEFAULT_ARC),
+        arc=escape(arc_text(*DEFAULT_ARC, lang=t["lang"])),
+        default=json.dumps(list(DEFAULT_ARC)),
         shared_css=SHARED_CSS + CIRCLE_CSS,
         circle_js=CIRCLE_JS,
         slug=escape(first["slug"], quote=True) if first else "",
@@ -588,7 +623,6 @@ def render_page(lang: str, deck: list[dict], left: int, mine: int) -> str:
         mine=mine,
         full=json.dumps(list(t["full"]), ensure_ascii=False),
         gen=json.dumps(list(t["gen"]), ensure_ascii=False),
-        pick_js=json.dumps(t["pick"], ensure_ascii=False),
         left_word=json.dumps(t["left"], ensure_ascii=False),
         thanks_head=json.dumps(t["thanks_head"], ensure_ascii=False),
         thanks_body=json.dumps(t["thanks_body"], ensure_ascii=False),

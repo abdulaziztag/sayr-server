@@ -230,3 +230,31 @@ async def test_очистка_возвращает_место_в_игру(client
         assert left == []
     finally:
         await _clean()
+
+
+async def test_карточка_стартует_с_апреля_по_сентябрь(client):
+    """Решение владельца: готовую дугу проще подвинуть, чем начать с нуля."""
+    try:
+        page = await client.get("/seasons")
+        assert '<option value="4" selected>' in page.text, "без скрипта — апрель"
+        assert '<option value="9" selected>' in page.text, "…по сентябрь"
+        assert "с апреля по сентябрь" in page.text
+    finally:
+        await _clean()
+
+
+def test_круглый_год_рисуется_по_кольцу():
+    """Замкнутая дуга — две полуокружности через противоположную точку.
+
+    Прежняя версия вела вторую половину не по той окружности, и полоса
+    вылезала за кольцо — на телефоне это выглядело как сломанный круг.
+    """
+    from app.api.seasons_page import arc_path
+
+    path = arc_path(1, 12)
+    # Январь начинается сверху (140, 44); противоположная точка — низ (140, 236)
+    assert path.startswith("M140.0 44.0"), path
+    assert "0 0 1 140.0 236.0" in path, "первая половина обязана кончаться внизу"
+    assert path.endswith("0 0 1 140.0 44.0"), "и вернуться туда же, откуда начала"
+    # Любое начало даёт тот же приём — хоть с мая по апрель
+    assert arc_path(5, 4).count("A96 96 0 0 1") == 2
