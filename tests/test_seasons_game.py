@@ -232,29 +232,39 @@ async def test_очистка_возвращает_место_в_игру(client
         await _clean()
 
 
-async def test_карточка_стартует_с_апреля_по_сентябрь(client):
+async def test_карточка_стартует_с_апреля_по_август(client):
     """Решение владельца: готовую дугу проще подвинуть, чем начать с нуля."""
     try:
         page = await client.get("/seasons")
         assert '<option value="4" selected>' in page.text, "без скрипта — апрель"
-        assert '<option value="9" selected>' in page.text, "…по сентябрь"
-        assert "с апреля по сентябрь" in page.text
+        assert '<option value="8" selected>' in page.text, "…по август"
+        assert "АПР — АВГ" in page.text, "итог в середине круга"
+        assert "5 месяцев" in page.text
     finally:
         await _clean()
 
 
 def test_круглый_год_рисуется_по_кольцу():
-    """Замкнутая дуга — две полуокружности через противоположную точку.
+    """Замкнутая дуга — две полуокружности через верх и низ.
 
     Прежняя версия вела вторую половину не по той окружности, и полоса
     вылезала за кольцо — на телефоне это выглядело как сломанный круг.
     """
-    from app.api.seasons_page import arc_path
+    from app.api.seasons_page import band_path
 
-    path = arc_path(1, 12)
-    # Январь начинается сверху (140, 44); противоположная точка — низ (140, 236)
-    assert path.startswith("M140.0 44.0"), path
-    assert "0 0 1 140.0 236.0" in path, "первая половина обязана кончаться внизу"
-    assert path.endswith("0 0 1 140.0 44.0"), "и вернуться туда же, откуда начала"
-    # Любое начало даёт тот же приём — хоть с мая по апрель
-    assert arc_path(5, 4).count("A96 96 0 0 1") == 2
+    path = band_path(5, 4)
+    # Дорожка радиусом 104 в круге 300 × 300: верх (150, 46), низ (150, 254)
+    assert path.startswith("M150.0 46.0"), path
+    assert "A104 104 0 0 0 150.0 254.0" in path, "первая половина кончается внизу"
+    assert path.endswith("A104 104 0 0 0 150.0 46.0"), "и возвращается наверх"
+
+
+def test_январь_наверху_весна_слева():
+    """Год — линия слева направо, загнутая концами вверх: весна слева."""
+    from app.api.seasons_page import _centre, _pt
+
+    x, y = _pt(_centre(1))
+    assert (round(x), round(y)) == (150, 46), "январь ровно наверху"
+    assert _pt(_centre(4))[0] < 100, "апрель слева"
+    assert _pt(_centre(10))[0] > 200, "октябрь справа"
+    assert _pt(_centre(7))[1] > 200, "июль внизу"

@@ -9,19 +9,34 @@
 (как в `report.py`) — значит однажды пропустить одну и искать её полдня.
 """
 
+import json
 import math
 from html import escape
 
 from ..reports import CATEGORY
-from ..seasons import DEFAULT_ARC, FROM_RU, MONTHS_UZ, SHORT_RU, SHORT_UZ, arc_text
+from ..seasons import (DEFAULT_ARC, FROM_RU, FULL_RU_UP, FULL_UZ_UP, MONTHS_UZ,
+                       SHORT_RU, SHORT_UZ, arc_text, centre_lines)
 
-# Круг: 280 × 280, середина 140, кольцо радиусом 96, подписи по 122.
-# Месяцы идут по часовой стрелке, граница декабря и января — наверху,
-# июня и июля — внизу; значит весна справа, осень слева, как их и держат
-# в голове (спека 2026-09-11-season-game-design.md)
-_MID = 140
-_RING = 96
-_LABEL = 122
+# Круг: 300 × 300, середина 150. Дорожка радиусом 104 и толщиной 24,
+# подписи месяцев — внутри, по 76; слова сезонов — снаружи, по 138.
+#
+# Январь стоит ровно наверху, и месяцы идут ПРОТИВ часовой: весна по левой
+# стороне, лето внизу, осень справа. Так год и лежит в голове — линия
+# слева направо, загнутая концами вверх. По часовой, как на часах, весна
+# оказывалась справа, и круг читался задом наперёд.
+#
+# Январь — серединой, а не границей декабря: тогда каждый сезон стоит
+# ровно на своей стороне (зима сверху, апрель слева, июль внизу, октябрь
+# справа), а не съезжает на полмесяца вбок
+_MID = 150
+_RING = 104
+_WIDTH = 24
+_LABELS = 76
+_SEASONS = 138
+#: Половина толщины дуги в градусах. На столько концы дуги отступают
+#: внутрь от границы месяца: закруглённый край ложится ровно на границу,
+#: а не залезает в соседний месяц
+_CAP = math.degrees((_WIDTH / 2) / _RING)
 
 
 def _fill(template: str, **values: object) -> str:
@@ -30,28 +45,60 @@ def _fill(template: str, **values: object) -> str:
     return template
 
 
-def arc_path(start: int, end: int, radius: int = _RING) -> str:
-    """Дуга по кольцу от начала первого месяца до конца последнего.
+def _pt(deg: float, radius: float = _RING) -> tuple[float, float]:
+    """Точка на круге. Угол — по часовой от верха."""
+    rad = math.radians(deg)
+    return _MID + radius * math.sin(rad), _MID - radius * math.cos(rad)
 
-    Та же математика, что в скрипте круга: месяцы закрашиваются целиком,
-    иначе край полосы врезался бы в середину подписи.
+
+def _xy(point: tuple[float, float]) -> str:
+    return f"{point[0]:.1f} {point[1]:.1f}"
+
+
+def _centre(month: int) -> float:
+    """Середина месяца: январь наверху, дальше против часовой."""
+    return -(month - 1) * 30
+
+
+def _span(start: int, end: int) -> int:
+    return (end - start) % 12 + 1
+
+
+def _inside(month: int, start: int, end: int) -> bool:
+    return (month - start) % 12 < _span(start, end)
+
+
+def arc_ends(start: int, end: int) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Концы толстой дуги — туда же встают ручки."""
+    return _pt(_centre(start) + 15 - _CAP), _pt(_centre(end) - 15 + _CAP)
+
+
+def band_path(start: int, end: int) -> str:
+    """Толстая дуга выбора: скруглённые края ровно по границам месяцев.
+
+    Круглый год — две полуокружности через противоположную точку: одной
+    дугой замкнутое кольцо не нарисовать, концы совпадают, а у ровной
+    половины радиус однозначен и полоса не вылезает за кольцо.
     """
-    def edge(deg: float) -> tuple[float, float]:
-        rad = math.radians(deg - 90)
-        return _MID + radius * math.cos(rad), _MID + radius * math.sin(rad)
+    r = _RING
+    if _span(start, end) == 12:
+        top, bottom = _pt(0), _pt(180)
+        return f"M{_xy(top)}A{r} {r} 0 0 0 {_xy(bottom)}A{r} {r} 0 0 0 {_xy(top)}"
+    a, z = arc_ends(start, end)
+    big = 1 if _span(start, end) * 30 - 2 * _CAP > 180 else 0
+    return f"M{_xy(a)}A{r} {r} 0 {big} 0 {_xy(z)}"
 
-    span = (end - start) % 12 + 1
-    ax, ay = edge((start - 1) * 30)
-    if span == 12:
-        # Замкнутое кольцо одной дугой не нарисовать: концы совпадают.
-        # Две ровные половины через противоположную точку — у полуокружности
-        # радиус однозначен, и полоса не вылезает за кольцо
-        ox, oy = 2 * _MID - ax, 2 * _MID - ay
-        return (f"M{ax:.1f} {ay:.1f}A{radius} {radius} 0 0 1 {ox:.1f} {oy:.1f}"
-                f"A{radius} {radius} 0 0 1 {ax:.1f} {ay:.1f}")
-    bx, by = edge(end * 30)
-    big = 1 if span > 6 else 0
-    return f"M{ax:.1f} {ay:.1f}A{radius} {radius} 0 {big} 1 {bx:.1f} {by:.1f}"
+
+def ring_path(start: int, end: int, radius: float) -> str:
+    """Тонкая дуга чужого ответа — строго по границам месяцев."""
+    if _span(start, end) == 12:
+        top, bottom = _pt(0, radius), _pt(180, radius)
+        return (f"M{_xy(top)}A{radius} {radius} 0 0 0 {_xy(bottom)}"
+                f"A{radius} {radius} 0 0 0 {_xy(top)}")
+    a = _pt(_centre(start) + 15, radius)
+    z = _pt(_centre(end) - 15, radius)
+    big = 1 if _span(start, end) * 30 > 180 else 0
+    return f"M{_xy(a)}A{radius} {radius} 0 {big} 0 {_xy(z)}"
 
 
 def circle_svg(
@@ -59,73 +106,54 @@ def circle_svg(
     seasons: tuple[str, ...],
     others: tuple[tuple[int, int], ...] = (),
     band: tuple[int, int] | None = None,
+    centre: tuple[str, str] = ("", ""),
 ) -> str:
-    """Круг года: деления, подписи месяцев и слова сезонов внутри.
+    """Круг года целиком, уже в нужном состоянии — скрипт его только двигает.
 
-    Дуга и маркеры дорисовываются скриптом: до первого ответа их нет вовсе.
-    Пустой круг — честное «ещё не выбрано», а поставленная по умолчанию
-    дуга подсказывала бы ответ, которого человек не давал.
+    Слова сезонов стоят снаружи, но только там, где нет чужих ответов:
+    у проверяющего по внешнему краю идут тонкие кольца ответов, и слова
+    легли бы на них.
     """
-    ticks = []
-    for index in range(12):
-        # Деление стоит на ГРАНИЦЕ месяцев, а не в середине: полоса дуги
-        # обрывается ровно по нему
-        angle = math.radians(index * 30 - 90)
-        inner, outer = _RING - 13, _RING + 13
-        x1, y1 = _MID + inner * math.cos(angle), _MID + inner * math.sin(angle)
-        x2, y2 = _MID + outer * math.cos(angle), _MID + outer * math.sin(angle)
-        ticks.append(
-            f'<line class="tick" x1="{x1:.1f}" y1="{y1:.1f}" '
-            f'x2="{x2:.1f}" y2="{y2:.1f}"/>'
-        )
-    labels = []
+    parts = ['<svg class="dial" viewBox="0 0 300 300" data-dial>']
+    parts.append(f'<circle class="track" cx="{_MID}" cy="{_MID}" r="{_RING}"/>')
+    # Ответы игроков — тонкими кольцами снаружи, каждое на своём радиусе:
+    # наложенные друг на друга, они читались бы как одно
+    for index, (start, end) in enumerate(others):
+        radius = 124 + index % 4 * 5
+        parts.append(f'<path class="other" d="{ring_path(start, end, radius)}"/>')
+    parts.append(f'<path class="band" data-band d="{band_path(*band) if band else ""}"/>')
     for index, name in enumerate(short_months):
-        angle = math.radians(index * 30 + 15 - 90)
-        x = _MID + _LABEL * math.cos(angle)
-        y = _MID + _LABEL * math.sin(angle)
-        labels.append(
-            f'<text class="mon" x="{x:.1f}" y="{y:.1f}">{escape(name)}</text>'
+        month = index + 1
+        x, y = _pt(_centre(month), _LABELS)
+        lit = " on" if band and _inside(month, *band) else ""
+        parts.append(
+            f'<text class="mon{lit}" data-mon="{month}" x="{x:.1f}" y="{y:.1f}">'
+            f"{escape(name)}</text>"
         )
-    # Слова сезонов — бледно и внутри кольца: они не подписи к делениям,
-    # а подсказка, куда вообще смотреть
-    corners = [
-        (seasons[3], _MID, _MID - 58),   # зима сверху
-        (seasons[0], _MID + 58, _MID),   # весна справа
-        (seasons[1], _MID, _MID + 62),   # лето снизу
-        (seasons[2], _MID - 58, _MID),   # осень слева
-    ]
-    words = "".join(
-        f'<text class="sea" x="{x}" y="{y}">{escape(word)}</text>'
-        for word, x, y in corners
-    )
-    # Чужие ответы — бледными дугами по тому же кольцу, каждая на своём
-    # радиусе: наложенные друг на друга, они читались бы как одна
-    spread = "".join(
-        f'<path class="other" d="{arc_path(start, end, _RING - 9 + index % 3 * 9)}"/>'
-        for index, (start, end) in enumerate(others)
-    )
-    ready = band is not None
-    grip_from = pos_on_ring(band[0]) if ready else (0.0, 0.0)
-    grip_to = pos_on_ring(band[1]) if ready else (0.0, 0.0)
-    off = "" if ready else " hidden"
-    return (
-        f'<svg class="dial" viewBox="0 0 280 280" data-dial>'
-        f'<circle class="ring" cx="{_MID}" cy="{_MID}" r="{_RING}"/>'
-        f"{spread}"
-        f'<path class="band" data-band d="{arc_path(*band) if ready else ""}"/>'
-        f'{"".join(ticks)}{"".join(labels)}{words}'
-        f'<circle class="grip" data-grip="from" cx="{grip_from[0]:.1f}" '
-        f'cy="{grip_from[1]:.1f}" r="15"{off}/>'
-        f'<circle class="grip" data-grip="to" cx="{grip_to[0]:.1f}" '
-        f'cy="{grip_to[1]:.1f}" r="15"{off}/>'
-        f"</svg>"
-    )
-
-
-def pos_on_ring(month: int) -> tuple[float, float]:
-    """Середина месяца на кольце — туда встаёт маркер."""
-    rad = math.radians((month - 0.5) * 30 - 90)
-    return _MID + _RING * math.cos(rad), _MID + _RING * math.sin(rad)
+    if not others:
+        spring, summer, autumn, winter = seasons
+        for word, deg, turn in ((winter, 0, 0), (spring, -90, -90),
+                                (summer, 180, 0), (autumn, 90, 90)):
+            x, y = _pt(deg, _SEASONS)
+            parts.append(
+                f'<text class="sea" x="{x:.1f}" y="{y:.1f}" '
+                f'transform="rotate({turn} {x:.1f} {y:.1f})">{escape(word)}</text>'
+            )
+    parts.append(f'<text class="c1" data-c1 x="{_MID}" y="{_MID - 8}">{escape(centre[0])}</text>')
+    parts.append(f'<text class="c2" data-c2 x="{_MID}" y="{_MID + 15}">{escape(centre[1])}</text>')
+    ends = arc_ends(*band) if band else ((0.0, 0.0), (0.0, 0.0))
+    off = "" if band else " hidden"
+    for key, point in zip(("from", "to"), ends):
+        parts.append(
+            f'<circle class="knob" data-knob="{key}" cx="{point[0]:.1f}" '
+            f'cy="{point[1]:.1f}" r="13"{off}/>'
+        )
+        parts.append(
+            f'<circle class="pip" data-pip="{key}" cx="{point[0]:.1f}" '
+            f'cy="{point[1]:.1f}" r="4"{off}/>'
+        )
+    parts.append("</svg>")
+    return "".join(parts)
 
 
 #: Общий стиль обеих страниц: токены, шапка, карточка, кнопки.
@@ -140,57 +168,68 @@ SHARED_CSS = """
 :root {
   --paper:#F3EEE3; --surface:#FBF8F1; --ink:#161A17; --ink2:#57524A; --ink3:#726A5C;
   --green:#2F5D3F; --terra:#C75B12; --cta:#B04E0C; --on-cta:#FFFFFF;
-  --edge:#161A1714; --line:#161A1726; --shadow:#161A1722;
+  --edge:#161A1714; --line:#161A171F; --shadow:#161A1722;
 }
 @media (prefers-color-scheme:dark) {
   :root { --paper:#141714; --surface:#1E221E; --ink:#EDEAE1; --ink2:#C6C1B5;
           --ink3:#8E897D; --green:#7FBF95; --terra:#E8843C; --cta:#E8843C;
-          --on-cta:#1F0F06; --edge:#EDEAE11F; --line:#EDEAE133; --shadow:#00000055; }
+          --on-cta:#1F0F06; --edge:#EDEAE11F; --line:#EDEAE11F; --shadow:#00000055; }
 }
 *,*::before,*::after { box-sizing:border-box; }
 body { margin:0; background:var(--paper); color:var(--ink);
-       font-family:Plex,ui-sans-serif,system-ui,sans-serif; line-height:1.5;
+       font-family:Plex,ui-sans-serif,system-ui,sans-serif; line-height:1.45;
        -webkit-font-smoothing:antialiased; }
 a { color:var(--green); }
 :focus-visible { outline:2px solid var(--terra); outline-offset:3px; border-radius:6px; }
-.wrap { max-width:32rem; margin:0 auto; min-height:100dvh;
-        padding:clamp(.9rem,3vw,1.4rem) clamp(1rem,5vw,1.6rem) 1.4rem;
-        display:flex; flex-direction:column; }
 
-header { display:flex; align-items:center; gap:.7rem; margin-bottom:.9rem; }
-header img { width:32px; height:32px; border-radius:9px; }
-.name { font-weight:600; font-size:1.05rem; color:var(--ink); text-decoration:none; }
+/* Один экран, без прокрутки: карточка, круг и кнопки делят высоту,
+   и круг забирает всё, что осталось. Ниже 560 точек — прокрутка:
+   иначе круг сжался бы до марки */
+.wrap { max-width:30rem; margin:0 auto; height:100dvh; min-height:560px;
+        padding:max(.75rem, env(safe-area-inset-top)) 1rem
+                max(.85rem, env(safe-area-inset-bottom));
+        display:flex; flex-direction:column; gap:.75rem; }
+header { display:flex; align-items:center; gap:.6rem; flex:none; }
+header img { width:28px; height:28px; border-radius:8px; }
+.name { font-weight:600; font-size:1rem; color:var(--ink); text-decoration:none; }
 .left { margin-left:auto; margin-right:.3rem; font-family:PlexMono,monospace;
-        font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
+        font-size:.7rem; letter-spacing:.08em; text-transform:uppercase;
         color:var(--ink3); white-space:nowrap; }
-.langlink { font-family:PlexMono,monospace; font-size:.7rem; letter-spacing:.08em;
+.langlink { font-family:PlexMono,monospace; font-size:.68rem; letter-spacing:.08em;
             text-transform:uppercase; color:var(--ink3); text-decoration:none; }
+.intro { flex:none; }
+h1 { font-size:1.35rem; line-height:1.15; margin:0; letter-spacing:-.02em; }
+.lede { color:var(--ink2); margin:.25rem 0 0; font-size:.86rem; }
 
-h1 { font-size:clamp(1.3rem,4.5vw,1.7rem); line-height:1.15; margin:0 0 .35rem;
-     letter-spacing:-.02em; }
-.lede { color:var(--ink2); margin:0 0 1rem; font-size:.92rem; max-width:34ch; }
+.play { flex:1; min-height:0; display:flex; flex-direction:column; gap:.75rem; }
 
-/* Карточка — та же форма, что у полароидов каталога: срезанный угол
-   и подпись под кадром */
-.card { background:var(--surface); border:1px solid var(--edge);
-        border-radius:18px 18px 18px 34px; overflow:hidden;
-        box-shadow:0 14px 34px -22px var(--shadow);
+/* Карточка — полоса фото с подписью поверх: место узнаётся по кадру,
+   а высоты уходит вдвое меньше, чем у кадра с подписью под ним */
+.card { position:relative; flex:none; height:clamp(104px, 18dvh, 168px);
+        border-radius:18px 18px 18px 34px; overflow:hidden; background:var(--line);
         transition:transform .2s cubic-bezier(.4,0,.2,1), opacity .2s; }
-.card.gone { transform:translateY(-14px) scale(.97); opacity:0; }
-.shot { aspect-ratio:16/10; background:var(--line); }
-.shot img { width:100%; height:100%; object-fit:cover; display:block; }
-.card h2 { font-size:1.15rem; margin:.7rem .9rem .15rem; letter-spacing:-.015em; }
-.meta { margin:0 .9rem .8rem; font-family:PlexMono,monospace; font-size:.72rem;
-        letter-spacing:.06em; text-transform:uppercase; color:var(--ink3); }
+.card.gone { transform:translateX(-18px) rotate(-1.5deg); opacity:0; }
+.card img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+            display:block; }
+.cap { position:absolute; left:0; right:0; bottom:0; padding:1.9rem .9rem .65rem;
+       background:linear-gradient(to bottom, rgba(12,14,12,0), rgba(12,14,12,.78)); }
+.cap h2 { margin:0; font-size:1.08rem; line-height:1.2; letter-spacing:-.01em;
+          color:#fff; }
+.cap .meta { margin:.15rem 0 0; font-family:PlexMono,monospace; font-size:.66rem;
+             letter-spacing:.06em; text-transform:uppercase; color:rgba(255,255,255,.84); }
+.card.bare img { display:none; }
+.card.bare .cap { background:none; }
+.card.bare h2 { color:var(--ink); }
+.card.bare .meta { color:var(--ink3); }
 
-.dialbox { display:none; margin:1rem 0 .2rem; }
+.stage { flex:1; min-height:0; display:flex; flex-direction:column;
+         align-items:center; justify-content:center; }
+.dialbox { display:none; height:100%; max-height:390px; aspect-ratio:1/1;
+           max-width:100%; }
 .js .dialbox { display:block; }
-.arc { text-align:center; font-weight:600; font-size:1rem; margin:.5rem 0 0;
-       min-height:1.5rem; }
-.arc.empty { color:var(--ink3); font-weight:400; font-size:.9rem; }
 
 /* Запасной путь: без скрипта круг не нужен, месяцы выбираются списками */
-.plain { display:flex; gap:.6rem; align-items:center; margin:1rem 0 .2rem;
+.plain { display:flex; gap:.6rem; align-items:center; justify-content:center;
          flex-wrap:wrap; }
 .js .plain { display:none; }
 .plain label { display:flex; align-items:center; gap:.4rem; color:var(--ink2);
@@ -199,7 +238,7 @@ select { font:inherit; font-size:.95rem; padding:.5rem .6rem; min-height:44px;
          border:1px solid var(--line); border-radius:11px;
          background:var(--paper); color:var(--ink); }
 
-.send { display:flex; gap:.7rem; margin-top:auto; padding-top:1.1rem; }
+.send { display:flex; gap:.7rem; flex:none; }
 button { font:inherit; font-weight:600; font-size:1rem; cursor:pointer;
          min-height:52px; flex:1; border-radius:14px 14px 14px 26px;
          border:0; transition:filter .16s, transform .16s; }
@@ -213,118 +252,124 @@ button:active { transform:scale(.985); }
         border-radius:18px 18px 18px 34px; padding:1.4rem; margin-top:1rem; }
 .done h2 { margin:0 0 .4rem; font-size:1.2rem; }
 .done p { margin:0 0 .8rem; color:var(--ink2); }
+@media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
 """
 
-#: Стили круга — общие для игры и для страницы проверяющего
+#: Стили круга. Образ — будильник «Режим сна» на айфоне: тонкая бледная
+#: дорожка, поверх — толстая дуга со скруглёнными краями, на концах белые
+#: ручки. Форма знакомая: людям не надо объяснять, что край тянется
 CIRCLE_CSS = """
-.dial { width: min(72vw, 300px); height: auto; touch-action: none;
-        display: block; margin: 0 auto; }
+.dial { width:100%; height:100%; display:block; overflow:visible; touch-action:none; }
 /* Круг тянут пальцем: без этого подписи месяцев выделяются синим,
    а долгое нажатие открывает меню «скопировать». Инпутов здесь нет,
    поэтому запрет безопасен — на странице входа он не стоит */
-.dialbox, .dial, .card, .send, .arc, .votes {
-  -webkit-user-select: none; user-select: none;
-  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
-.dial .ring { fill: none; stroke: var(--line); stroke-width: 26; }
-.dial .band { fill: none; stroke: var(--green); stroke-width: 26;
-              stroke-linecap: butt; }
-.dial .tick { stroke: var(--paper); stroke-width: 1.5; }
-.dial .mon { font-family: PlexMono, monospace; font-size: 10px; fill: var(--ink3);
-             text-anchor: middle; dominant-baseline: middle; }
-.dial .sea { font-family: PlexMono, monospace; font-size: 9px; fill: var(--ink3);
-             letter-spacing: .12em; text-anchor: middle; dominant-baseline: middle;
-             opacity: .65; }
-.dial .grip { fill: var(--surface); stroke: var(--green); stroke-width: 3;
-              cursor: grab; }
-/* Атрибут hidden у SVG браузеры игнорируют: без этого правила маркеры
-   торчат в левом верхнем углу, где их и оставили нулевые координаты */
-.dial .grip[hidden] { display: none; }
-.dial .other { fill: none; stroke: var(--green); stroke-width: 26; opacity: .18; }
+.dialbox, .dial, .card, .send, .votes {
+  -webkit-user-select:none; user-select:none;
+  -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
+.dial .track { fill:none; stroke:var(--line); stroke-width:24; }
+.dial .band { fill:none; stroke:var(--green); stroke-width:24; stroke-linecap:round; }
+.dial .mon { font-family:PlexMono,monospace; font-weight:500; font-size:10.5px;
+             fill:var(--ink3); text-anchor:middle; dominant-baseline:central;
+             letter-spacing:.04em; transition:fill .15s; }
+.dial .mon.on { fill:var(--ink); }
+.dial .sea { font-family:PlexMono,monospace; font-weight:500; font-size:8.5px;
+             fill:var(--ink3); letter-spacing:.24em; text-anchor:middle;
+             dominant-baseline:central; opacity:.75; }
+.dial .c1 { font-family:Plex,sans-serif; font-weight:600; font-size:19px;
+            fill:var(--ink); text-anchor:middle; dominant-baseline:central; }
+.dial .c2 { font-family:PlexMono,monospace; font-weight:500; font-size:9.5px;
+            fill:var(--ink3); text-anchor:middle; dominant-baseline:central;
+            letter-spacing:.1em; }
+.dial .knob { fill:#fff; filter:drop-shadow(0 1px 2.5px rgba(0,0,0,.38)); cursor:grab; }
+.dial .pip { fill:var(--green); pointer-events:none; }
+/* Атрибут hidden у SVG браузеры игнорируют: без этого правила ручки
+   торчали бы в углу, где их оставили нулевые координаты */
+.dial [hidden] { display:none; }
+.dial .other { fill:none; stroke:var(--green); stroke-width:3; stroke-linecap:round;
+               opacity:.55; }
 """
 
-#: Поведение круга. Вынесено строкой, потому что страница проверяющего
-#: берёт тот же скрипт: разъехавшись, они начали бы считать месяцы
-#: по-разному, а сверять их было бы нечем
-CIRCLE_JS = """
+#: Поведение круга. Одно на две страницы: разъехавшись, игра и проверка
+#: начали бы считать месяцы по-разному, а сверять их было бы нечем.
+#: Геометрия — та же, что в `circle_svg` выше, числа обязаны совпадать
+CIRCLE_JS = r"""
 function dial(root, onChange, start) {
   var svg = root.querySelector('[data-dial]');
   var band = svg.querySelector('[data-band]');
-  var grips = { from: svg.querySelector('[data-grip=from]'),
-                to: svg.querySelector('[data-grip=to]') };
-  var MID = 140, R = 96, dragging = null;
+  var knobs = { from: svg.querySelector('[data-knob=from]'),
+                to: svg.querySelector('[data-knob=to]') };
+  var pips = { from: svg.querySelector('[data-pip=from]'),
+               to: svg.querySelector('[data-pip=to]') };
+  var labels = svg.querySelectorAll('[data-mon]');
+  var MID = 150, R = 104, CAP = 12 / 104 * 180 / Math.PI, dragging = null;
   var state = start ? { from: start[0], to: start[1] } : { from: 0, to: 0 };
 
-  function pos(month) {
-    var r = ((month - 0.5) * 30 - 90) * Math.PI / 180;
-    return [MID + R * Math.cos(r), MID + R * Math.sin(r)];
+  // Угол — по часовой от верха. Январь наверху, месяцы идут против часовой
+  function centre(m) { return -(m - 1) * 30; }
+  function pt(deg) {
+    var r = deg * Math.PI / 180;
+    return (MID + R * Math.sin(r)).toFixed(1) + ' ' + (MID - R * Math.cos(r)).toFixed(1);
   }
-  // Дуга закрашивается целыми месяцами: от начала первого до конца
-  // последнего, иначе край полосы врезался бы в середину подписи
-  function edge(deg) {
-    var r = (deg - 90) * Math.PI / 180;
-    return [MID + R * Math.cos(r), MID + R * Math.sin(r)];
-  }
-  function span(from, to) { return ((to - from + 12) % 12) + 1; }
+  function span(a, b) { return ((b - a + 12) % 12) + 1; }
   // Расстояние между месяцами по кругу: от декабря до января — один шаг
   function gap(a, b) { var d = Math.abs(a - b) % 12; return Math.min(d, 12 - d); }
+  function inside(m) { return ((m - state.from + 12) % 12) < span(state.from, state.to); }
 
   function draw() {
-    if (!state.from) {
-      band.setAttribute('d', '');
-      grips.from.setAttribute('hidden', '');
-      grips.to.setAttribute('hidden', '');
-      return;
-    }
-    var n = span(state.from, state.to);
-    var a = edge((state.from - 1) * 30), d;
-    if (n === 12) {
-      // Целый год одной дугой не нарисовать: концы совпадают. Две ровные
-      // половины через противоположную точку — у полуокружности радиус
-      // однозначен. Прежний вариант строил вторую дугу не на той окружности,
-      // и полоса вылезала за кольцо
-      var o = [2 * MID - a[0], 2 * MID - a[1]];
-      d = 'M' + a[0] + ' ' + a[1] + 'A' + R + ' ' + R + ' 0 0 1 ' + o[0] + ' ' + o[1] +
-          'A' + R + ' ' + R + ' 0 0 1 ' + a[0] + ' ' + a[1];
-    } else {
-      var b = edge(state.to * 30);
-      d = 'M' + a[0] + ' ' + a[1] + 'A' + R + ' ' + R + ' 0 ' + (n > 6 ? 1 : 0) +
-          ' 1 ' + b[0] + ' ' + b[1];
-    }
-    band.setAttribute('d', d);
+    var on = !!state.from;
     ['from', 'to'].forEach(function (key) {
-      var p = pos(state[key]);
-      grips[key].setAttribute('cx', p[0]);
-      grips[key].setAttribute('cy', p[1]);
-      // Через атрибут, а не через .hidden: у SVG-элементов такого
-      // свойства нет, и присваивание молча ничего не гасит и не зажигает
-      grips[key].removeAttribute('hidden');
+      if (on) { knobs[key].removeAttribute('hidden'); pips[key].removeAttribute('hidden'); }
+      else { knobs[key].setAttribute('hidden', ''); pips[key].setAttribute('hidden', ''); }
+    });
+    labels.forEach(function (el) {
+      el.classList.toggle('on', on && inside(+el.getAttribute('data-mon')));
+    });
+    if (!on) { band.setAttribute('d', ''); return; }
+    var n = span(state.from, state.to);
+    var a = pt(centre(state.from) + 15 - CAP), z = pt(centre(state.to) - 15 + CAP);
+    if (n === 12) {
+      // Круглый год — две ровные половины: одной дугой кольцо не замкнуть
+      band.setAttribute('d', 'M' + pt(0) + 'A' + R + ' ' + R + ' 0 0 0 ' + pt(180) +
+                             'A' + R + ' ' + R + ' 0 0 0 ' + pt(0));
+    } else {
+      var big = n * 30 - 2 * CAP > 180 ? 1 : 0;
+      band.setAttribute('d', 'M' + a + 'A' + R + ' ' + R + ' 0 ' + big + ' 0 ' + z);
+    }
+    [['from', a], ['to', z]].forEach(function (pair) {
+      var xy = pair[1].split(' ');
+      [knobs[pair[0]], pips[pair[0]]].forEach(function (el) {
+        el.setAttribute('cx', xy[0]); el.setAttribute('cy', xy[1]);
+      });
     });
   }
 
   // Где палец: месяц под ним и насколько далеко он от середины круга
   function locate(event) {
     var box = svg.getBoundingClientRect();
-    var x = (event.clientX - box.left) / box.width * 280 - MID;
-    var y = (event.clientY - box.top) / box.height * 280 - MID;
-    var deg = (Math.atan2(y, x) * 180 / Math.PI + 90 + 360) % 360;
-    return { month: Math.floor(deg / 30) + 1, dist: Math.sqrt(x * x + y * y) };
+    var size = Math.min(box.width, box.height);
+    var x = (event.clientX - box.left - box.width / 2) / size * 300;
+    var y = (event.clientY - box.top - box.height / 2) / size * 300;
+    var cw = Math.atan2(x, -y) * 180 / Math.PI;
+    var ccw = ((-cw) % 360 + 360) % 360;
+    return { month: Math.floor((ccw + 15) / 30) % 12 + 1,
+             dist: Math.sqrt(x * x + y * y) };
   }
 
   function notify() { if (onChange) onChange(state.from, state.to); }
 
   svg.addEventListener('pointerdown', function (e) {
     var hit = locate(e);
-    // Середина круга ничего не значит: угол там скачет от малейшего
-    // движения, и касание у надписи «ЛЕТО» дёргало бы край дуги
-    if (hit.dist < 50) return;
+    // Середина круга — это подпись итога, а не место для касания:
+    // угол там скачет от малейшего движения, и край дуги дёргался бы
+    if (hit.dist < 60) return;
     e.preventDefault();
     svg.setPointerCapture(e.pointerId);
     if (!state.from) {
       state.from = state.to = hit.month;
       dragging = 'to';
     } else {
-      // Двигается БЛИЖАЙШИЙ конец дуги, а не начинается выбор заново:
-      // промах мимо маркера на телефоне — норма, и сбрасывать из-за него
+      // Двигается БЛИЖАЙШИЙ край дуги, а не начинается выбор заново:
+      // промах мимо ручки на телефоне — норма, и сбрасывать из-за него
       // уже поставленную дугу значило бы наказывать за неточный палец
       dragging = gap(hit.month, state.from) < gap(hit.month, state.to) ? 'from' : 'to';
       state[dragging] = hit.month;
@@ -350,6 +395,17 @@ function dial(root, onChange, start) {
     get: function () { return [state.from, state.to]; }
   };
 }
+
+// Итог в середине круга: «АПР — АВГ» крупно, длина мелко под ним
+function centreText(svg, from, to, t) {
+  var c1 = svg.querySelector('[data-c1]'), c2 = svg.querySelector('[data-c2]');
+  var n = ((to - from + 12) % 12) + 1;
+  if (n === 12) { c1.textContent = t.all; c2.textContent = ''; return; }
+  c1.textContent = from === to ? t.full[from - 1] : t.short[from - 1] + ' — ' + t.short[to - 1];
+  c2.textContent = t.uz ? n + ' oy' : n + ' ' + (
+    (n % 10 === 1 && n !== 11) ? 'месяц' :
+    (n % 10 >= 2 && n % 10 <= 4 && (n < 12 || n > 14)) ? 'месяца' : 'месяцев');
+}
 """
 
 RU = {
@@ -357,12 +413,10 @@ RU = {
     "other": ("/uz/seasons", "Oʻzbekcha"),
     "title": "Когда сюда идти — Sayr",
     "h1": "Когда сюда идти?",
-    "lede": "Проведите по кругу: с какого месяца по какой в это место стоит "
-            "идти. Не были — жмите «не знаю», это тоже ответ.",
+    "lede": "Подвиньте края дуги. Не были — жмите «не знаю».",
     "left": "осталось",
     "skip": "Не знаю",
     "send": "Готово",
-    "pick": "Отметьте месяцы на круге",
     "from": "с",
     "to": "по",
     "thanks_head": "Спасибо!",
@@ -376,6 +430,8 @@ RU = {
     "seasons": ("ВЕСНА", "ЛЕТО", "ОСЕНЬ", "ЗИМА"),
     "full": ("январь", "февраль", "март", "апрель", "май", "июнь",
              "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"),
+    "full_up": FULL_RU_UP,
+    "all": "ВЕСЬ ГОД",
     "gen": FROM_RU,
 }
 
@@ -384,12 +440,10 @@ UZ = {
     "other": ("/seasons", "Русский"),
     "title": "Bu yerga qachon borish kerak — Sayr",
     "h1": "Bu yerga qachon borish kerak?",
-    "lede": "Doira boʻylab suring: bu joyga qaysi oydan qaysi oygacha borish "
-            "kerak. Bormagan boʻlsangiz — «bilmayman», bu ham javob.",
+    "lede": "Yoy chetlarini suring. Bormagan boʻlsangiz — «bilmayman».",
     "left": "qoldi",
     "skip": "Bilmayman",
     "send": "Tayyor",
-    "pick": "Doirada oylarni belgilang",
     "from": "dan",
     "to": "gacha",
     "thanks_head": "Rahmat!",
@@ -402,10 +456,29 @@ UZ = {
     "months": SHORT_UZ,
     "seasons": ("BAHOR", "YOZ", "KUZ", "QISH"),
     "full": MONTHS_UZ,
+    "full_up": FULL_UZ_UP,
+    "all": "YIL BOʻYI",
     "gen": MONTHS_UZ,
 }
 
 _T = {"ru": RU, "uz": UZ}
+
+
+def _centre_words(t: dict) -> str:
+    """Словарь для `centreText` в скрипте."""
+    return json.dumps(
+        {"short": list(t["months"]), "full": list(t["full_up"]), "all": t["all"],
+         "uz": t["lang"] == "uz"},
+        ensure_ascii=False,
+    )
+
+
+def _options(t: dict, selected: int | None) -> str:
+    return "".join(
+        f'<option value="{index + 1}"'
+        f'{" selected" if index + 1 == selected else ""}>{escape(name)}</option>'
+        for index, name in enumerate(t["full"])
+    )
 
 
 _PAGE = """<!doctype html>
@@ -419,37 +492,38 @@ _PAGE = """<!doctype html>
 <link rel="preload" href="/static/fonts/IBMPlexSans-Regular.woff2" as="font"
       type="font/woff2" crossorigin>
 <style>
-%%shared_css%%
-@media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
+%%css%%
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <img src="/static/img/icon.png" alt="" width="32" height="32">
+    <img src="/static/img/icon.png" alt="" width="28" height="28">
     <a class="name" href="%%back_href%%">Sayr</a>
     <span class="left" data-left>%%left_text%%</span>
     <a class="langlink" href="%%other_href%%">%%other_label%%</a>
   </header>
 
-  <h1>%%h1%%</h1>
-  <p class="lede">%%lede%%</p>
+  <div class="intro">
+    <h1>%%h1%%</h1>
+    <p class="lede">%%lede%%</p>
+  </div>
 
-  <form id="game" method="post" action="/seasons/vote" %%form_hidden%%>
-    <article class="card" data-card>
-      <div class="shot"><img data-thumb src="%%thumb%%" alt=""></div>
-      <h2 data-name>%%name%%</h2>
-      <p class="meta" data-meta>%%meta%%</p>
+  <form id="game" class="play" method="post" action="/seasons/vote" %%form_hidden%%>
+    <article class="card%%bare%%" data-card>
+      <img data-thumb src="%%thumb%%" alt="">
+      <div class="cap">
+        <h2 data-name>%%name%%</h2>
+        <p class="meta" data-meta>%%meta%%</p>
+      </div>
     </article>
 
-    <div class="dialbox">
-      %%dial%%
-      <p class="arc" data-arc>%%arc%%</p>
-    </div>
-
-    <div class="plain">
-      <label>%%from_label%% <select name="from_month">%%options_from%%</select></label>
-      <label>%%to_label%% <select name="to_month">%%options_to%%</select></label>
+    <div class="stage">
+      <div class="dialbox">%%dial%%</div>
+      <div class="plain">
+        <label>%%from_label%% <select name="from_month">%%options_from%%</select></label>
+        <label>%%to_label%% <select name="to_month">%%options_to%%</select></label>
+      </div>
     </div>
 
     <input type="hidden" name="slug" data-slug value="%%slug%%">
@@ -470,39 +544,32 @@ _PAGE = """<!doctype html>
 document.documentElement.classList.add('js');
 %%circle_js%%
 (function () {
-  var deck = %%deck%%, left = %%left%%, mine = %%mine%%;
-  var lang = "%%lang%%";
-  var full = %%full%%, gen = %%gen%%;
   var form = document.getElementById('game');
+  if (!form || form.hidden) return;
+  var deck = %%deck%%, left = %%left%%, mine = %%mine%%;
+  var lang = "%%lang%%", DEF = %%default%%, WORDS = %%words%%;
   var done = document.querySelector('[data-done]');
   var counter = document.querySelector('[data-left]');
-  var arc = document.querySelector('[data-arc]');
-  var go = document.querySelector('[data-go]');
+  var card = form.querySelector('[data-card]');
   var picks = form.querySelectorAll('select');
-  var DEF = %%default%%;
+  var svg = document.querySelector('[data-dial]');
   var knob = dial(document.querySelector('.dialbox'), function (from, to) {
     picks[0].value = from; picks[1].value = to;
-    arc.textContent = words(from, to);
+    centreText(svg, from, to, WORDS);
   }, DEF);
 
-  function words(from, to) {
-    if (from === to) return full[from - 1];
-    if (lang === 'uz') return full[from - 1] + ' — ' + full[to - 1];
-    return 'с ' + gen[from - 1] + ' по ' + full[to - 1];
-  }
-
-  function show(card) {
-    form.querySelector('[data-slug]').value = card.slug;
-    form.querySelector('[data-name]').textContent = card.name;
-    form.querySelector('[data-meta]').textContent = card.meta;
+  function show(next) {
+    form.querySelector('[data-slug]').value = next.slug;
+    form.querySelector('[data-name]').textContent = next.name;
+    form.querySelector('[data-meta]').textContent = next.meta;
     var img = form.querySelector('[data-thumb]');
-    if (card.thumb) { img.src = card.thumb; img.hidden = false; }
-    else { img.removeAttribute('src'); img.hidden = true; }
+    if (next.thumb) { img.src = next.thumb; card.classList.remove('bare'); }
+    else { img.removeAttribute('src'); card.classList.add('bare'); }
     // Каждая карточка начинает с одной и той же дуги: иначе ответ на
     // прошлое место подсказывал бы ответ на следующее
     knob.set(DEF[0], DEF[1]);
     picks[0].value = DEF[0]; picks[1].value = DEF[1];
-    arc.textContent = words(DEF[0], DEF[1]);
+    centreText(svg, DEF[0], DEF[1], WORDS);
     counter.textContent = %%left_word%% + ' ' + left;
   }
 
@@ -520,7 +587,6 @@ document.documentElement.classList.add('js');
     deck.shift();
     if (deck.length <= 3) refill();
     if (!deck.length) { finish(); return; }
-    var card = form.querySelector('[data-card]');
     card.classList.add('gone');
     setTimeout(function () { show(deck[0]); card.classList.remove('gone'); }, 190);
   }
@@ -573,21 +639,11 @@ def _meta(card: dict) -> str:
 
 def render_page(lang: str, deck: list[dict], left: int, mine: int) -> str:
     """Страница игры: первая карточка разметкой, остальные — колодой в скрипте."""
-    import json
-
     t = _T[lang if lang in _T else "ru"]
     cards = [dict(card, meta=_meta(card)) for card in deck]
     first = cards[0] if cards else None
-    def options(selected: int) -> str:
-        return "".join(
-            f'<option value="{index + 1}"'
-            f'{" selected" if index + 1 == selected else ""}>{escape(name)}</option>'
-            for index, name in enumerate(t["full"])
-        )
     done_head = t["thanks_head"] if mine else t["empty_head"]
-    done_body = (t["thanks_body"] if mine else t["empty_body"]).replace(
-        "{n}", str(mine)
-    )
+    done_body = (t["thanks_body"] if mine else t["empty_body"]).replace("{n}", str(mine))
     return _fill(
         _PAGE,
         lang=t["lang"],
@@ -603,26 +659,26 @@ def render_page(lang: str, deck: list[dict], left: int, mine: int) -> str:
         send=escape(t["send"]),
         from_label=escape(t["from"]),
         to_label=escape(t["to"]),
-        options_from=options(DEFAULT_ARC[0]),
-        options_to=options(DEFAULT_ARC[1]),
-        dial=circle_svg(t["months"], t["seasons"], band=DEFAULT_ARC),
-        arc=escape(arc_text(*DEFAULT_ARC, lang=t["lang"])),
-        default=json.dumps(list(DEFAULT_ARC)),
-        shared_css=SHARED_CSS + CIRCLE_CSS,
+        options_from=_options(t, DEFAULT_ARC[0]),
+        options_to=_options(t, DEFAULT_ARC[1]),
+        dial=circle_svg(t["months"], t["seasons"], band=DEFAULT_ARC,
+                        centre=centre_lines(*DEFAULT_ARC, lang=t["lang"])),
+        css=SHARED_CSS + CIRCLE_CSS,
         circle_js=CIRCLE_JS,
         slug=escape(first["slug"], quote=True) if first else "",
         name=escape(first["name"]) if first else "",
         meta=escape(first["meta"]) if first else "",
         thumb=escape(first["thumb"] or "", quote=True) if first else "",
+        bare="" if first and first["thumb"] else " bare",
         form_hidden="" if first else "hidden",
-        done_hidden="" if not first else "hidden",
+        done_hidden="hidden" if first else "",
         done_head=escape(done_head),
         done_body=escape(done_body),
         deck=json.dumps(cards, ensure_ascii=False),
         left=left,
         mine=mine,
-        full=json.dumps(list(t["full"]), ensure_ascii=False),
-        gen=json.dumps(list(t["gen"]), ensure_ascii=False),
+        default=json.dumps(list(DEFAULT_ARC)),
+        words=_centre_words(t),
         left_word=json.dumps(t["left"], ensure_ascii=False),
         thanks_head=json.dumps(t["thanks_head"], ensure_ascii=False),
         thanks_body=json.dumps(t["thanks_body"], ensure_ascii=False),
@@ -646,7 +702,7 @@ _LOGIN = """<!doctype html>
 <meta name="robots" content="noindex">
 <link rel="icon" href="/static/img/icon.png">
 <style>
-%%shared_css%%
+%%css%%
 .gate { background:var(--surface); border:1px solid var(--edge);
         border-radius:18px 18px 18px 34px; padding:1.4rem; margin-top:2rem; }
 .gate h1 { font-size:1.25rem; margin:0 0 .3rem; }
@@ -655,6 +711,7 @@ input[type=password] { width:100%; font:inherit; font-size:1rem; padding:.75rem 
         border:1px solid var(--line); border-radius:12px; background:var(--paper);
         color:var(--ink); min-height:48px; margin-bottom:.8rem; }
 .err { color:var(--terra); font-weight:600; font-size:.9rem; margin:0 0 .8rem; }
+.wrap { height:auto; }
 </style>
 </head>
 <body>
@@ -683,42 +740,42 @@ _REVIEW = """<!doctype html>
 <meta name="robots" content="noindex">
 <link rel="icon" href="/static/img/icon.png">
 <style>
-%%shared_css%%
-.votes { margin:.6rem 0 0; text-align:center; font-family:PlexMono,monospace;
-         font-size:.74rem; letter-spacing:.04em; color:var(--ink3); }
-.ready { color:var(--green); font-weight:600; }
-@media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
+%%css%%
+.votes { margin:0; text-align:center; font-family:PlexMono,monospace; font-size:.7rem;
+         letter-spacing:.03em; line-height:1.5; color:var(--ink3); flex:none; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <img src="/static/img/icon.png" alt="" width="32" height="32">
+    <img src="/static/img/icon.png" alt="" width="28" height="28">
     <a class="name" href="/seasons/review">Sayr</a>
     <span class="left">%%waiting%%</span>
   </header>
 
-  <h1>Что выбрали игроки</h1>
-  <p class="lede">Круг показывает все ответы; жирная дуга — то, на чём сошлись.
-  Подкрутите маркеры, если знаете лучше, и одобрите — сезон встанет месту.</p>
+  <div class="intro">
+    <h1>Что выбрали игроки</h1>
+    <p class="lede">Тонкие кольца — ответы, толстая дуга — на чём сошлись.
+    Подвиньте края, если знаете лучше, и одобрите.</p>
+  </div>
 
-  <form method="post" action="/seasons/review/approve" %%form_hidden%%>
-    <article class="card">
-      <div class="shot"><img src="%%thumb%%" alt=""></div>
-      <h2>%%name%%</h2>
-      <p class="meta">%%meta%%</p>
+  <form class="play" method="post" action="/seasons/review/approve" %%form_hidden%%>
+    <article class="card%%bare%%">
+      <img src="%%thumb%%" alt="">
+      <div class="cap">
+        <h2>%%name%%</h2>
+        <p class="meta">%%meta%%</p>
+      </div>
     </article>
 
-    <div class="dialbox">
-      %%dial%%
-      <p class="arc %%arc_class%%" data-arc>%%arc%%</p>
+    <div class="stage">
+      <div class="dialbox">%%dial%%</div>
+      <div class="plain">
+        <label>с <select name="from_month">%%options_from%%</select></label>
+        <label>по <select name="to_month">%%options_to%%</select></label>
+      </div>
     </div>
     <p class="votes">%%votes%%</p>
-
-    <div class="plain">
-      <label>с <select name="from_month">%%options_from%%</select></label>
-      <label>по <select name="to_month">%%options_to%%</select></label>
-    </div>
 
     <input type="hidden" name="slug" value="%%slug%%">
     <div class="send">
@@ -740,22 +797,15 @@ document.documentElement.classList.add('js');
 (function () {
   var form = document.querySelector('form');
   if (!form || form.hidden) return;
-  var full = %%full%%, gen = %%gen%%;
-  var arc = document.querySelector('[data-arc]');
+  var WORDS = %%words%%;
   var go = document.querySelector('[data-go]');
   var picks = form.querySelectorAll('select');
-  function words(from, to) {
-    if (from === to) return full[from - 1];
-    return 'с ' + gen[from - 1] + ' по ' + full[to - 1];
-  }
-  var knob = dial(document.querySelector('.dialbox'), function (from, to) {
+  var svg = document.querySelector('[data-dial]');
+  dial(document.querySelector('.dialbox'), function (from, to) {
     picks[0].value = from; picks[1].value = to;
-    arc.textContent = words(from, to);
-    arc.classList.remove('empty');
+    centreText(svg, from, to, WORDS);
     go.disabled = false;
-  });
-  var start = %%band%%;
-  if (start) knob.set(start[0], start[1]);
+  }, %%band%%);
 })();
 </script>
 </body>
@@ -765,23 +815,19 @@ document.documentElement.classList.add('js');
 def render_login(failed: bool = False) -> str:
     return _fill(
         _LOGIN,
-        shared_css=SHARED_CSS,
+        css=SHARED_CSS,
         error='<p class="err">Пароль не подошёл</p>' if failed else "",
     )
 
 
 def render_review(place, votes: list[tuple[int, int]], waiting: int, enough: int) -> str:
     """Карточка проверки: место, все ответы и предложение."""
-    import json
-
-    from ..seasons import arc_text, suggest
+    from ..seasons import suggest
 
     t = RU
     band = suggest(votes) if votes else None
     if place is None:
-        meta = name = thumb = slug = ""
-        arc = ""
-        votes_line = ""
+        meta = name = thumb = slug = votes_line = ""
     else:
         cover = place.photos[0] if place.photos else None
         thumb = (cover.thumb_url or cover.url or "") if cover else ""
@@ -792,37 +838,27 @@ def render_review(place, votes: list[tuple[int, int]], waiting: int, enough: int
         kind = CATEGORY["ru"].get(place.category.value, "")
         meta = " · ".join(bit for bit in (region, kind) if bit)
         slug = place.slug
-        arc = arc_text(*band) if band else "Ответы вразнобой — поставьте дугу сами"
         spread = " · ".join(arc_text(start, end) for start, end in votes)
         mark = " · порог набран" if len(votes) >= enough else ""
         votes_line = f"{len(votes)} отв.{mark}: {spread}"
-
-    def options(selected: int | None) -> str:
-        return "".join(
-            f'<option value="{index + 1}"'
-            f'{" selected" if selected == index + 1 else ""}>{escape(month)}</option>'
-            for index, month in enumerate(t["full"])
-        )
-
+    centre = centre_lines(*band) if band else ("?", "ВРАЗНОБОЙ")
     return _fill(
         _REVIEW,
-        shared_css=SHARED_CSS + CIRCLE_CSS,
+        css=SHARED_CSS + CIRCLE_CSS,
         circle_js=CIRCLE_JS,
         waiting=f"ждут проверки: {waiting}" if waiting else "",
-        dial=circle_svg(t["months"], t["seasons"], tuple(votes), band),
-        arc=escape(arc),
-        arc_class="" if band else "empty",
+        dial=circle_svg(t["months"], t["seasons"], tuple(votes), band, centre),
         votes=escape(votes_line),
-        options_from=options(band[0] if band else None),
-        options_to=options(band[1] if band else None),
+        options_from=_options(t, band[0] if band else None),
+        options_to=_options(t, band[1] if band else None),
         slug=escape(slug, quote=True),
         name=escape(name),
         meta=escape(meta),
         thumb=escape(thumb, quote=True),
+        bare="" if thumb else " bare",
         form_hidden="" if place else "hidden",
         done_hidden="hidden" if place else "",
         go_off="" if band else "disabled",
         band=json.dumps(list(band) if band else None),
-        full=json.dumps(list(t["full"]), ensure_ascii=False),
-        gen=json.dumps(list(t["gen"]), ensure_ascii=False),
+        words=_centre_words(t),
     )
