@@ -89,38 +89,15 @@ def band_path(start: int, end: int) -> str:
     return f"M{_xy(a)}A{r} {r} 0 {big} 0 {_xy(z)}"
 
 
-def ring_path(start: int, end: int, radius: float) -> str:
-    """Тонкая дуга чужого ответа — строго по границам месяцев."""
-    if _span(start, end) == 12:
-        top, bottom = _pt(0, radius), _pt(180, radius)
-        return (f"M{_xy(top)}A{radius} {radius} 0 0 0 {_xy(bottom)}"
-                f"A{radius} {radius} 0 0 0 {_xy(top)}")
-    a = _pt(_centre(start) + 15, radius)
-    z = _pt(_centre(end) - 15, radius)
-    big = 1 if _span(start, end) * 30 > 180 else 0
-    return f"M{_xy(a)}A{radius} {radius} 0 {big} 0 {_xy(z)}"
-
-
 def circle_svg(
     short_months: tuple[str, ...],
     seasons: tuple[str, ...],
-    others: tuple[tuple[int, int], ...] = (),
     band: tuple[int, int] | None = None,
     centre: tuple[str, str] = ("", ""),
 ) -> str:
-    """Круг года целиком, уже в нужном состоянии — скрипт его только двигает.
-
-    Слова сезонов стоят снаружи, но только там, где нет чужих ответов:
-    у проверяющего по внешнему краю идут тонкие кольца ответов, и слова
-    легли бы на них.
-    """
+    """Круг года целиком, уже в нужном состоянии — скрипт его только двигает."""
     parts = ['<svg class="dial" viewBox="0 0 300 300" data-dial>']
     parts.append(f'<circle class="track" cx="{_MID}" cy="{_MID}" r="{_RING}"/>')
-    # Ответы игроков — тонкими кольцами снаружи, каждое на своём радиусе:
-    # наложенные друг на друга, они читались бы как одно
-    for index, (start, end) in enumerate(others):
-        radius = 124 + index % 4 * 5
-        parts.append(f'<path class="other" d="{ring_path(start, end, radius)}"/>')
     parts.append(f'<path class="band" data-band d="{band_path(*band) if band else ""}"/>')
     for index, name in enumerate(short_months):
         month = index + 1
@@ -130,15 +107,14 @@ def circle_svg(
             f'<text class="mon{lit}" data-mon="{month}" x="{x:.1f}" y="{y:.1f}">'
             f"{escape(name)}</text>"
         )
-    if not others:
-        spring, summer, autumn, winter = seasons
-        for word, deg, turn in ((winter, 0, 0), (spring, -90, -90),
-                                (summer, 180, 0), (autumn, 90, 90)):
-            x, y = _pt(deg, _SEASONS)
-            parts.append(
-                f'<text class="sea" x="{x:.1f}" y="{y:.1f}" '
-                f'transform="rotate({turn} {x:.1f} {y:.1f})">{escape(word)}</text>'
-            )
+    spring, summer, autumn, winter = seasons
+    for word, deg, turn in ((winter, 0, 0), (spring, -90, -90),
+                            (summer, 180, 0), (autumn, 90, 90)):
+        x, y = _pt(deg, _SEASONS)
+        parts.append(
+            f'<text class="sea" x="{x:.1f}" y="{y:.1f}" '
+            f'transform="rotate({turn} {x:.1f} {y:.1f})">{escape(word)}</text>'
+        )
     parts.append(f'<text class="c1" data-c1 x="{_MID}" y="{_MID - 8}">{escape(centre[0])}</text>')
     parts.append(f'<text class="c2" data-c2 x="{_MID}" y="{_MID + 15}">{escape(centre[1])}</text>')
     ends = arc_ends(*band) if band else ((0.0, 0.0), (0.0, 0.0))
@@ -263,7 +239,7 @@ CIRCLE_CSS = """
 /* Круг тянут пальцем: без этого подписи месяцев выделяются синим,
    а долгое нажатие открывает меню «скопировать». Инпутов здесь нет,
    поэтому запрет безопасен — на странице входа он не стоит */
-.dialbox, .dial, .card, .send, .votes {
+.dialbox, .dial, .card, .send {
   -webkit-user-select:none; user-select:none;
   -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
 .dial .track { fill:none; stroke:var(--line); stroke-width:24; }
@@ -285,8 +261,6 @@ CIRCLE_CSS = """
 /* Атрибут hidden у SVG браузеры игнорируют: без этого правила ручки
    торчали бы в углу, где их оставили нулевые координаты */
 .dial [hidden] { display:none; }
-.dial .other { fill:none; stroke:var(--green); stroke-width:3; stroke-linecap:round;
-               opacity:.55; }
 """
 
 #: Поведение круга. Одно на две страницы: разъехавшись, игра и проверка
@@ -741,8 +715,56 @@ _REVIEW = """<!doctype html>
 <link rel="icon" href="/static/img/icon.png">
 <style>
 %%css%%
-.votes { margin:0; text-align:center; font-family:PlexMono,monospace; font-size:.7rem;
-         letter-spacing:.03em; line-height:1.5; color:var(--ink3); flex:none; }
+/* Проверка — не игра, а рабочий список: все места сразу, одно касание
+   на место. Высота обычная, страница прокручивается */
+.wrap { height:auto; min-height:100dvh; max-width:64rem; }
+.list { display:flex; flex-direction:column; gap:.55rem; }
+.row { display:grid; gap:.5rem .75rem; align-items:center;
+       grid-template-columns:52px minmax(0,1fr);
+       grid-template-areas:"thumb who" "strip strip" "ctrl ctrl" "said said";
+       padding:.7rem .8rem; background:var(--surface); border:1px solid var(--edge);
+       border-radius:14px; transition:opacity .22s, transform .22s; }
+.row.gone { opacity:0; transform:translateX(24px); }
+.row.err { border-color:var(--terra); }
+.thumb { grid-area:thumb; width:52px; height:52px; border-radius:10px; object-fit:cover;
+         background:var(--line); display:block; }
+.who { grid-area:who; min-width:0; }
+.who b { display:block; font-size:.98rem; line-height:1.25; white-space:nowrap;
+         overflow:hidden; text-overflow:ellipsis; }
+.who span { font-family:PlexMono,monospace; font-size:.66rem; letter-spacing:.05em;
+            text-transform:uppercase; color:var(--ink3); }
+.who .ready { color:var(--green); }
+.who .split { color:var(--terra); }
+/* Полоска года: цвет месяца — доля игроков, которые его отметили;
+   рамка — что уйдёт месту. Разброс мнений читается за полсекунды,
+   текст ответов под ней — для точности, а не для чтения */
+.strip { grid-area:strip; display:grid; grid-template-columns:repeat(12, 1fr);
+         gap:3px; -webkit-user-select:none; user-select:none; }
+.strip i { font-style:normal; font-family:PlexMono,monospace; font-size:.62rem;
+           text-align:center; line-height:24px; height:24px; border-radius:5px;
+           color:var(--ink3); background:var(--line); position:relative; z-index:0; }
+.strip i::before { content:""; position:absolute; inset:0; border-radius:5px;
+                   background:var(--green); opacity:var(--k); z-index:-1; }
+.strip i.hot { color:var(--surface); }
+/* Не «pick»: так называется блок списков, и его grid-area утаскивала
+   выбранные клетки из полоски стопкой в лишнюю колонку */
+.strip i.sel { box-shadow:inset 0 0 0 2px var(--ink); }
+.ctrl { grid-area:ctrl; display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; }
+.pick { display:flex; align-items:center; gap:.35rem; flex:1 1 15rem; min-width:0; }
+.pick select { flex:1; min-width:0; min-height:40px; padding:.35rem .45rem;
+               font-size:.88rem; }
+.acts { display:flex; gap:.4rem; margin-left:auto; }
+.acts button { flex:none; min-height:40px; padding:0 .9rem; font-size:.9rem;
+               border-radius:11px; }
+.said { grid-area:said; margin:0; font-family:PlexMono,monospace; font-size:.66rem;
+        letter-spacing:.02em; color:var(--ink3); }
+@media (min-width:760px) {
+  .row { grid-template-columns:52px minmax(8rem,1fr) minmax(15rem,1.3fr) auto;
+         grid-template-areas:"thumb who strip ctrl" "thumb said said said"; }
+  .ctrl { flex-wrap:nowrap; }
+  .pick { flex:none; }
+  .pick select { flex:none; width:8.5rem; }
+}
 </style>
 </head>
 <body>
@@ -750,66 +772,86 @@ _REVIEW = """<!doctype html>
   <header>
     <img src="/static/img/icon.png" alt="" width="28" height="28">
     <a class="name" href="/seasons/review">Sayr</a>
-    <span class="left">%%waiting%%</span>
+    <span class="left" data-count>%%waiting%%</span>
   </header>
 
   <div class="intro">
-    <h1>Что выбрали игроки</h1>
-    <p class="lede">Тонкие кольца — ответы, толстая дуга — на чём сошлись.
-    Подвиньте края, если знаете лучше, и одобрите.</p>
+    <h1>Проверка сезонов</h1>
+    <p class="lede">Цвет месяца — сколько игроков его отметили, рамка — что уйдёт
+    месту. Поправьте месяцы, если знаете лучше, и одобрите.</p>
   </div>
 
-  <form class="play" method="post" action="/seasons/review/approve" %%form_hidden%%>
-    <article class="card%%bare%%">
-      <img src="%%thumb%%" alt="">
-      <div class="cap">
-        <h2>%%name%%</h2>
-        <p class="meta">%%meta%%</p>
-      </div>
-    </article>
+  <div class="list" data-list>%%rows%%</div>
 
-    <div class="stage">
-      <div class="dialbox">%%dial%%</div>
-      <div class="plain">
-        <label>с <select name="from_month">%%options_from%%</select></label>
-        <label>по <select name="to_month">%%options_to%%</select></label>
-      </div>
-    </div>
-    <p class="votes">%%votes%%</p>
-
-    <input type="hidden" name="slug" value="%%slug%%">
-    <div class="send">
-      <button type="submit" class="ghost" formaction="/seasons/review/clear"
-              formnovalidate>Очистить ответы</button>
-      <button type="submit" class="go" data-go %%go_off%%>Одобрить</button>
-    </div>
-  </form>
-
-  <div class="done" %%done_hidden%%>
+  <div class="done" data-done %%done_hidden%%>
     <h2>Пока нечего проверять</h2>
     <p>Как только игроки ответят, места появятся здесь.</p>
     <p><a href="/seasons">Открыть игру</a></p>
   </div>
 </div>
 <script>
-document.documentElement.classList.add('js');
-%%circle_js%%
 (function () {
-  var form = document.querySelector('form');
-  if (!form || form.hidden) return;
-  var WORDS = %%words%%;
-  var go = document.querySelector('[data-go]');
-  var picks = form.querySelectorAll('select');
-  var svg = document.querySelector('[data-dial]');
-  dial(document.querySelector('.dialbox'), function (from, to) {
-    picks[0].value = from; picks[1].value = to;
-    centreText(svg, from, to, WORDS);
-    go.disabled = false;
-  }, %%band%%);
+  var counter = document.querySelector('[data-count]');
+  var list = document.querySelector('[data-list]');
+  var done = document.querySelector('[data-done]');
+  var left = list.querySelectorAll('[data-row]').length;
+  function span(a, b) { return ((b - a + 12) % 12) + 1; }
+  function inside(m, a, b) { return ((m - a + 12) % 12) < span(a, b); }
+  function recount() {
+    counter.textContent = left ? 'ждут проверки: ' + left : '';
+    if (!left) done.hidden = false;
+  }
+
+  list.querySelectorAll('[data-row]').forEach(function (row) {
+    var picks = row.querySelectorAll('select');
+    var cells = row.querySelectorAll('[data-m]');
+    // Рамка идёт за списками: что выбрано в них, то и уйдёт месту
+    function paint() {
+      var a = +picks[0].value, b = +picks[1].value;
+      cells.forEach(function (cell) {
+        cell.classList.toggle('sel', !!(a && b) && inside(+cell.getAttribute('data-m'), a, b));
+      });
+    }
+    picks.forEach(function (select) { select.addEventListener('change', paint); });
+    paint();
+
+    // Стереть чужие ответы — не то, что делают промахом: первое касание
+    // только взводит кнопку, второе в течение двух секунд — стирает
+    var clear = row.querySelector('[data-clear]'), armed = null;
+    clear.addEventListener('click', function (e) {
+      if (armed) return;
+      e.preventDefault();
+      clear.textContent = 'Точно?';
+      armed = setTimeout(function () { armed = null; clear.textContent = 'Очистить'; }, 2000);
+    });
+
+    row.addEventListener('submit', function (e) {
+      if (!window.fetch) return;
+      e.preventDefault();
+      var by = e.submitter;
+      var url = by && by.hasAttribute('formaction') ? by.formAction : row.action;
+      fetch(url, { method: 'POST', body: new FormData(row),
+                   headers: { 'Accept': 'application/json' } })
+        .then(function (r) { if (!r.ok) throw 0; })
+        .then(function () {
+          // Строка уезжает сразу: следующая оказывается под пальцем,
+          // и разбор идёт касание за касанием, без перезагрузок
+          row.classList.add('gone');
+          setTimeout(function () { row.remove(); }, 230);
+          left -= 1;
+          recount();
+        })
+        .catch(function () { row.classList.add('err'); });
+    });
+  });
 })();
 </script>
 </body>
 </html>"""
+
+#: Буквы месяцев на полоске. «М» и «И» повторяются, но полоска всегда
+#: идёт с января по декабрь, и место в ряду снимает двусмысленность
+_INITIALS = "ЯФМАМИИАСОНД"
 
 
 def render_login(failed: bool = False) -> str:
@@ -820,45 +862,78 @@ def render_login(failed: bool = False) -> str:
     )
 
 
-def render_review(place, votes: list[tuple[int, int]], waiting: int, enough: int) -> str:
-    """Карточка проверки: место, все ответы и предложение."""
-    from ..seasons import suggest
+def _row(place, votes: list[tuple[int, int]], enough: int) -> str:
+    """Строка списка: место, полоска года, месяцы на одобрение и кнопки."""
+    from ..seasons import arc_months, suggest
 
-    t = RU
-    band = suggest(votes) if votes else None
-    if place is None:
-        meta = name = thumb = slug = votes_line = ""
+    band = suggest(votes)
+    total = len(votes)
+    count = [0] * 13
+    for start, end in votes:
+        for month in arc_months(start, end):
+            count[month] += 1
+    cells = "".join(
+        f'<i data-m="{month}" class="{"hot" if count[month] / total > 0.5 else ""}" '
+        f'style="--k:{count[month] / total:.2f}">{_INITIALS[month - 1]}</i>'
+        for month in range(1, 13)
+    )
+
+    def options(selected: int | None) -> str:
+        # Сошлись — месяцы уже выставлены, остаётся одобрить. Нет —
+        # списки пустые и обязательные: предлагать чей-то ответ как итог
+        # значило бы подсказывать там, где игроки разошлись
+        head = "" if selected else '<option value="">—</option>'
+        return head + "".join(
+            f'<option value="{index + 1}"'
+            f'{" selected" if selected == index + 1 else ""}>{escape(name)}</option>'
+            for index, name in enumerate(RU["full"])
+        )
+
+    cover = place.photos[0] if place.photos else None
+    thumb = (cover.thumb_url or cover.url or "") if cover else ""
+    image = (f'<img class="thumb" src="{escape(thumb, quote=True)}" alt="" loading="lazy">'
+             if thumb else '<div class="thumb"></div>')
+    region = place.region.name if place.region else ""
+    if band is None:
+        state = '<span class="split">вразнобой</span>'
+    elif total >= enough:
+        state = '<span class="ready">порог набран</span>'
     else:
-        cover = place.photos[0] if place.photos else None
-        thumb = (cover.thumb_url or cover.url or "") if cover else ""
-        name = place.name
-        region = place.region.name if place.region else ""
-        # Категория словом, а не кодом: «DESERT» в карточке — это утечка
-        # базы наружу, а не подпись
-        kind = CATEGORY["ru"].get(place.category.value, "")
-        meta = " · ".join(bit for bit in (region, kind) if bit)
-        slug = place.slug
-        spread = " · ".join(arc_text(start, end) for start, end in votes)
-        mark = " · порог набран" if len(votes) >= enough else ""
-        votes_line = f"{len(votes)} отв.{mark}: {spread}"
-    centre = centre_lines(*band) if band else ("?", "ВРАЗНОБОЙ")
+        state = ""
+    info = " · ".join(bit for bit in (escape(region), f"{total} отв.", state) if bit)
+    said = " · ".join(arc_text(start, end) for start, end in votes)
+    required = "" if band else " required"
+    return (
+        f'<form class="row" method="post" action="/seasons/review/approve" data-row>'
+        f"{image}"
+        f'<div class="who"><b>{escape(place.name)}</b><span>{info}</span></div>'
+        f'<div class="strip">{cells}</div>'
+        f'<div class="ctrl">'
+        f'<div class="pick">'
+        f'<select name="from_month" aria-label="С какого месяца"{required}>'
+        f'{options(band[0] if band else None)}</select>'
+        f"<span>—</span>"
+        f'<select name="to_month" aria-label="По какой месяц"{required}>'
+        f'{options(band[1] if band else None)}</select>'
+        f"</div>"
+        f'<div class="acts">'
+        f'<button type="submit" class="ghost" data-clear formaction="/seasons/review/clear"'
+        f" formnovalidate>Очистить</button>"
+        f'<button type="submit" class="go">Одобрить</button>'
+        f"</div>"
+        f"</div>"
+        f'<input type="hidden" name="slug" value="{escape(place.slug, quote=True)}">'
+        f'<p class="said">{escape(said)}</p>'
+        f"</form>"
+    )
+
+
+def render_review(queue: list[tuple[object, list[tuple[int, int]]]], enough: int) -> str:
+    """Весь список ждущих проверки — по строке на место."""
     return _fill(
         _REVIEW,
-        css=SHARED_CSS + CIRCLE_CSS,
-        circle_js=CIRCLE_JS,
-        waiting=f"ждут проверки: {waiting}" if waiting else "",
-        dial=circle_svg(t["months"], t["seasons"], tuple(votes), band, centre),
-        votes=escape(votes_line),
-        options_from=_options(t, band[0] if band else None),
-        options_to=_options(t, band[1] if band else None),
-        slug=escape(slug, quote=True),
-        name=escape(name),
-        meta=escape(meta),
-        thumb=escape(thumb, quote=True),
-        bare="" if thumb else " bare",
-        form_hidden="" if place else "hidden",
-        done_hidden="hidden" if place else "",
-        go_off="" if band else "disabled",
-        band=json.dumps(list(band) if band else None),
-        words=_centre_words(t),
+        css=SHARED_CSS,
+        waiting=f"ждут проверки: {len(queue)}" if queue else "",
+        rows="".join(_row(place, votes, enough) for place, votes in queue),
+        done_hidden="hidden" if queue else "",
     )

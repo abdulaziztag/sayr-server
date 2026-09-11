@@ -268,3 +268,54 @@ def test_январь_наверху_весна_слева():
     assert _pt(_centre(4))[0] < 100, "апрель слева"
     assert _pt(_centre(10))[0] > 200, "октябрь справа"
     assert _pt(_centre(7))[1] > 200, "июль внизу"
+
+
+async def test_проверка_показывает_все_места_списком(client, review_client):
+    """Проверка — рабочий список: все ждущие места на одной странице."""
+    try:
+        for voter in ("a", "b", "c"):
+            await _vote(client, "test-lake", voter, (5, 9))
+        await _vote(client, "test-peak", "a", (6, 8))
+        page = await review_client.get("/seasons/review")
+        # Считаем разметку строк, а не «data-row»: эта подстрока есть ещё
+        # и в скрипте страницы, который строки ищет
+        assert page.text.count('class="row"') == 2, "оба места сразу, а не по одному"
+        assert page.text.index("Тестовое озеро") < page.text.index("Тестовый пик"), (
+            "сверху те, где ответов больше"
+        )
+        assert "порог набран" in page.text
+    finally:
+        await _clean()
+
+
+async def test_одобрение_отвечает_скрипту_без_перезагрузки(client, review_client):
+    try:
+        await _vote(client, "test-lake", "a", (5, 9))
+        done = await review_client.post(
+            "/seasons/review/approve",
+            data={"slug": "test-lake", "from_month": 5, "to_month": 9},
+            headers={"Accept": "application/json"},
+        )
+        assert done.status_code == 200 and done.json() == {"ok": True}
+
+        broken = await review_client.post(
+            "/seasons/review/approve",
+            data={"slug": "test-lake"},
+            headers={"Accept": "application/json"},
+        )
+        assert broken.status_code == 422, "без месяцев одобрять нечего"
+    finally:
+        await _clean()
+
+
+async def test_вразнобой_списки_пустые_и_обязательные(client, review_client):
+    """Разошлись — чей-то ответ за итог не выдаём: месяцы ставит человек."""
+    try:
+        await _vote(client, "test-lake", "a", (1, 1))
+        await _vote(client, "test-lake", "b", (7, 7))
+        page = await review_client.get("/seasons/review")
+        assert "вразнобой" in page.text
+        assert '<option value="">—</option>' in page.text
+        assert "required" in page.text
+    finally:
+        await _clean()

@@ -13,7 +13,7 @@
 import secrets
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -82,25 +82,40 @@ async def _queue(session: AsyncSession) -> list[Place]:
     return list((await session.execute(stmt)).scalars().all())
 
 
-async def _votes(session: AsyncSession, place_id: int) -> list[tuple[int, int]]:
+async def _votes(
+    session: AsyncSession, place_ids: list[int]
+) -> dict[int, list[tuple[int, int]]]:
+    """Ответы с месяцами для всех мест списка — одним запросом, а не сотней."""
+    if not place_ids:
+        return {}
     stmt = (
-        select(SeasonVote.from_month, SeasonVote.to_month)
-        .where(SeasonVote.place_id == place_id, SeasonVote.from_month.is_not(None))
+        select(SeasonVote.place_id, SeasonVote.from_month, SeasonVote.to_month)
+        .where(SeasonVote.place_id.in_(place_ids), SeasonVote.from_month.is_not(None))
         .order_by(SeasonVote.id)
     )
-    return [(row[0], row[1]) for row in (await session.execute(stmt)).all()]
+    votes: dict[int, list[tuple[int, int]]] = {pid: [] for pid in place_ids}
+    for place_id, start, end in (await session.execute(stmt)).all():
+        votes[place_id].append((start, end))
+    return votes
 
 
 @router.get("/seasons/review", response_class=HTMLResponse)
 async def review(request: Request, session: AsyncSession = Depends(get_session)):
+    """Весь список сразу: проверка — это разбор подряд, а не игра по одной."""
     if (closed := _guard(request)) is not None:
         return closed
     queue = await _queue(session)
-    place = queue[0] if queue else None
-    votes = await _votes(session, place.id) if place else []
+    votes = await _votes(session, [place.id for place in queue])
     return HTMLResponse(
-        render_review(place=place, votes=votes, waiting=len(queue), enough=ENOUGH_VOTES)
+        render_review([(place, votes[place.id]) for place in queue], ENOUGH_VOTES)
     )
+
+
+def _done(request: Request):
+    """Скрипту — короткое «да», без него — обратно в список."""
+    if "application/json" in request.headers.get("accept", ""):
+        return JSONResponse({"ok": True})
+    return RedirectResponse("/seasons/review", status_code=303)
 
 
 @router.post("/seasons/review/login")
@@ -133,6 +148,8 @@ async def review_approve(
     if (closed := _guard(request)) is not None:
         return closed
     if not (valid(from_month) and valid(to_month)):
+        if "application/json" in request.headers.get("accept", ""):
+            return JSONResponse({"ok": False, "error": "Нужны оба месяца"}, status_code=422)
         return RedirectResponse("/seasons/review", status_code=303)
     place = (
         await session.execute(select(Place).where(Place.slug == slug.strip()))
@@ -144,7 +161,7 @@ async def review_approve(
         # значило бы задавать второй вопрос там, где задан один
         place.best_seasons = seasons_of(from_month, to_month)
         await session.commit()
-    return RedirectResponse("/seasons/review", status_code=303)
+    return _done(request)
 
 
 @router.post("/seasons/review/clear")
@@ -164,4 +181,4 @@ async def review_clear(
             delete(SeasonVote).where(SeasonVote.place_id == place.id)
         )
         await session.commit()
-    return RedirectResponse("/seasons/review", status_code=303)
+    return _done(request)
