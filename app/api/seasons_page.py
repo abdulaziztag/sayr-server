@@ -11,11 +11,13 @@
 
 import json
 import math
+from collections import Counter
 from html import escape
 
 from ..reports import CATEGORY
-from ..seasons import (DEFAULT_ARC, FROM_RU, FULL_RU_UP, FULL_UZ_UP, MONTHS_UZ,
-                       SHORT_RU, SHORT_UZ, arc_text, centre_lines)
+from ..seasons import (DEFAULT_ARC, FROM_RU, FULL_RU_UP, FULL_UZ_UP, LIMIT_CODES,
+                       LIMITS, MONTHS_UZ, SHORT_RU, SHORT_UZ, arc_text, centre_lines,
+                       median)
 
 # Круг: 300 × 300, середина 150. Дорожка радиусом 104 и толщиной 24,
 # подписи месяцев — внутри, по 76; слова сезонов — снаружи, по 138.
@@ -382,6 +384,63 @@ function centreText(svg, from, to, t) {
 }
 """
 
+#: Необязательное в игре: зимняя шкала под кругом и шторка с остальным.
+#: Главный вопрос остаётся одним касанием — всё здесь можно не трогать
+GAME_CSS = """
+.winter { flex:none; border:0; margin:0; padding:0; min-width:0; }
+.winter legend, .lab { display:block; padding:0; margin:0 0 .35rem; font-weight:600;
+                       font-size:.86rem; color:var(--ink); }
+.winter legend em, .lab em { font-style:normal; font-weight:400; font-size:.74rem;
+                             color:var(--ink3); margin-left:.3rem; }
+.scale { display:grid; grid-template-columns:repeat(10, 1fr); gap:4px; }
+.scale label { position:relative; }
+.scale input { position:absolute; inset:0; opacity:0; margin:0; cursor:pointer; }
+.scale span { display:block; text-align:center; line-height:34px; border-radius:9px;
+              background:var(--line); color:var(--ink2); font-family:PlexMono,monospace;
+              font-size:.8rem; transition:background .12s, color .12s; }
+.scale input:checked + span { background:var(--green); color:var(--surface); font-weight:600; }
+.scale input:focus-visible + span { outline:2px solid var(--terra); outline-offset:2px; }
+.more { flex:none; }
+.more summary { list-style:none; cursor:pointer; display:flex; align-items:center;
+                gap:.55rem; min-height:40px; font-size:.88rem; color:var(--ink2); }
+.more summary::-webkit-details-marker { display:none; }
+.more summary span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* В кружке «+», пока пусто, и число заполненного, когда нет: сколько
+   уже сказано, видно, не открывая шторку */
+.more summary i { font-style:normal; display:inline-grid; place-items:center; flex:none;
+                  width:24px; height:24px; border-radius:50%; border:1px solid var(--line);
+                  font-family:PlexMono,monospace; font-size:.8rem; color:var(--ink2); }
+.more summary i.on { background:var(--green); border-color:var(--green);
+                     color:var(--surface); font-weight:600; }
+.sheet .hint { margin:0; font-size:.84rem; color:var(--ink3); }
+.sheet { display:flex; flex-direction:column; gap:1rem; padding:.6rem 0 0; }
+.sheet .chips { display:flex; flex-wrap:wrap; gap:.4rem; }
+.sheet .chip { position:relative; }
+.sheet .chip input { position:absolute; inset:0; opacity:0; margin:0; cursor:pointer; }
+.sheet .chip span { display:inline-flex; align-items:center; min-height:38px;
+                    padding:.35rem .85rem; border:1px solid var(--line); border-radius:19px;
+                    font-size:.88rem; color:var(--ink2); background:var(--paper); }
+.sheet .chip input:checked + span { background:var(--terra); border-color:var(--terra);
+                                    color:#fff; font-weight:600; }
+.sheet textarea { width:100%; font:inherit; font-size:.95rem; padding:.65rem .8rem;
+                  border:1px solid var(--line); border-radius:12px; background:var(--paper);
+                  color:var(--ink); resize:none; }
+.scrim, .close { display:none; }
+/* Со скриптом шторка выезжает поверх экрана: главный экран остаётся
+   без прокрутки, а длинное необязательное живёт отдельно */
+.js .more[open] .scrim { display:block; position:fixed; inset:0; z-index:19;
+                         background:rgba(12,14,12,.42); }
+.js .more[open] .sheet { position:fixed; z-index:20; bottom:0; left:50%;
+                         transform:translateX(-50%); width:min(100%, 30rem);
+                         max-height:82dvh; overflow:auto;
+                         padding:1.1rem 1rem calc(1rem + env(safe-area-inset-bottom));
+                         background:var(--surface); border-radius:22px 22px 0 0;
+                         box-shadow:0 -12px 40px -18px rgba(0,0,0,.45); }
+.js .close { display:block; }
+/* На низком экране пояснение под заголовком уступает место кругу */
+@media (max-height:700px) { .lede { display:none; } }
+"""
+
 RU = {
     "lang": "ru",
     "other": ("/uz/seasons", "Oʻzbekcha"),
@@ -407,6 +466,16 @@ RU = {
     "full_up": FULL_RU_UP,
     "all": "ВЕСЬ ГОД",
     "gen": FROM_RU,
+    "snow": "Тропёжка зимой",
+    "snow_hint": "1 — натоптано, 10 — по пояс",
+    "more": "Опасность, ограничения, комментарий",
+    "optional": "Всё здесь по желанию: отмечайте только то, что знаете точно.",
+    "danger": "Опасность",
+    "danger_hint": "1 — спокойно, 10 — камнепады, лавины",
+    "limits": "Что мешает попасть",
+    "note": "Комментарий",
+    "note_ph": "Что ещё стоит знать: пропуск, закрытый мост, собаки у кошары…",
+    "close": "Закрыть",
 }
 
 UZ = {
@@ -433,6 +502,16 @@ UZ = {
     "full_up": FULL_UZ_UP,
     "all": "YIL BOʻYI",
     "gen": MONTHS_UZ,
+    "snow": "Qishda iz ochish",
+    "snow_hint": "1 — iz bor, 10 — belgacha qor",
+    "more": "Xavf, cheklovlar, izoh",
+    "optional": "Bu yerda hammasi ixtiyoriy: faqat aniq bilganingizni belgilang.",
+    "danger": "Xavf",
+    "danger_hint": "1 — xotirjam, 10 — tosh qulashi, koʻchki",
+    "limits": "Kirishga nima xalaqit beradi",
+    "note": "Izoh",
+    "note_ph": "Yana nimani bilish kerak: ruxsatnoma, yopiq koʻprik…",
+    "close": "Yopish",
 }
 
 _T = {"ru": RU, "uz": UZ}
@@ -500,6 +579,27 @@ _PAGE = """<!doctype html>
       </div>
     </div>
 
+    <fieldset class="winter" data-winter>
+      <legend>%%snow_label%% <em>%%snow_hint%%</em></legend>
+      <div class="scale">%%snow_scale%%</div>
+    </fieldset>
+
+    <details class="more" data-more>
+      <summary><i data-more-count aria-hidden="true">+</i><span>%%more_label%%</span></summary>
+      <div class="scrim" data-scrim></div>
+      <div class="sheet">
+        <p class="hint">%%optional%%</p>
+        <div><p class="lab">%%danger_label%% <em>%%danger_hint%%</em></p>
+          <div class="scale">%%danger_scale%%</div></div>
+        <div><p class="lab">%%limits_label%%</p>
+          <div class="chips">%%limit_chips%%</div></div>
+        <div><label class="lab" for="note">%%note_label%%</label>
+          <textarea id="note" name="note" maxlength="300" rows="3"
+                    placeholder="%%note_ph%%"></textarea></div>
+        <button type="button" class="go close" data-close>%%close_label%%</button>
+      </div>
+    </details>
+
     <input type="hidden" name="slug" data-slug value="%%slug%%">
     <input type="hidden" name="lang" value="%%lang%%">
     <div class="send">
@@ -527,10 +627,75 @@ document.documentElement.classList.add('js');
   var card = form.querySelector('[data-card]');
   var picks = form.querySelectorAll('select');
   var svg = document.querySelector('[data-dial]');
+  var winter = form.querySelector('[data-winter]');
+  var more = form.querySelector('[data-more]');
+  var moreCount = form.querySelector('[data-more-count]');
+  var note = more.querySelector('textarea');
+
+  // Зимняя шкала — только если дуга задевает декабрь, январь или февраль:
+  // спрашивать про снег у места, куда ходят с апреля по август, незачем
+  function touchesWinter(from, to) {
+    var n = ((to - from + 12) % 12) + 1;
+    for (var i = 0; i < n; i++) {
+      var m = (from - 1 + i) % 12 + 1;
+      if (m === 12 || m === 1 || m === 2) return true;
+    }
+    return false;
+  }
+  function showWinter(from, to) {
+    var on = touchesWinter(from, to);
+    winter.hidden = !on;
+    if (!on) winter.querySelectorAll('input').forEach(function (r) {
+      r.checked = false; r.dataset.was = '';
+    });
+  }
+
+  // Сколько необязательного заполнено — видно, не открывая шторку
+  function countMore() {
+    var n = 0;
+    if (more.querySelector('input[name=danger]:checked')) n++;
+    if (more.querySelector('input[name=limits]:checked')) n++;
+    if (note.value.trim()) n++;
+    moreCount.textContent = n ? String(n) : '+';
+    moreCount.classList.toggle('on', !!n);
+  }
+  function resetMore() {
+    form.querySelectorAll('.scale input, .chip input').forEach(function (i) {
+      i.checked = false; i.dataset.was = '';
+    });
+    note.value = '';
+    more.open = false;
+    countMore();
+  }
+
+  // Балл снимается повторным касанием: радиокнопка сама этого не умеет,
+  // а необязательное обязано уметь снова стать пустым
+  form.querySelectorAll('.scale input').forEach(function (radio) {
+    radio.addEventListener('click', function () {
+      if (radio.dataset.was === '1') { radio.checked = false; radio.dataset.was = ''; }
+      else {
+        form.querySelectorAll('input[name="' + radio.name + '"]').forEach(function (o) {
+          o.dataset.was = '';
+        });
+        radio.dataset.was = '1';
+      }
+      countMore();
+    });
+  });
+  more.addEventListener('change', countMore);
+  note.addEventListener('input', countMore);
+  form.querySelector('[data-scrim]').addEventListener('click', function () { more.open = false; });
+  form.querySelector('[data-close]').addEventListener('click', function () { more.open = false; });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && more.open) more.open = false;
+  });
+
   var knob = dial(document.querySelector('.dialbox'), function (from, to) {
     picks[0].value = from; picks[1].value = to;
     centreText(svg, from, to, WORDS);
+    showWinter(from, to);
   }, DEF);
+  showWinter(DEF[0], DEF[1]);
 
   function show(next) {
     form.querySelector('[data-slug]').value = next.slug;
@@ -539,11 +704,14 @@ document.documentElement.classList.add('js');
     var img = form.querySelector('[data-thumb]');
     if (next.thumb) { img.src = next.thumb; card.classList.remove('bare'); }
     else { img.removeAttribute('src'); card.classList.add('bare'); }
-    // Каждая карточка начинает с одной и той же дуги: иначе ответ на
-    // прошлое место подсказывал бы ответ на следующее
+    // Каждая карточка начинает с одной и той же дуги и с пустого
+    // необязательного: иначе ответ на прошлое место подсказывал бы
+    // ответ на следующее
     knob.set(DEF[0], DEF[1]);
     picks[0].value = DEF[0]; picks[1].value = DEF[1];
     centreText(svg, DEF[0], DEF[1], WORDS);
+    resetMore();
+    showWinter(DEF[0], DEF[1]);
     counter.textContent = %%left_word%% + ' ' + left;
   }
 
@@ -583,11 +751,11 @@ document.documentElement.classList.add('js');
     if (!window.fetch) return;
     e.preventDefault();
     var skipped = e.submitter && e.submitter.name === 'skip';
-    var body = new FormData();
-    body.append('slug', form.querySelector('[data-slug]').value);
-    body.append('lang', lang);
-    if (skipped) body.append('skip', '1');
-    else { body.append('from_month', picks[0].value); body.append('to_month', picks[1].value); }
+    // Форма целиком: вместе с дугой уезжает и необязательное, если его
+    // заполнили, — даже при «не знаю»: сезон можно не помнить, а про
+    // погранзону знать точно
+    var body = new FormData(form);
+    if (skipped) body.set('skip', '1');
     fetch(form.action, { method: 'POST', body: body,
                          headers: { 'Accept': 'application/json' } })
       .catch(function () {});
@@ -599,6 +767,14 @@ document.documentElement.classList.add('js');
 </script>
 </body>
 </html>"""
+
+
+def _scale(name: str) -> str:
+    """Шкала 1–10 радиокнопками: работает и без скрипта."""
+    return "".join(
+        f'<label><input type="radio" name="{name}" value="{n}"><span>{n}</span></label>'
+        for n in range(1, 11)
+    )
 
 
 def _meta(card: dict) -> str:
@@ -637,8 +813,25 @@ def render_page(lang: str, deck: list[dict], left: int, mine: int) -> str:
         options_to=_options(t, DEFAULT_ARC[1]),
         dial=circle_svg(t["months"], t["seasons"], band=DEFAULT_ARC,
                         centre=centre_lines(*DEFAULT_ARC, lang=t["lang"])),
-        css=SHARED_CSS + CIRCLE_CSS,
+        css=SHARED_CSS + CIRCLE_CSS + GAME_CSS,
         circle_js=CIRCLE_JS,
+        snow_label=escape(t["snow"]),
+        snow_hint=escape(t["snow_hint"]),
+        snow_scale=_scale("snow_load"),
+        more_label=escape(t["more"]),
+        optional=escape(t["optional"]),
+        danger_label=escape(t["danger"]),
+        danger_hint=escape(t["danger_hint"]),
+        danger_scale=_scale("danger"),
+        limits_label=escape(t["limits"]),
+        limit_chips="".join(
+            f'<label class="chip"><input type="checkbox" name="limits" value="{code}">'
+            f"<span>{escape(ru if t['lang'] == 'ru' else uz)}</span></label>"
+            for code, ru, uz in LIMITS
+        ),
+        note_label=escape(t["note"]),
+        note_ph=escape(t["note_ph"], quote=True),
+        close_label=escape(t["close"]),
         slug=escape(first["slug"], quote=True) if first else "",
         name=escape(first["name"]) if first else "",
         meta=escape(first["meta"]) if first else "",
@@ -721,7 +914,7 @@ _REVIEW = """<!doctype html>
 .list { display:flex; flex-direction:column; gap:.55rem; }
 .row { display:grid; gap:.5rem .75rem; align-items:center;
        grid-template-columns:52px minmax(0,1fr);
-       grid-template-areas:"thumb who" "strip strip" "ctrl ctrl" "said said";
+       grid-template-areas:"thumb who" "strip strip" "ctrl ctrl" "facts facts" "said said";
        padding:.7rem .8rem; background:var(--surface); border:1px solid var(--edge);
        border-radius:14px; transition:opacity .22s, transform .22s; }
 .row.gone { opacity:0; transform:translateX(24px); }
@@ -758,9 +951,26 @@ _REVIEW = """<!doctype html>
                border-radius:11px; }
 .said { grid-area:said; margin:0; font-family:PlexMono,monospace; font-size:.66rem;
         letter-spacing:.02em; color:var(--ink3); }
+/* Что ещё сказали игроки: баллы уже выставлены серединой ответов,
+   ограничения — отмечены; одобрение применяет их вместе с сезоном */
+.facts { grid-area:facts; display:flex; flex-wrap:wrap; align-items:center;
+         gap:.4rem .6rem; }
+.facts .num { display:flex; align-items:center; gap:.35rem; font-family:PlexMono,monospace;
+              font-size:.66rem; letter-spacing:.05em; text-transform:uppercase;
+              color:var(--ink3); }
+.facts .num select { min-height:34px; padding:.2rem .4rem; font-size:.85rem; }
+.facts .flag { position:relative; }
+.facts .flag input { position:absolute; inset:0; opacity:0; margin:0; cursor:pointer; }
+.facts .flag span { display:inline-flex; align-items:center; min-height:32px;
+                    padding:.2rem .7rem; border-radius:16px; border:1px solid var(--line);
+                    font-size:.8rem; color:var(--ink2); }
+.facts .flag input:checked + span { background:var(--terra); border-color:var(--terra);
+                                    color:#fff; }
+.facts .notes { flex-basis:100%; margin:0; font-size:.82rem; color:var(--ink2); }
 @media (min-width:760px) {
   .row { grid-template-columns:52px minmax(8rem,1fr) minmax(15rem,1.3fr) auto;
-         grid-template-areas:"thumb who strip ctrl" "thumb said said said"; }
+         grid-template-areas:"thumb who strip ctrl" "thumb facts facts facts"
+                             "thumb said said said"; }
   .ctrl { flex-wrap:nowrap; }
   .pick { flex:none; }
   .pick select { flex:none; width:8.5rem; }
@@ -862,14 +1072,59 @@ def render_login(failed: bool = False) -> str:
     )
 
 
-def _row(place, votes: list[tuple[int, int]], enough: int) -> str:
-    """Строка списка: место, полоска года, месяцы на одобрение и кнопки."""
+def _facts(votes: list) -> str:
+    """Необязательное из ответов — сводкой, уже готовой к одобрению.
+
+    Баллы — серединой ответов, ограничения — отмечены все, о которых сказал
+    хоть кто-то, со счётчиком рядом: погранзону обычно знает один человек
+    из трёх, и молчание двух других её не отменяет. Проверяющий снимает
+    лишнее одним касанием.
+
+    Скрытые метки «поле было показано» нужны, чтобы одобрение не стирало
+    то, чего в строке не было: пустая шкала и отсутствующая шкала — разное
+    """
+    snow = median([v.snow_load for v in votes if v.snow_load])
+    danger = median([v.danger for v in votes if v.danger])
+    counts = Counter(code for v in votes for code in (v.limits or []) if code in LIMIT_CODES)
+    notes = [v.note for v in votes if v.note]
+    if snow is None and danger is None and not counts and not notes:
+        return ""
+
+    def number(name: str, label: str, value: int) -> str:
+        options = '<option value="">—</option>' + "".join(
+            f'<option value="{n}"{" selected" if n == value else ""}>{n}</option>'
+            for n in range(1, 11)
+        )
+        return (f'<label class="num"><span>{label}</span>'
+                f'<select name="{name}">{options}</select></label>')
+
+    parts = []
+    if snow is not None:
+        parts.append(number("winter_load", "Тропёжка", snow))
+    if danger is not None:
+        parts.append(number("danger", "Опасность", danger))
+    if counts:
+        parts.append('<input type="hidden" name="limits_shown" value="1">')
+        for code, ru, _ in LIMITS:
+            if counts[code]:
+                parts.append(
+                    f'<label class="flag"><input type="checkbox" name="limits" '
+                    f'value="{code}" checked><span>{escape(ru)} · {counts[code]}</span></label>'
+                )
+    if notes:
+        parts.append('<p class="notes">' + " · ".join(f"«{escape(n)}»" for n in notes) + "</p>")
+    return f'<div class="facts">{"".join(parts)}</div>'
+
+
+def _row(place, votes: list, enough: int) -> str:
+    """Строка списка: место, полоска года, месяцы на одобрение, факты и кнопки."""
     from ..seasons import arc_months, suggest
 
-    band = suggest(votes)
-    total = len(votes)
+    arcs = [(v.from_month, v.to_month) for v in votes if v.from_month is not None]
+    band = suggest(arcs)
+    total = len(arcs)
     count = [0] * 13
-    for start, end in votes:
+    for start, end in arcs:
         for month in arc_months(start, end):
             count[month] += 1
     cells = "".join(
@@ -901,7 +1156,7 @@ def _row(place, votes: list[tuple[int, int]], enough: int) -> str:
     else:
         state = ""
     info = " · ".join(bit for bit in (escape(region), f"{total} отв.", state) if bit)
-    said = " · ".join(arc_text(start, end) for start, end in votes)
+    said = " · ".join(arc_text(start, end) for start, end in arcs)
     required = "" if band else " required"
     return (
         f'<form class="row" method="post" action="/seasons/review/approve" data-row>'
@@ -923,6 +1178,7 @@ def _row(place, votes: list[tuple[int, int]], enough: int) -> str:
         f"</div>"
         f"</div>"
         f'<input type="hidden" name="slug" value="{escape(place.slug, quote=True)}">'
+        f"{_facts(votes)}"
         f'<p class="said">{escape(said)}</p>'
         f"</form>"
     )

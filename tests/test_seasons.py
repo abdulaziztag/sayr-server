@@ -6,7 +6,7 @@
 
 import pytest
 
-from app.seasons import arc_months, arc_text, seasons_of, suggest
+from app.seasons import arc_months, arc_text, median, seasons_of, suggest, touches_winter
 
 
 def test_дуга_считается_по_кругу():
@@ -78,3 +78,17 @@ def test_дуга_словами():
     assert arc_text(7, 7) == "июль"
     assert arc_text(11, 2) == "с ноября по февраль"
     assert arc_text(5, 10, "uz") == "may — oktabr"
+
+
+def test_середина_ответов():
+    assert median([]) is None
+    assert median([5]) == 5
+    assert median([2, 3]) == 3, "половина — вверх"
+    assert median([1, 2, 9]) == 2, "один перестраховщик не утаскивает спокойное место"
+
+
+def test_зима_в_дуге():
+    assert touches_winter(11, 2)
+    assert touches_winter(12, 12)
+    assert touches_winter(10, 12)
+    assert not touches_winter(4, 8), "апрель–август про снег не спрашивает"

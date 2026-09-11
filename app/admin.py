@@ -18,6 +18,8 @@ from starlette.responses import (FileResponse, HTMLResponse, RedirectResponse,
                                  Response)
 from markupsafe import Markup
 from wtforms import SelectField, SelectMultipleField
+from wtforms.validators import NumberRange
+from wtforms.validators import Optional as Blank
 
 try:  # расположение менялось между версиями пакета
     from fastapi_storages import StorageFile
@@ -44,6 +46,7 @@ from .models import (
     photo_storage,
 )
 from .reports import STATUS_RU, telegram_url, topic_names
+from .seasons import LIMITS
 from .services import attachments
 from .services.gpx import recorded_from_target, reverse_track, track_stats
 from .services.images import make_thumbnail, retire_photo, store_upload
@@ -76,6 +79,10 @@ _PLACE_LABELS = {
     # заполняются они только вместе, и это должно быть видно
     Place.overnight: "Ночёвка",
     Place.trip_days: "Дней на выход",
+    # Приходят из игры на сайте через проверку, но правятся и здесь
+    Place.winter_load: "Тропёжка зимой",
+    Place.danger: "Опасность",
+    Place.limits: "Ограничения",
 }
 
 # Что считаем переведённым. Пустая строка — это «не переведено»
@@ -161,8 +168,22 @@ class PlaceAdmin(ModelView, model=Place):
         "how_to_get_md": {"rows": 8},
         "how_to_get_md_uz": {"rows": 8},
     }
-    form_overrides = {"best_seasons": SelectMultipleField}
+    form_overrides = {"best_seasons": SelectMultipleField, "limits": SelectMultipleField}
     form_args = {
+        "limits": {
+            "choices": [(code, ru) for code, ru, _ in LIMITS],
+            "description": "Что мешает попасть, кроме погоды",
+        },
+        # Optional первым: пустое поле — «ещё не знаем», и на нём цепочка
+        # проверок останавливается, не доходя до «от 1 до 10»
+        "winter_load": {
+            "validators": [Blank(), NumberRange(min=1, max=10)],
+            "description": "1 — натоптано, 10 — тропить по пояс",
+        },
+        "danger": {
+            "validators": [Blank(), NumberRange(min=1, max=10)],
+            "description": "Отдельно от сложности: 1 — спокойно, 10 — камнепады, лавины",
+        },
         "best_seasons": {
             "choices": [(s.value, s.value) for s in Season],
             "coerce": str,

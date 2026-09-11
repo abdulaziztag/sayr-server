@@ -89,6 +89,51 @@ _SEASON_OF = {
 _SEASON_ORDER = ("spring", "summer", "autumn", "winter")
 
 
+#: Что мешает попасть в место, кроме погоды. Код, русская подпись, узбекская.
+#:
+#: Появилось после разговора с Данилой Алябьевым (11 сентября 2026): сезон
+#: отвечает на «когда», а человеку нужно ещё «пустят ли». Погранзона на
+#: Наували, заповедник на Бешторе, охота осенью, Кумбель, закрытый прямо
+#: сейчас, — всё это разные причины, и смешивать их со сложностью нельзя.
+#: Кодами, а не текстом: по коду в карточке можно показать нужную плашку.
+#: Узбекские слова — по docs/uz-glossary.md
+LIMITS: tuple[tuple[str, str, str], ...] = (
+    ("border", "Погранзона", "Chegara hududi"),
+    ("law", "Закрыто по закону", "Qonun bilan yopiq"),
+    ("hunting", "Сезон охоты", "Ov mavsumi"),
+    ("closed", "Сейчас закрыто", "Hozir yopiq"),
+)
+LIMIT_CODES = frozenset(code for code, _, _ in LIMITS)
+
+#: Зимние месяцы: дуга, задевающая хоть один, открывает вопрос о тропёжке
+WINTER = frozenset({12, 1, 2})
+
+
+def touches_winter(start: int, end: int) -> bool:
+    """Задевает ли дуга зиму — тогда имеет смысл спросить про снег."""
+    return any(month in WINTER for month in arc_months(start, end))
+
+
+def score(value: object) -> int | None:
+    """Балл от 1 до 10 или ничего. Числа приходят из формы — доверять нельзя."""
+    return value if isinstance(value, int) and 1 <= value <= 10 else None
+
+
+def median(values: list[int]) -> int | None:
+    """Середина ответов, половина — вверх: для «2 и 3» это 3.
+
+    Середина, а не среднее: один «10» от перестраховщика не должен
+    утащить за собой спокойное место.
+    """
+    if not values:
+        return None
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[mid]
+    return (ordered[mid - 1] + ordered[mid] + 1) // 2
+
+
 def valid(month: object) -> bool:
     """Месяц ли это. Числа приходят из формы, доверять им нельзя."""
     return isinstance(month, int) and 1 <= month <= 12

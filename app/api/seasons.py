@@ -28,7 +28,7 @@ from ..db import get_session
 from ..models import Place, SeasonVote
 from ..reports import CATEGORY
 from ..schemas import Lang, pick
-from ..seasons import DECK_SIZE, ENOUGH_VOTES, valid
+from ..seasons import DECK_SIZE, ENOUGH_VOTES, LIMIT_CODES, score, touches_winter, valid
 from .seasons_page import render_page
 
 router = APIRouter(tags=["seasons"])
@@ -149,6 +149,13 @@ def _card(place: Place, lang: Lang) -> dict:
     }
 
 
+def _int(value: str | None) -> int | None:
+    try:
+        return int(value) if value not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _voter_of(request: Request) -> str:
     return request.cookies.get(COOKIE, "")
 
@@ -220,10 +227,14 @@ async def seasons_vote(
     to_month: int | None = Form(None),
     skip: str = Form(""),
     lang: str = Form("ru"),
+    snow_load: str = Form(""),
+    danger: str = Form(""),
+    limits: list[str] = Form([]),
+    note: str = Form(""),
     accept: str = Header("", alias="Accept"),
     session: AsyncSession = Depends(get_session),
 ):
-    """Один ответ: дуга по кругу или «не знаю».
+    """Один ответ: дуга по кругу или «не знаю» — и необязательное к ним.
 
     Второй ответ с того же устройства перезаписывает первый, а не ложится
     рядом: человек имеет право передумать, а два его голоса на одно место
@@ -251,6 +262,16 @@ async def seasons_vote(
     else:
         raise HTTPException(422, "Нужны оба месяца или «не знаю»")
 
+    facts = {
+        # Снег спрашиваем только про зимнюю дугу: у места, куда ходят
+        # с апреля по август, балл за тропёжку ничего не значит
+        "snow_load": (score(_int(snow_load))
+                      if months[0] and touches_winter(months[0], months[1]) else None),
+        "danger": score(_int(danger)),
+        "limits": sorted({code for code in limits if code in LIMIT_CODES}),
+        "note": note.strip()[:300] or None,
+    }
+
     existing = (
         await session.execute(
             select(SeasonVote).where(
@@ -265,10 +286,13 @@ async def seasons_vote(
                 voter=voter,
                 from_month=months[0],
                 to_month=months[1],
+                **facts,
             )
         )
     else:
         existing.from_month, existing.to_month = months
+        for key, value in facts.items():
+            setattr(existing, key, value)
     await session.commit()
 
     if "application/json" in accept:

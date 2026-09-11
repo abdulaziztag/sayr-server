@@ -146,6 +146,16 @@ class Place(Base):
     # Пусто значит однодневный, а не ноль
     trip_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     best_seasons: Mapped[list[str]] = mapped_column(ARRAY(String(16)), default=list)
+    # Тропёжка зимой, 1–10: сколько сил уходит на снег. Опасность, 1–10 —
+    # отдельно от сложности: лёгкая тропа бывает камнеопасной. Ограничения —
+    # коды из seasons.LIMITS: погранзона, закон, охота, временное закрытие.
+    # Все три приходят из игры на сайте через одобрение проверяющим, как
+    # и сезон. Пусто — «ещё не знаем», а не «нет»
+    winter_load: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    danger: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    limits: Mapped[list[str]] = mapped_column(
+        ARRAY(String(16)), default=list, server_default="{}"
+    )
     kid_friendly: Mapped[bool] = mapped_column(Boolean, default=False)
     # Коллекции клуба «Проект 21»: cascade / horizon / mirage / underground.
     # Коды, не имена: названия коллекций — имена собственные и не переводятся,
@@ -669,6 +679,15 @@ class SeasonVote(Base):
     #: Концы дуги, 1–12; пусто — «не знаю»
     from_month: Mapped[int | None] = mapped_column(Integer, nullable=True)
     to_month: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Необязательное из той же карточки: снег (только если дуга задевает
+    #: зиму), опасность, ограничения, комментарий. Хранится и при «не знаю»:
+    #: человек может не помнить сезон, но точно знать, что там погранзона
+    snow_load: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    danger: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    limits: Mapped[list[str]] = mapped_column(
+        ARRAY(String(16)), default=list, server_default="{}"
+    )
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: Номер устройства из cookie
     voter: Mapped[str] = mapped_column(String(40), index=True)
     created_at: Mapped[datetime] = mapped_column(

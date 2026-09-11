@@ -22,7 +22,8 @@ from sqlalchemy.orm import selectinload
 from ..config import settings
 from ..db import get_session
 from ..models import Place, SeasonVote
-from ..seasons import ENOUGH_VOTES, seasons_of, valid
+from ..seasons import (ENOUGH_VOTES, LIMIT_CODES, score, seasons_of, touches_winter,
+                       valid)
 from .seasons_page import render_login, render_review
 
 router = APIRouter(tags=["seasons"])
@@ -82,21 +83,30 @@ async def _queue(session: AsyncSession) -> list[Place]:
     return list((await session.execute(stmt)).scalars().all())
 
 
-async def _votes(
-    session: AsyncSession, place_ids: list[int]
-) -> dict[int, list[tuple[int, int]]]:
-    """Ответы с месяцами для всех мест списка — одним запросом, а не сотней."""
+async def _votes(session: AsyncSession, place_ids: list[int]) -> dict[int, list[SeasonVote]]:
+    """Все ответы по местам списка — одним запросом, а не сотней.
+
+    Вместе с «не знаю»: у такого ответа нет дуги, но могут быть
+    ограничения и комментарий, и проверяющему их надо видеть.
+    """
     if not place_ids:
         return {}
     stmt = (
-        select(SeasonVote.place_id, SeasonVote.from_month, SeasonVote.to_month)
-        .where(SeasonVote.place_id.in_(place_ids), SeasonVote.from_month.is_not(None))
+        select(SeasonVote)
+        .where(SeasonVote.place_id.in_(place_ids))
         .order_by(SeasonVote.id)
     )
-    votes: dict[int, list[tuple[int, int]]] = {pid: [] for pid in place_ids}
-    for place_id, start, end in (await session.execute(stmt)).all():
-        votes[place_id].append((start, end))
+    votes: dict[int, list[SeasonVote]] = {pid: [] for pid in place_ids}
+    for vote in (await session.execute(stmt)).scalars().all():
+        votes[vote.place_id].append(vote)
     return votes
+
+
+def _int(value: str | None) -> int | None:
+    try:
+        return int(value) if value not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
 
 
 @router.get("/seasons/review", response_class=HTMLResponse)
@@ -142,9 +152,20 @@ async def review_approve(
     slug: str = Form(""),
     from_month: int | None = Form(None),
     to_month: int | None = Form(None),
+    winter_load: str | None = Form(None),
+    danger: str | None = Form(None),
+    limits: list[str] = Form([]),
+    limits_shown: str = Form(""),
     session: AsyncSession = Depends(get_session),
 ):
-    """Одобрение: дуга становится сезоном места, и оно уходит из игры."""
+    """Одобрение: дуга становится сезоном места, и оно уходит из игры.
+
+    Вместе с сезоном — то необязательное, что было в строке: тропёжка,
+    опасность, ограничения. Поле, которого в строке не было, не трогаем:
+    None от формы значит «не показывали», а пустая строка — «показали
+    и оставили пустым». Иначе одобрение сезона стирало бы то, что
+    владелец когда-то проставил в админке руками
+    """
     if (closed := _guard(request)) is not None:
         return closed
     if not (valid(from_month) and valid(to_month)):
@@ -160,6 +181,14 @@ async def review_approve(
         # Четыре сезона считаются из дуги: держать их отдельным решением
         # значило бы задавать второй вопрос там, где задан один
         place.best_seasons = seasons_of(from_month, to_month)
+        if winter_load is not None:
+            # Балл за снег у места без зимы в сезоне ничего не значит
+            place.winter_load = (score(_int(winter_load))
+                                 if touches_winter(from_month, to_month) else None)
+        if danger is not None:
+            place.danger = score(_int(danger))
+        if limits_shown:
+            place.limits = sorted({code for code in limits if code in LIMIT_CODES})
         await session.commit()
     return _done(request)
 
