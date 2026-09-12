@@ -1,0 +1,155 @@
+{
+  "adelunga-peak": {
+    "tracks": [
+      {
+        "file": "adelunga-day1.gpx",
+        "name": "День 1 · подход к базовому лагерю",
+        "credit": null
+      },
+      {
+        "file": "adelunga-day2.gpx",
+        "name": "День 2 · восхождение",
+        "credit": null
+      }
+    ],
+    "plans": [
+      {
+        "title": "Классика за три дня",
+        "title_uz": "Uch kunlik klassika",
+        "days": [
+          {
+            "n": 1,
+            "title": "Подход к лагерю",
+            "title_uz": "Lagerga yondashuv",
+            "track": "День 1 · подход к базовому лагерю",
+            "steps": [
+              {
+                "kind": "depart",
+                "time": "2:00",
+                "title": "Выехать из Ташкента",
+                "title_uz": "Toshkentdan chiqish"
+              },
+              {
+                "kind": "point",
+                "time": "5:30",
+                "title": "Погранпост в Пскеме",
+                "title_uz": "Piskomdagi chegara posti",
+                "sub": "проверка пропусков",
+                "sub_uz": "ruxsatnomalar tekshiruvi"
+              },
+              {
+                "kind": "point",
+                "time": "10:00",
+                "title": "Конец автодороги",
+                "title_uz": "Avtomobil yoʻlining oxiri",
+                "sub": "старт тропы, 2730 м",
+                "sub_uz": "soʻqmoq starti, 2730 m"
+              },
+              {
+                "kind": "hike",
+                "minutes": 240,
+                "title": "Подход к лагерю",
+                "title_uz": "Lagerga yondashuv"
+              },
+              {
+                "kind": "night",
+                "time": "14:00",
+                "title": "Базовый лагерь · 3220 м",
+                "title_uz": "Bazaviy lager · 3220 m"
+              }
+            ]
+          },
+          {
+            "n": 2,
+            "title": "Вершина",
+            "title_uz": "Choʻqqi",
+            "track": "День 2 · восхождение",
+            "steps": [
+              {
+                "kind": "point",
+                "time": "3:30",
+                "title": "Подъём",
+                "title_uz": "Uygʻonish"
+              },
+              {
+                "kind": "point",
+                "time": "5:00",
+                "title": "Выход на вершину",
+                "title_uz": "Choʻqqiga yoʻl olish"
+              },
+              {
+                "kind": "hike",
+                "minutes": 600,
+                "title": "Подъём",
+                "title_uz": "Koʻtarilish"
+              },
+              {
+                "kind": "summit",
+                "time": "15:00",
+                "title": "Вершина Аделунги · 4301 м",
+                "title_uz": "Adelunga choʻqqisi · 4301 m",
+                "sub": "полчаса наверху",
+                "sub_uz": "tepada yarim soat"
+              },
+              {
+                "kind": "hike",
+                "minutes": 300,
+                "title": "Спуск в лагерь",
+                "title_uz": "Lagerga tushish"
+              },
+              {
+                "kind": "night",
+                "time": "20:30",
+                "title": "Лагерь",
+                "title_uz": "Lager"
+              }
+            ]
+          },
+          {
+            "n": 3,
+            "title": "Возвращение",
+            "title_uz": "Qaytish",
+            "track": "День 1 · подход к базовому лагерю",
+            "reversed": true,
+            "steps": [
+              {
+                "kind": "point",
+                "time": "9:30",
+                "title": "Выход к машинам",
+                "title_uz": "Mashinalarga chiqish",
+                "sub": "тем же путём, что в день 1",
+                "sub_uz": "1-kundagi yoʻl bilan"
+              },
+              {
+                "kind": "hike",
+                "minutes": 90,
+                "title": "Спуск",
+                "title_uz": "Tushish"
+              },
+              {
+                "kind": "depart",
+                "time": "11:30",
+                "title": "Выехать домой",
+                "title_uz": "Uyga qaytish"
+              },
+              {
+                "kind": "road",
+                "minutes": 450,
+                "title": "Дорога",
+                "title_uz": "Yoʻl",
+                "sub": "через погранпост",
+                "sub_uz": "chegara posti orqali"
+              },
+              {
+                "kind": "home",
+                "time": "19:00",
+                "title": "Дома в Ташкенте",
+                "title_uz": "Toshkentda, uyda"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

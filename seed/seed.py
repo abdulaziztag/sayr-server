@@ -21,7 +21,7 @@ except ImportError:  # расположение менялось между ве
 from app.config import GPX_DIR, PHOTOS_DIR
 from app.db import SessionLocal
 from app.models import Place, PlacePhoto, PlaceTrack, Region, gpx_storage, photo_storage
-from app.services.gpx import track_stats
+from app.services.gpx import thin_if_heavy, track_stats
 from app.services.images import generate_placeholder, make_thumbnail
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -116,8 +116,11 @@ async def _ensure_tracks(session, place: Place, item: dict) -> None:
         if not src.exists():
             print(f"  ! {place.slug}: нет файла {spec['file']}, трек пропущен")
             continue
-        shutil.copy(src, GPX_DIR / src.name)
-        stats = track_stats(src.read_bytes())
+        # Сырая запись с часов прореживается ещё на входе; статистика —
+        # по тому файлу, который ляжет в хранилище и уедет клиенту
+        data = thin_if_heavy(src.read_bytes())
+        (GPX_DIR / src.name).write_bytes(data)
+        stats = track_stats(data)
         track = existing.get(src.name)
         if track is None:
             track = PlaceTrack(

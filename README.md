@@ -163,6 +163,31 @@ uv run pytest
 Тестам нужна отдельная база `sayr_test` — её создаёт `docker/initdb/01-test-db.sh`
 при первом подъёме контейнера.
 
+## Планы по дням и тяжёлые треки
+
+У многодневок план пишет человек (спека
+`docs/superpowers/specs/2026-09-13-multiday-plan-design.md`): часы клуба,
+дни, станции. Планы лежат в `seed/data/plans.json` и грузятся отдельно
+от основного сида, идемпотентно по паре «место, название»:
+
+```bash
+uv run python -m seed.load_plans                     # все места из файла
+uv run python -m seed.load_plans --only adelunga-peak
+```
+
+В файле у места могут быть и `tracks` — они заливаются тем же путём,
+что треки из `places.json`. Форма в админке («Планы по дням») —
+запасной путь.
+
+GPX длиннее 2000 точек прореживаются при загрузке в админку и в сиде
+(`services/gpx.thin_if_heavy`). Файлы, залитые раньше, чистит разовый
+скрипт — сначала посмотреть, потом `--apply` после копии `media/gpx`:
+
+```bash
+uv run python -m seed.thin_tracks
+uv run python -m seed.thin_tracks --apply
+```
+
 ## Известные ограничения
 
 - `POST/DELETE /api/v1/places/{slug}/intents` доверяют `device_id` от клиента:

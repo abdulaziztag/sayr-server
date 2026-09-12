@@ -313,6 +313,25 @@ def outbound_only(data: bytes) -> bytes | None:
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
+#: Длиннее — файл считается сырой записью и прореживается при загрузке.
+#: Две тысячи точек — это ~100 КБ и достаточно для профиля любого дня;
+#: сырые записи с часов несут по 50 тысяч точек и 17 МБ
+MAX_POINTS = 2000
+
+
+def thin_if_heavy(data: bytes) -> bytes:
+    """Проредить файл длиннее MAX_POINTS точек; короткий вернуть как есть.
+
+    Битый XML тоже возвращается как есть: решать, что с ним делать,
+    будет статистика, которая на нём уже умеет не падать.
+    """
+    try:
+        heavy = len(track_coords(data)) > MAX_POINTS
+    except ET.ParseError:
+        return data
+    return clean(data) if heavy else data
+
+
 def track_coords(data: bytes) -> list[tuple[float, float]]:
     """Точки всех треков файла — только широта и долгота."""
     root = ET.fromstring(data)

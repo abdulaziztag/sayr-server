@@ -35,9 +35,12 @@ from .models import (
     AppUpdate,
     Place,
     PlacePhoto,
+    PlacePlan,
     PlaceReport,
     PlaceReportFile,
     PlaceTrack,
+    PlanDay,
+    PlanStep,
     PushToken,
     Region,
     ReportStatus,
@@ -48,7 +51,7 @@ from .models import (
 from .reports import STATUS_RU, telegram_url, topic_names
 from .seasons import LIMITS
 from .services import attachments
-from .services.gpx import recorded_from_target, reverse_track, track_stats
+from .services.gpx import recorded_from_target, reverse_track, thin_if_heavy, track_stats
 from .services.images import make_thumbnail, retire_photo, store_upload
 from .services.nearby import rebuild_for_track
 
@@ -433,6 +436,13 @@ class PlaceTrackAdmin(ModelView, model=PlaceTrack):
                 if recorded_from_target(data, place_lat, place_lng):
                     data = reverse_track(data)
                     path.write_bytes(data)
+                # Сырая запись с часов весит мегабайты: прореживаем при
+                # загрузке и статистику считаем уже по тому файлу, который
+                # человек скачает
+                thin = thin_if_heavy(data)
+                if thin is not data:
+                    data = thin
+                    path.write_bytes(data)
                 stats = track_stats(data)
             except Exception:
                 return
@@ -605,6 +615,90 @@ def _render(d: dict) -> str:
   <h2 class="h3 mt-4">Открытия ссылок «поделиться» за 30 дней</h2>
   {shares}
 </div></div></body></html>"""
+
+
+class PlacePlanAdmin(ModelView, model=PlacePlan):
+    """План выхода по дням — запасной путь.
+
+    Обычно планы заносит `seed.load_plans` из `seed/data/plans.json`;
+    форма здесь на всякий случай, с раздельными полями по языкам
+    и по времени (решение владельца, 13 сентября 2026).
+    """
+
+    name = "План по дням"
+    name_plural = "Планы по дням"
+    category = "Планы по дням"
+    column_list = [PlacePlan.id, PlacePlan.place, PlacePlan.title, PlacePlan.is_draft,
+                   PlacePlan.sort_order]
+    column_searchable_list = [PlacePlan.title]
+    column_default_sort = ("id", True)
+    form_columns = [PlacePlan.place, PlacePlan.title, PlacePlan.title_uz, PlacePlan.is_draft,
+                    PlacePlan.sort_order]
+    column_labels = {
+        PlacePlan.place: "Место",
+        PlacePlan.title: "Название",
+        PlacePlan.title_uz: "Название · UZ",
+        PlacePlan.is_draft: "Черновик",
+        PlacePlan.sort_order: "Порядок",
+        PlacePlan.days: "Дни",
+    }
+    form_args = {"title": {"description": "«С ночёвкой» — видно только в переключателе вариантов"}}
+
+
+class PlanDayAdmin(ModelView, model=PlanDay):
+    name = "День плана"
+    name_plural = "Дни планов"
+    category = "Планы по дням"
+    column_list = [PlanDay.id, PlanDay.plan, PlanDay.n, PlanDay.title, PlanDay.track,
+                   PlanDay.reversed]
+    column_default_sort = ("id", True)
+    # Список треков — все треки каталога подряд: это запасной путь,
+    # фильтровать его по месту не стоит той возни
+    form_columns = [PlanDay.plan, PlanDay.n, PlanDay.title, PlanDay.title_uz, PlanDay.track,
+                    PlanDay.reversed]
+    column_labels = {
+        PlanDay.plan: "План",
+        PlanDay.n: "День №",
+        PlanDay.title: "Название",
+        PlanDay.title_uz: "Название · UZ",
+        PlanDay.track: "Трек дня",
+        PlanDay.reversed: "По треку обратно",
+        PlanDay.steps: "Станции",
+    }
+    form_args = {
+        "track": {"description": "Ради профиля и наклеек км и набора; можно без трека"},
+        "reversed": {"description": "Набор покажется спуском, профиль зеркалится"},
+    }
+
+
+class PlanStepAdmin(ModelView, model=PlanStep):
+    name = "Станция плана"
+    name_plural = "Станции планов"
+    category = "Планы по дням"
+    column_list = [PlanStep.id, PlanStep.day, PlanStep.sort_order, PlanStep.kind, PlanStep.at,
+                   PlanStep.minutes, PlanStep.title]
+    column_default_sort = ("id", True)
+    form_columns = [PlanStep.day, PlanStep.sort_order, PlanStep.kind, PlanStep.at,
+                    PlanStep.minutes, PlanStep.title, PlanStep.title_uz, PlanStep.sub,
+                    PlanStep.sub_uz]
+    column_labels = {
+        PlanStep.day: "День",
+        PlanStep.sort_order: "Порядок",
+        PlanStep.kind: "Вид",
+        PlanStep.at: "Время",
+        PlanStep.minutes: "Длительность, мин",
+        PlanStep.title: "Название",
+        PlanStep.title_uz: "Название · UZ",
+        PlanStep.sub: "Подпись",
+        PlanStep.sub_uz: "Подпись · UZ",
+    }
+    form_args = {
+        "kind": {"description": "depart — выезд, point — точка, hike — пешком, road — дорога, "
+                                "summit — вершина, night — ночёвка, home — дома"},
+        "at": {"description": "У точек; у участков пусто"},
+        "minutes": {"description": "У участков hike и road; у точек пусто"},
+        "sub": {"description": "Мелким капсом под названием: «проверка пропусков»"},
+    }
 
 
 class TesterSignupAdmin(ModelView, model=TesterSignup):
@@ -1184,6 +1278,9 @@ def mount_admin(app: FastAPI) -> Admin:
     admin.add_view(PlaceAdmin)
     admin.add_view(PlacePhotoAdmin)
     admin.add_view(PlaceTrackAdmin)
+    admin.add_view(PlacePlanAdmin)
+    admin.add_view(PlanDayAdmin)
+    admin.add_view(PlanStepAdmin)
     admin.add_view(RegionAdmin)
     admin.add_view(PlaceReportAdmin)
     admin.add_base_view(ReportFilesView)

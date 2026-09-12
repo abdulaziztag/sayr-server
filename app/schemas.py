@@ -3,7 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from .models import Difficulty, OvernightType, Place, PlaceCategory, PlacePhoto, PlaceTrack
+from .models import (Difficulty, OvernightType, Place, PlaceCategory, PlacePhoto, PlacePlan,
+                     PlaceTrack, PlanDay, PlanStep)
 
 # Язык ответа. Список закрытый и совпадает с тем, что зашито в клиентах
 # (AppLanguage на обеих платформах); «как в системе» там нет, и здесь тоже
@@ -86,6 +87,34 @@ class TrackOut(BaseModel):
     start_lng: float | None = None
 
 
+class PlanStepOut(BaseModel):
+    """Станция плана. `time` — «H:MM» у точек, `minutes` — у участков."""
+
+    kind: str
+    time: str | None
+    minutes: int | None
+    title: str
+    sub: str | None
+
+
+class PlanDayOut(BaseModel):
+    n: int
+    title: str
+    #: Трек дня из `tracks` той же детали; пусто — карточка без профиля
+    track_id: int | None
+    reversed: bool
+    steps: list[PlanStepOut]
+
+
+class PlanOut(BaseModel):
+    """План по дням, написанный человеком (спека 2026-09-13)."""
+
+    id: int
+    title: str
+    is_draft: bool
+    days: list[PlanDayOut]
+
+
 class NearbyOut(BaseModel):
     """Соседнее место: то, мимо чего проходит трек одного из двух."""
 
@@ -106,6 +135,8 @@ class PlaceDetail(PlaceListItem):
     gpx_url: str | None
     gpx_credit: str | None
     nearby: list[NearbyOut] = []
+    # Планы по дням. Старые сборки поля не знают и пропускают его
+    plans: list[PlanOut] = []
 
 
 class WeatherDay(BaseModel):
@@ -190,6 +221,40 @@ def track_out(t: PlaceTrack, lang: Lang = DEFAULT_LANG) -> TrackOut:
     )
 
 
+def _hhmm(value) -> str | None:
+    # Без ведущего нуля — как все часы в нити: «2:00», а не «02:00»
+    return None if value is None else f"{value.hour}:{value.minute:02d}"
+
+
+def plan_step_out(s: PlanStep, lang: Lang = DEFAULT_LANG) -> PlanStepOut:
+    return PlanStepOut(
+        kind=s.kind.value,
+        time=_hhmm(s.at),
+        minutes=s.minutes,
+        title=pick(s.title, s.title_uz, lang),
+        sub=pick(s.sub, s.sub_uz, lang) if s.sub else None,
+    )
+
+
+def plan_day_out(d: PlanDay, lang: Lang = DEFAULT_LANG) -> PlanDayOut:
+    return PlanDayOut(
+        n=d.n,
+        title=pick(d.title, d.title_uz, lang),
+        track_id=d.track_id,
+        reversed=d.reversed,
+        steps=[plan_step_out(s, lang) for s in d.steps],
+    )
+
+
+def plan_out(p: PlacePlan, lang: Lang = DEFAULT_LANG) -> PlanOut:
+    return PlanOut(
+        id=p.id,
+        title=pick(p.title, p.title_uz, lang),
+        is_draft=p.is_draft,
+        days=[plan_day_out(d, lang) for d in p.days],
+    )
+
+
 def nearby_out(p: Place, distance_m: int, lang: Lang = DEFAULT_LANG) -> NearbyOut:
     cover = p.photos[0] if p.photos else None
     return NearbyOut(
@@ -214,4 +279,5 @@ def place_detail(
         gpx_url=primary.gpx_url if primary else None,
         gpx_credit=primary.gpx_credit if primary else None,
         nearby=nearby or [],
+        plans=[plan_out(plan, lang) for plan in p.plans],
     )

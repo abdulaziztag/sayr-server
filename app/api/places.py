@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from ..db import get_session
-from ..models import Difficulty, Place, PlaceCategory, PlaceNeighbor, Season
+from ..models import Difficulty, Place, PlaceCategory, PlaceNeighbor, PlacePlan, PlanDay, Season
 from ..schemas import (
     DEFAULT_LANG,
     Lang,
@@ -126,6 +126,9 @@ async def _get_place_or_404(slug: str, session: AsyncSession) -> Place:
         .options(
             selectinload(Place.photos),
             selectinload(Place.tracks),
+            # Планы по дням целиком: дни и станции. В API уезжает только
+            # track_id дня — сам трек уже есть в tracks
+            selectinload(Place.plans).selectinload(PlacePlan.days).selectinload(PlanDay.steps),
             joinedload(Place.region),
         )
         .where(Place.slug == slug, Place.is_published)

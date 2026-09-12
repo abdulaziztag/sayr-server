@@ -1,5 +1,6 @@
 import enum
 from datetime import date, datetime
+from datetime import time as datetime_time
 from pathlib import Path
 
 from fastapi_storages import FileSystemStorage
@@ -15,6 +16,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    Time,
     UniqueConstraint,
     func,
 )
@@ -74,6 +76,23 @@ class Season(str, enum.Enum):
     summer = "summer"
     autumn = "autumn"
     winter = "winter"
+
+
+class PlanStepKind(str, enum.Enum):
+    """Вид станции в плане по дням — от него зависит карточка в нити.
+
+    Семь видов, и все уже есть в расчётной нити однодневки: план не
+    заводит нового языка, он только называет станции руками. Участки —
+    `hike` и `road`, у них длительность; остальное — точки со временем.
+    """
+
+    depart = "depart"
+    point = "point"
+    hike = "hike"
+    road = "road"
+    summit = "summit"
+    night = "night"
+    home = "home"
 
 
 photo_storage = FileSystemStorage(path=str(PHOTOS_DIR))
@@ -207,6 +226,14 @@ class Place(Base):
         cascade="all, delete-orphan",
         order_by="[PlaceTrack.sort_order, PlaceTrack.id]",
     )
+    # Планы по дням (спека 2026-09-13-multiday-plan-design.md). У места
+    # без пометки ночёвки расчётная нить остаётся, планы — варианты к ней;
+    # у места с ночёвкой план заменяет расчёт
+    plans: Mapped[list["PlacePlan"]] = relationship(
+        back_populates="place",
+        cascade="all, delete-orphan",
+        order_by="[PlacePlan.sort_order, PlacePlan.id]",
+    )
 
     def __str__(self) -> str:
         return self.name
@@ -285,6 +312,106 @@ class PlaceTrack(Base):
 
     def __str__(self) -> str:
         return self.name
+
+
+class PlacePlan(Base):
+    """План выхода по дням, написанный человеком.
+
+    Расчётная нить считает световой день и про погранпост, лагерь
+    и подъём в полчетвёртого не знает. План — это часы клуба: «2:00 выезд,
+    5:30 пост, 14:00 лагерь». У места их может быть несколько (Коксу:
+    одним днём и с ночёвкой), в карточке между ними переключатель.
+    """
+
+    __tablename__ = "place_plans"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    place_id: Mapped[int] = mapped_column(
+        ForeignKey("places.id", ondelete="CASCADE"), index=True
+    )
+    #: «С ночёвкой» — видно только в переключателе вариантов
+    title: Mapped[str] = mapped_column(String(120))
+    title_uz: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    #: Метка «черновик»: цифры ещё не подтверждены
+    is_draft: Mapped[bool] = mapped_column(Boolean, default=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    # joined: подписи в выпадающих списках админки зовут __str__, а ленивая
+    # подгрузка из async-сессии там падает на greenlet
+    place: Mapped[Place] = relationship(back_populates="plans", lazy="joined")
+    days: Mapped[list["PlanDay"]] = relationship(
+        back_populates="plan",
+        cascade="all, delete-orphan",
+        order_by="PlanDay.n",
+    )
+
+    def __str__(self) -> str:
+        # Так подписан выпадающий список дней в админке
+        return f"{self.place.name} · {self.title}" if self.place else self.title
+
+
+class PlanDay(Base):
+    """День плана: название, станции и трек, по которому идут."""
+
+    __tablename__ = "plan_days"
+    __table_args__ = (UniqueConstraint("plan_id", "n", name="uq_plan_day"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    plan_id: Mapped[int] = mapped_column(
+        ForeignKey("place_plans.id", ondelete="CASCADE"), index=True
+    )
+    #: Номер дня с единицы
+    n: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(120))
+    title_uz: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    #: Трек дня — ради профиля и наклеек км и набора в карточке пешего
+    #: участка. Пусто — карточка без профиля. Трек удалили — день остаётся
+    track_id: Mapped[int | None] = mapped_column(
+        ForeignKey("place_tracks.id", ondelete="SET NULL"), nullable=True
+    )
+    #: День идёт по треку обратно: набор показывается спуском, профиль зеркалится
+    reversed: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    plan: Mapped[PlacePlan] = relationship(back_populates="days", lazy="joined")
+    track: Mapped["PlaceTrack | None"] = relationship()
+    steps: Mapped[list["PlanStep"]] = relationship(
+        back_populates="day",
+        cascade="all, delete-orphan",
+        order_by="[PlanStep.sort_order, PlanStep.id]",
+    )
+
+    def __str__(self) -> str:
+        return f"{self.plan} · день {self.n} · {self.title}" if self.plan else self.title
+
+
+class PlanStep(Base):
+    """Станция плана. `at` и `minutes` оба необязательны: у черновика
+    станции без часов, и это законно — вид решает, что показывать."""
+
+    __tablename__ = "plan_steps"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    day_id: Mapped[int] = mapped_column(
+        ForeignKey("plan_days.id", ondelete="CASCADE"), index=True
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    kind: Mapped[PlanStepKind] = mapped_column(
+        Enum(PlanStepKind, name="plan_step_kind"), default=PlanStepKind.point
+    )
+    #: Время суток точки; у участков пусто
+    at: Mapped[datetime_time | None] = mapped_column(Time, nullable=True)
+    #: Длительность участка в минутах; у точек пусто
+    minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    title: Mapped[str] = mapped_column(String(200))
+    title_uz: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: Подпись капсом под названием: «проверка пропусков»
+    sub: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    sub_uz: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    day: Mapped[PlanDay] = relationship(back_populates="steps", lazy="joined")
+
+    def __str__(self) -> str:
+        return self.title
 
 
 class PlaceNeighbor(Base):
