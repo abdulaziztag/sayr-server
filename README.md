@@ -179,6 +179,13 @@ uv run python -m seed.load_plans --only adelunga-peak
 что треки из `places.json`. Форма в админке («Планы по дням») —
 запасной путь.
 
+На боевом стенде отдельного пользователя нет: скрипты запускаются
+от root из корня репозитория, где лежит `.env` со строкой к базе:
+
+```bash
+cd /root/Projects/sayr-server && .venv/bin/python -m seed.load_plans
+```
+
 GPX длиннее 2000 точек прореживаются при загрузке в админку и в сиде
 (`services/gpx.thin_if_heavy`). Файлы, залитые раньше, чистит разовый
 скрипт — сначала посмотреть, потом `--apply` после копии `media/gpx`:
@@ -187,6 +194,9 @@ GPX длиннее 2000 точек прореживаются при загру�
 uv run python -m seed.thin_tracks
 uv run python -m seed.thin_tracks --apply
 ```
+
+На боевом стенде — так же от root из `/root/Projects/sayr-server`,
+через `.venv/bin/python`.
 
 ## Известные ограничения
 
