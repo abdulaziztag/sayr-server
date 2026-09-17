@@ -86,8 +86,8 @@ RU = {
                     "и честной оценкой сложности."),
         ("День по часам", "Во сколько выехать, сколько ехать, сколько идти "
                           "и когда садится солнце."),
-        ("Карта", "Все места сразу — видно, что рядом, а что на выходные "
-                  "с ночёвкой."),
+        ("На тропе", "Где вы на нитке маршрута и сколько осталось идти. "
+                     "Свой выход можно записать."),
     ],
     "privacy": "Конфиденциальность",
     "support": "Поддержка",
@@ -148,8 +148,8 @@ UZ = {
         ("Katalog", "Yuzdan ortiq joy: suratlar, masofa va murakkablikning "
                     "halol bahosi."),
         ("Kun soatlab", "Qachon chiqish, qancha yurish va quyosh qachon botadi."),
-        ("Xarita", "Barcha joylar birdan — nima yaqin, nimaga tunab borish "
-                   "kerakligi koʻrinadi."),
+        ("Soʻqmoqda", "Trek ipida qayerdasiz va yurishga qancha qolgan. "
+                      "Chiqishingizni yozib olish ham mumkin."),
     ],
     "privacy": "Maxfiylik",
     "support": "Yordam",
@@ -452,7 +452,7 @@ _ANDROID = ('<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
             'M9.4 6.1a.55.55 0 110-1.1.55.55 0 010 1.1zm5.2 0a.55.55 0 110-1.1.55.55 0 010 1.1z"/>'
             '</svg>')
 
-_SHOT_FILES = ("shot-catalog", "shot-detail", "shot-map")
+_SHOT_FILES = ("shot-catalog", "shot-detail", "shot-trail")
 
 
 def _cta(t: dict) -> tuple[str, str]:
