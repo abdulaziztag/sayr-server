@@ -59,6 +59,10 @@ RU = {
          "Приложение берёт закат в координатах места и вычитает дорогу туда "
          "и обратно, ходовое время и запас. Получается час, позже которого "
          "выезжать не стоит."),
+        ("Идёт с вами по тропе",
+         "На маршруте видно вашу точку на нитке и сколько осталось до конца — "
+         "по пути, а не по прямой. Свой выход можно записать: трек пишется "
+         "с погашенным экраном, телефон лежит в кармане."),
         ("Настоящие треки",
          "Записи GPS, которые прошли люди, а не нарисованные линии. Открываются "
          "в вашем навигаторе одним касанием. Отдельно — координаты начала тропы, "
@@ -67,11 +71,12 @@ RU = {
          "Отметили выезд — описание, трек, фотографии и карта скачиваются заранее. "
          "В ущелье, где не ловит, всё открывается как ни в чём не бывало."),
         ("Без рекламы и регистрации",
-         "Нет аккаунтов, нет рекламы, нет слежки. Геопозиция не запрашивается вовсе. "
-         "Избранное и планы остаются на вашем телефоне."),
+         "Нет аккаунтов, нет рекламы, нет слежки. Геопозиция нужна только экрану "
+         "трека и записи: она считается на телефоне и на сервер не уходит. "
+         "Избранное, планы и записанные треки остаются на вашем телефоне."),
     ],
     "facts": [
-        ("120", "место в каталоге"),
+        ("147", "мест в каталоге"),
         ("12", "регионов Узбекистана"),
         ("GPX", "треки, записанные людьми"),
         ("0", "рекламы и аккаунтов"),
@@ -117,6 +122,10 @@ UZ = {
          "Ilova joyning koordinatalari boʻyicha quyoshning botishini oladi va "
          "yoʻl, yurish vaqti hamda zaxirani ayiradi. Shundan keyin chiqish "
          "tavsiya etilmaydigan vaqt kelib chiqadi."),
+        ("Soʻqmoqda siz bilan birga",
+         "Marshrutda oʻz nuqtangiz trek ipida koʻrinadi, oxirigacha qancha "
+         "qolgani ham — toʻgʻri chiziq emas, yoʻl boʻylab. Chiqishingizni yozib "
+         "olish mumkin: trek ekran oʻchgan holda yoziladi."),
         ("Haqiqiy treklar",
          "Chizilgan chiziqlar emas, odamlar yurgan GPS yozuvlari. Bir teginishda "
          "navigatoringizda ochiladi. Alohida — mashinada yetib borish uchun "
@@ -125,11 +134,12 @@ UZ = {
          "Chiqishni belgilasangiz, tavsif, trek, suratlar va xarita oldindan "
          "yuklab olinadi. Aloqa yoʻq darada ham hammasi ochilaveradi."),
         ("Reklamasiz va roʻyxatdan oʻtmasdan",
-         "Akkaunt yoʻq, reklama yoʻq, kuzatuv yoʻq. Joylashuv umuman soʻralmaydi. "
-         "Saralanganlar va rejalar telefoningizda qoladi."),
+         "Akkaunt yoʻq, reklama yoʻq, kuzatuv yoʻq. Joylashuv faqat trek ekrani "
+         "va yozuv uchun kerak: u telefonda hisoblanadi, serverga ketmaydi. "
+         "Saralanganlar, rejalar va yozilgan treklar telefoningizda qoladi."),
     ],
     "facts": [
-        ("120", "joy katalogda"),
+        ("147", "joy katalogda"),
         ("12", "Oʻzbekiston mintaqasi"),
         ("GPX", "odamlar yozgan treklar"),
         ("0", "reklama va akkaunt"),
