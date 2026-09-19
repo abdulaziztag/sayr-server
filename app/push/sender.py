@@ -19,7 +19,9 @@ from ..models import Announcement, AnnouncementStatus, PushToken
 from . import SendResult
 
 TASHKENT = ZoneInfo("Asia/Tashkent")
-Transport = Callable[[str, str, str, str | None], Awaitable[SendResult]]
+#: токен, заголовок, текст, slug места, номер рассылки. Номер едет всегда:
+#: по нему приложение сообщает открытие, и у рассылки появляется процент
+Transport = Callable[[str, str, str, str | None, int], Awaitable[SendResult]]
 
 # Сколько запросов держим в воздухе разом: и APNs, и FCM спокойно берут больше,
 # но нам важнее не упереться в лимиты соединений на маленьком VPS
@@ -81,7 +83,10 @@ async def send_announcement(
                 missing[t.platform] += 1
                 failed += 1
                 return
-            result = await transport(t.token, announcement.title, announcement.body, announcement.place_slug)
+            result = await transport(
+                t.token, announcement.title, announcement.body,
+                announcement.place_slug, announcement.id,
+            )
         if result.ok:
             sent += 1
             return

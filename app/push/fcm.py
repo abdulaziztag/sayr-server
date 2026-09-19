@@ -47,7 +47,9 @@ class FcmSender:
         self._access_until = now + int(data.get("expires_in", 3600))
         return self._access
 
-    async def send(self, token: str, title: str, body: str, slug: str | None) -> SendResult:
+    async def send(
+        self, token: str, title: str, body: str, slug: str | None, announcement_id: int
+    ) -> SendResult:
         message: dict = {
             "message": {
                 "token": token,
@@ -55,8 +57,12 @@ class FcmSender:
                 "android": {"priority": "high"},
             }
         }
+        # data в FCM — только строки. Номер рассылки едет всегда: по нему
+        # приложение сообщает открытие; slug — когда есть куда вести
+        data = {"announcement_id": str(announcement_id)}
         if slug:
-            message["message"]["data"] = {"slug": slug}
+            data["slug"] = slug
+        message["message"]["data"] = data
         try:
             access = await self._access_token()
             r = await self._client.post(

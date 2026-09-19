@@ -43,8 +43,14 @@ class ApnsSender:
             self._jwt_at = time.time()
         return self._jwt
 
-    async def send(self, token: str, title: str, body: str, slug: str | None) -> SendResult:
-        payload: dict = {"aps": {"alert": {"title": title, "body": body}, "sound": "default"}}
+    async def send(
+        self, token: str, title: str, body: str, slug: str | None, announcement_id: int
+    ) -> SendResult:
+        payload: dict = {
+            "aps": {"alert": {"title": title, "body": body}, "sound": "default"},
+            # По номеру приложение сообщает открытие рассылки
+            "announcement_id": announcement_id,
+        }
         if slug:
             # Тот же ключ, что у локальных напоминаний: делегат в приложении
             # уже умеет открывать место по нему

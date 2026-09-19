@@ -92,14 +92,16 @@ async def test_sends_only_ripe_and_disables_dead_tokens():
     await _seed(now)
     calls: list[tuple[str, str]] = []
 
-    async def ios(token, title, body, slug):
+    async def ios(token, title, body, slug, announcement_id):
         calls.append((token, title))
+        # Номер рассылки едет всегда — по нему приложение сообщает открытие
+        assert isinstance(announcement_id, int) and announcement_id > 0
         # Вторая установка снесла приложение — Apple отвечает 410
         if token == TOKEN_B:
             return SendResult(ok=False, invalid_token=True, error="apns 410 Unregistered")
         return SendResult(ok=True)
 
-    async def android(token, title, body, slug):
+    async def android(token, title, body, slug, announcement_id):
         calls.append((token, title))
         return SendResult(ok=True)
 
@@ -127,7 +129,7 @@ async def test_platform_without_keys_is_reported_not_fatal():
     now = datetime(2026, 9, 5, 12, 0)
     await _seed(now)
 
-    async def ios(token, title, body, slug):
+    async def ios(token, title, body, slug, announcement_id):
         return SendResult(ok=True)
 
     async with SessionLocal() as session:
@@ -143,12 +145,12 @@ async def test_broken_keys_stop_the_platform_after_first_answer():
     await _seed(now)
     attempts = 0
 
-    async def ios(token, title, body, slug):
+    async def ios(token, title, body, slug, announcement_id):
         nonlocal attempts
         attempts += 1
         return SendResult(ok=False, fatal=True, error="apns 403 InvalidProviderToken")
 
-    async def android(token, title, body, slug):
+    async def android(token, title, body, slug, announcement_id):
         return SendResult(ok=True)
 
     async with SessionLocal() as session:

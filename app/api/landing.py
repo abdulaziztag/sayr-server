@@ -15,14 +15,15 @@
 
 import re
 
-from fastapi import APIRouter, Depends, Form, Header, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import APIRouter, Depends, Form, Header, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..db import get_session
 from ..models import TesterSignup
+from ..stats import clean_mark, record_event
 
 router = APIRouter(tags=["landing"])
 
@@ -455,7 +456,7 @@ _ANDROID = ('<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
 _SHOT_FILES = ("shot-catalog", "shot-detail", "shot-trail")
 
 
-def _cta(t: dict) -> tuple[str, str]:
+def _cta(t: dict, mark: str | None = None) -> tuple[str, str]:
     """Две кнопки, по одной на платформу.
 
     Раньше кнопка была одна и сама угадывала систему, а вторая платформа
@@ -472,13 +473,17 @@ def _cta(t: dict) -> tuple[str, str]:
             f'<p class="note">{t["soon_note"]}</p>',
             "",
         )
+    # Кнопки ведут через свой редирект /go/…, а не прямо в магазин: так
+    # клик считается по метке канала, с которой человек пришёл, и видно
+    # не только «зашли по ссылке из „Горца"», но и «пошли ставить»
+    tail = f"?from={mark}" if mark else ""
     buttons = []
     if ios:
-        buttons.append(f'<a class="btn" href="{ios}">{_APPLE}{t["ios"]}</a>')
+        buttons.append(f'<a class="btn" href="/go/ios{tail}">{_APPLE}{t["ios"]}</a>')
     # Пока в Google Play нас нет, андроидная кнопка ведёт к форме
     # закрытого теста ниже по странице
     buttons.append(
-        f'<a class="btn btn-android" href="{android or "#android"}">'
+        f'<a class="btn btn-android" href="{f"/go/android{tail}" if android else "#android"}">'
         f'{_ANDROID}{t["android"]}</a>'
     )
     return f'<div class="cta">{"".join(buttons)}</div>', ""
@@ -543,8 +548,8 @@ def _tester_form(t: dict) -> str:
   </script>"""
 
 
-def _render(t: dict) -> str:
-    cta, script = _cta(t)
+def _render(t: dict, mark: str | None = None) -> str:
+    cta, script = _cta(t, mark)
     tester_form = _tester_form(t)
     blocks = "".join(
         f'<div class="block">{icon}<h2>{head}</h2><p>{body}</p></div>'
@@ -642,10 +647,28 @@ async def android_tester_signup(
 
 
 @router.get("/", response_class=HTMLResponse)
-async def landing() -> str:
-    return _render(RU)
+async def landing(request: Request) -> str:
+    return _render(RU, clean_mark(request.query_params.get("from")))
 
 
 @router.get("/uz", response_class=HTMLResponse)
-async def landing_uz() -> str:
-    return _render(UZ)
+async def landing_uz(request: Request) -> str:
+    return _render(UZ, clean_mark(request.query_params.get("from")))
+
+
+_STORES = {"ios": "app_store_url", "android": "play_store_url"}
+
+
+@router.get("/go/{platform}", include_in_schema=False)
+async def go_store(platform: str, request: Request) -> RedirectResponse:
+    """Клик по кнопке магазина: записать событие с меткой канала и увести.
+
+    Метка та же, что на странице лендинга; без неё пишется пустой ключ.
+    Магазин ещё не открыт (адрес в настройках пуст) — ведём на главную,
+    а не в никуда.
+    """
+    field = _STORES.get(platform)
+    if field is None:
+        raise HTTPException(status_code=404)
+    await record_event(f"store_{platform}", clean_mark(request.query_params.get("from")), None)
+    return RedirectResponse(getattr(settings, field) or "/", status_code=302)

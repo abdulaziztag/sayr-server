@@ -211,6 +211,14 @@ async def touch_device(
     )
 
 
+async def record_event(
+    kind: str, slug: str | None, device: str | None, info: AppInfo | None = None
+) -> None:
+    """Записать событие вне middleware — редирект в магазины пишет клик
+    по каналу сам. Тот же путь, те же гарантии: ошибка не роняет запрос."""
+    await _record(kind, slug, device, info)
+
+
 async def _record(
     kind: str, slug: str | None, device: str | None, info: AppInfo | None = None
 ) -> None:
