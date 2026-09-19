@@ -65,7 +65,9 @@ ALLOWED_KINDS: dict[str, re.Pattern[str] | None] = {
     "photo_full": _slug,
     "coords_copy": _slug,
     "route_external": _slug,
-    "share": _slug,
+    # share_place, а не share: под `share` сервер пишет открытия страницы
+    # /p/{slug} получателями ссылки, и это другое событие
+    "share_place": _slug,
     "plan_day": _slug,
     "weather": _slug,
     "date_pick": _slug,

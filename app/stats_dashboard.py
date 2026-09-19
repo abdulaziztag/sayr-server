@@ -26,7 +26,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import charts
 from .api.app_update import parse_version
-from .api.events import ALLOWED_KINDS
 from .charts import ACCENT, GREEN, MUTED, Series
 from .config import settings
 from .models import (
@@ -71,9 +70,6 @@ TOP_LIMIT = 25
 #: С какой версии приложения едут клиентские события. Пусто, пока выпуск
 #: не собран, — номера проставляются на этапе выкладки клиентов
 CLIENT_EVENTS_SINCE: dict[str, str | None] = {"ios": None, "android": None}
-
-#: Все виды событий с телефона — по ним понятно, пришло ли хоть что-то
-CLIENT_KINDS = frozenset(ALLOWED_KINDS)
 
 TZ = "Asia/Tashkent"
 WEEKDAYS = ("пн", "вт", "ср", "чт", "пт", "сб", "вс")
@@ -135,7 +131,13 @@ class Counts:
         return {key: v for (k, key), v in self.events.items() if k == kind}
 
     def has_client_data(self) -> bool:
-        return any(k in CLIENT_KINDS and v for (k, _), v in self.events.items())
+        """Есть ли обновлённые клиенты: по app_open — его шлёт каждый запуск.
+
+        Не «хоть одно событие из перечня»: одиночная проверка ручкой
+        или случайный favorite переключили бы все пустые блоки с «данные
+        пойдут с версии» на «таких мест нет», и это было бы враньём.
+        """
+        return self.total("app_open") > 0
 
 
 async def dashboard(session: AsyncSession, period_days: int = DEFAULT_PERIOD,

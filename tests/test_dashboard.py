@@ -75,6 +75,8 @@ async def test_top_places_sort_and_service_lists():
             DailyCount(day=yesterday, kind="rec_finish", key="test-lake", events=2, devices=2),
             # Сегодня — из сырья, а не из свёрток
             ApiEvent(kind="place", slug="test-lake", device="d-today", ts=_at(date.today())),
+            # Признак обновлённых клиентов — запуск приложения
+            ApiEvent(kind="app_open", device="d-today", ts=_at(date.today())),
         ])
         await session.commit()
 
@@ -112,6 +114,9 @@ async def test_look_list_needs_ten_opens_and_track_list_needs_five_navs():
     d = await _data()
     assert d["places"]["look"] == []
     assert d["places"]["track"] == []
+    # Навигации есть, а запусков приложения нет — так бывает только
+    # от ручной проверки; пустые блоки по-прежнему говорят про версию
+    assert d["client_data"] is False
 
 
 async def test_channels_and_cohorts():
