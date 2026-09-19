@@ -1,0 +1,364 @@
+{# Страница «Статистика»: пять разделов, период и сортировка — адресом.
+
+   Всё рендерит сервер; графики — SVG из app/charts.py, уже безопасная
+   разметка (Markup), поэтому без |safe. Под каждым графиком строка-
+   определение: цифра без определения читается неверно. Пустые блоки
+   клиентских событий говорят, с какой версии пойдут данные. #}
+{% macro define(text) %}<p class="def">{{ text }}</p>{% endmacro %}
+{% macro empty(text=none) %}<p class="empty">{{ text or d.since_text }}</p>{% endmacro %}
+{% macro th(col, label) %}<th class="num{% if d.sort == col %} on{% endif %}"><a href="?period={{ d.period }}&amp;sort={{ col }}#places">{{ label }}</a></th>{% endmacro %}
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Статистика — Sayr</title>
+<link rel="stylesheet" href="/static/stats.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap bar">
+    <a class="brand" href="/admin">Sayr <span>статистика</span></a>
+    <nav class="periods" aria-label="Период">
+      {% for p in periods %}<a href="?period={{ p }}&amp;sort={{ d.sort }}"{% if p == d.period %} aria-current="page"{% endif %}>{{ p }} дней</a>{% endfor %}
+    </nav>
+    <nav class="sections" aria-label="Разделы">
+      <a href="#overview">Обзор</a><a href="#launch">Запуск</a><a href="#places">Места</a><a href="#trail">Тропа</a><a href="#app">Приложение</a>
+    </nav>
+    <a class="back" href="/admin">В админку</a>
+  </div>
+</header>
+
+<main class="wrap">
+<p class="lede">Обезличенные счётчики за {{ d.period }} дней до {{ d.today.strftime('%d.%m.%Y') }}.
+  Сырьё живёт {{ retention }} дней, дневные свёртки — всегда. Всё, где нужно
+  «сколько устройств», считается по сырью за {{ d.window }} дн. — и подписано.
+  Всего устройств с августа: <b>{{ d.total_devices }}</b>.</p>
+
+{# ---------------------------------------------------------------- Обзор #}
+<section id="overview">
+  <h2>Обзор</h2>
+  <div class="tiles">
+    {% for t in d.overview.tiles %}
+    <div class="tile{% if t.client and not d.client_data %} tile-wait{% endif %}">
+      <div class="tile-label">{{ t.label }}</div>
+      <div class="tile-value">{{ t.value }}</div>
+      {{ t.spark }}
+      <div class="tile-note">{% if t.client and not d.client_data %}данные пойдут с обновления{% else %}{{ t.note }}{% endif %}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="card">
+    <h3>Активные и новые устройства по дням</h3>
+    {{ d.overview.active_line }}
+    {{ define("Активное — устройство, от которого за день пришёл хоть один запрос. Новое — впервые увиденное в этот день. Прошлое из дневных свёрток, сегодня — на лету.") }}
+  </div>
+</section>
+
+{# ------------------------------------------------------- Запуск и каналы #}
+<section id="launch">
+  <h2>Запуск и каналы</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>Новые устройства</h3>
+      {{ d.launch.new_line }}
+      {{ define("Первый запрос с нового случайного номера. Пики — дни постов и рассылок.") }}
+    </div>
+    <div class="card">
+      <h3>Каналы</h3>
+      {% if d.launch.channels %}
+      <table class="table">
+        <thead><tr><th>Метка</th><th class="num">Визитов</th><th class="num">В магазин</th><th class="num">Конверсия</th></tr></thead>
+        <tbody>{% for c in d.launch.channels %}
+          <tr><td><code>{{ c.mark }}</code></td><td class="num">{{ c.visits }}</td><td class="num">{{ c.clicks }}</td><td class="num">{{ c.conv }}</td></tr>
+        {% endfor %}</tbody>
+      </table>
+      {% else %}{{ empty("Визитов на лендинг за период не было.") }}{% endif %}
+      {{ define("Визит — открытие лендинга с ?from=метка (без метки — прямые заходы). «В магазин» — клики по кнопкам App Store и Google Play, они идут через /go/… с той же меткой.") }}
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h3>Когорты по неделям</h3>
+      {% if d.launch.cohorts %}{{ d.launch.cohorts }}{% else %}{{ empty("Закрытых недель после прихода пока нет.") }}{% endif %}
+      {{ define("Строка — неделя прихода и размер когорты; столбец — какая неделя после; в клетке доля устройств когорты, заходивших на той неделе. Клетка пустая, пока неделя не закрылась.") }}
+    </div>
+    <div class="card">
+      <h3>Возврат новых устройств</h3>
+      <div class="pair">
+        <div><div class="big">{{ d.launch.d1 }}</div><div class="tile-note">вернулись на следующий день</div></div>
+        <div><div class="big">{{ d.launch.d7 }}</div><div class="tile-note">вернулись в течение недели</div></div>
+      </div>
+      {{ define("По сырью за " ~ d.retention ~ " дн.: новых устройств " ~ d.launch.fresh ~ ". В долю входят только те, чьё окно уже закрылось — назавтра или неделя спустя.") }}
+    </div>
+  </div>
+</section>
+
+{# ----------------------------------------------------------------- Места #}
+<section id="places">
+  <h2>Места</h2>
+  <div class="card">
+    <h3>Топ за период</h3>
+    {% if d.places.top %}
+    <div class="scroll">
+    <table class="table dense">
+      <thead><tr>
+        <th>Место</th>
+        {{ th("opens", "Открытий") }}{{ th("devices", "Устройств") }}{{ th("votes", "«Пойду»") }}
+        {{ th("nav", "Навигаций") }}{{ th("finish", "Финишей") }}{{ th("share", "Доля финишей") }}
+        {{ th("rec", "Записей") }}<th class="num">Как прошли</th><th class="num">GPX</th>
+      </tr></thead>
+      <tbody>{% for r in d.places.top %}
+        <tr>
+          <td>{{ r.name }}</td>
+          <td class="num">{{ r.opens }}</td><td class="num">{{ r.devices }}</td><td class="num">{{ r.votes }}</td>
+          <td class="num">{{ r.nav }}</td><td class="num">{{ r.finish }}</td><td class="num">{{ r.finish_share_text }}</td>
+          <td class="num">{{ r.rec }}</td><td class="num">{{ r.pace_text }}</td><td class="num">{{ r.downloads }}</td>
+        </tr>
+      {% endfor %}</tbody>
+    </table>
+    </div>
+    {% else %}{{ empty("За период никто ничего не открывал.") }}{% endif %}
+    {{ define("Открытия — карточки места; устройств — уникальных по сырью за " ~ d.places.window ~ " дн.; «Пойду» — отметки на даты периода; навигации, финиши и записи — события приложения по месту. «Как прошли»: быстрее · как рассчитано · дольше, накопительно. GPX — обращения за файлом трека, приложение тянет его само.") }}
+    {% if not d.places.has_nav %}{{ empty() }}{% endif %}
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Смотрят, но не идут</h3>
+      {% if d.places.look %}
+      <table class="table">
+        <thead><tr><th>Место</th><th class="num">Открытий</th><th class="num">«Пойду»</th></tr></thead>
+        <tbody>{% for r in d.places.look %}<tr><td>{{ r.name }}</td><td class="num">{{ r.opens }}</td><td class="num">{{ r.votes }}</td></tr>{% endfor %}</tbody>
+      </table>
+      {% elif d.client_data %}{{ empty("Таких мест нет: у всего, что открывают, есть хоть одна навигация.") }}{% else %}{{ empty() }}{% endif %}
+      {{ define("Открытий от десяти и ни одной навигации за период. Повод посмотреть на описание, дорогу и трек.") }}
+    </div>
+    <div class="card">
+      <h3>Трек под вопросом</h3>
+      {% if d.places.track %}
+      <table class="table">
+        <thead><tr><th>Место</th><th class="num">Навигаций</th><th class="num">Сходов</th><th class="num">Финишей</th><th>Почему</th></tr></thead>
+        <tbody>{% for r in d.places.track %}<tr><td>{{ r.name }}</td><td class="num">{{ r.nav }}</td><td class="num">{{ r.offtrail }}</td><td class="num">{{ r.finish }}</td><td class="warn">{{ r.reason }}</td></tr>{% endfor %}</tbody>
+      </table>
+      {% elif d.client_data %}{{ empty("Все треки с пятью и больше навигациями ведут себя прилично.") }}{% else %}{{ empty() }}{% endif %}
+      {{ define("Навигаций от пяти, а сходов с тропы больше половины или финишей меньше трети. Это список того, что чинить в первую очередь.") }}
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>По категориям</h3>
+      {{ d.places.categories }}
+      {{ define("Открытия карточек против запусков навигатора, по категориям мест.") }}
+    </div>
+    <div class="card">
+      <h3>По регионам</h3>
+      {{ d.places.regions }}
+      {{ define("То же по регионам каталога.") }}
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Что ищут</h3>
+      {% if d.places.search %}
+      <table class="table"><tbody>{% for q, n in d.places.search %}<tr><td>{{ q }}</td><td class="num">{{ n }}</td></tr>{% endfor %}</tbody></table>
+      {% else %}{{ empty() }}{% endif %}
+      {{ define("Запросы, по которым нашлось хотя бы одно место, в нижнем регистре. Пустые поиски не уходят с телефона.") }}
+    </div>
+    <div class="card">
+      <h3>Какие фильтры включают</h3>
+      {% if d.places.filters %}
+      <table class="table"><tbody>{% for f, n in d.places.filters %}<tr><td>{{ f }}</td><td class="num">{{ n }}</td></tr>{% endfor %}</tbody></table>
+      {% else %}{{ empty() }}{% endif %}
+      {{ define("Каждое включение фильтра — одно событие. Дорога и пешком — верхняя граница в минутах и километрах.") }}
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Кто куда собирается</h3>
+      {% if d.places.upcoming %}
+      <table class="table">
+        <thead><tr><th>День</th><th>Место</th><th class="num">Человек</th></tr></thead>
+        <tbody>{% for r in d.places.upcoming %}<tr><td>{{ r.day.strftime('%d.%m') }}</td><td>{{ r.name }}</td><td class="num">{{ r.people }}</td></tr>{% endfor %}</tbody>
+      </table>
+      {% else %}{{ empty("На ближайшие дни никто не собрался.") }}{% endif %}
+      {{ define("Живые отметки «Пойду» на будущие даты.") }}
+    </div>
+    <div class="card">
+      <h3>Открытия ссылок «поделиться»</h3>
+      {% if d.places.shares %}
+      <table class="table"><tbody>{% for r in d.places.shares %}<tr><td>{{ r.name }}</td><td class="num">{{ r.opens }}</td></tr>{% endfor %}</tbody></table>
+      {% else %}{{ empty("Ссылками за период не делились.") }}{% endif %}
+      {{ define("Открытия страницы /p/{slug} в браузере — их делают получатели ссылки, не приложение.") }}
+    </div>
+  </div>
+</section>
+
+{# ------------------------------------------------------- Тропа и запись #}
+<section id="trail">
+  <h2>Тропа и запись</h2>
+  <div class="card">
+    <h3>Воронка устройств за {{ d.trail.retention }} дней</h3>
+    {{ d.trail.funnel }}
+    {% if not d.trail.has_nav %}{{ empty() }}{% endif %}
+    {{ define("Уникальные устройства на каждом шаге и доля от предыдущего. Всегда за " ~ d.trail.retention ~ " дн. — столько живёт сырьё, по которому считаются уникальные; период сверху на воронку не влияет.") }}
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Запись выхода</h3>
+      {% if d.trail.has_rec %}
+      {% set r = d.trail.recording %}
+      <table class="table kv"><tbody>
+        <tr><td>Начали записей</td><td class="num">{{ r.started }}</td></tr>
+        <tr><td>Закончили</td><td class="num">{{ r.finished }} <span class="muted">({{ r.finish_share }})</span></td></tr>
+        <tr><td>Пауз на законченную запись</td><td class="num">{{ r.pauses }}</td></tr>
+        <tr><td>Автовозобновлений на запись</td><td class="num">{{ r.autoresumes }}</td></tr>
+        <tr><td>Склеек</td><td class="num">{{ r.merges }}</td></tr>
+        <tr><td>Переименований</td><td class="num">{{ r.renames }}</td></tr>
+        <tr><td>Удалений</td><td class="num">{{ r.deletes }}</td></tr>
+        <tr><td>Отправок файлом</td><td class="num">{{ r.shared_files }}</td></tr>
+      </tbody></table>
+      {% else %}{{ empty() }}{% endif %}
+      {{ define("События записи за период. Много пауз при мало автовозобновлений — люди жмут паузу руками; много автовозобновлений — система убивает запись в фоне.") }}
+    </div>
+    <div class="card">
+      <h3>Наклейка</h3>
+      {% if d.trail.has_sticker %}
+      {% set s = d.trail.sticker %}
+      <table class="table kv"><tbody>
+        <tr><td>Открыли редактор</td><td class="num">{{ s.opened }}</td></tr>
+        <tr><td>Сохранили</td><td class="num">{{ s.saved }} <span class="muted">({{ s.saved_share }})</span></td></tr>
+        <tr><td>Отправили</td><td class="num">{{ s.shared }} <span class="muted">({{ s.shared_share }})</span></td></tr>
+      </tbody></table>
+      {% if s.layouts %}{{ s.layouts }}{% endif %}
+      {% else %}{{ empty() }}{% endif %}
+      {{ define("Открытия редактора наклейки против сохранений и отправок; ниже — какие раскладки выбирают.") }}
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Файлы треков</h3>
+      {% if d.trail.has_files %}
+      <table class="table">
+        <thead><tr><th>Формат</th><th class="num">Открыли</th><th class="num">Сохранили</th><th class="num">Доля</th></tr></thead>
+        <tbody>{% for f in d.trail.files %}<tr><td>{{ f.ext }}</td><td class="num">{{ f.opened }}</td><td class="num">{{ f.saved }}</td><td class="num">{{ f.share }}</td></tr>{% endfor %}</tbody>
+      </table>
+      {% else %}{{ empty() }}{% endif %}
+      {{ define("Открытия чужих файлов в приложении по форматам и доля сохранённых в «Своё».") }}
+    </div>
+    <div class="card">
+      <h3>Когда ходят</h3>
+      {{ d.trail.weekdays }}
+      {% if not d.trail.has_nav %}{{ empty() }}{% endif %}
+      {{ define("Запуски навигатора по дням недели за " ~ d.trail.retention ~ " дн., по ташкентскому времени.") }}
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Когда планируют</h3>
+    {{ d.trail.hours }}
+    {% if not d.trail.has_sessions %}{{ empty() }}{% endif %}
+    {{ define("Открытия приложения: день недели × час, ташкентское время, за " ~ d.trail.retention ~ " дн. Тёмные клетки — когда люди листают каталог; туда и ставить рассылки.") }}
+  </div>
+</section>
+
+{# ------------------------------------------------------------ Приложение #}
+<section id="app">
+  <h2>Приложение</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>Платформы по дням</h3>
+      {{ d.app.platforms }}
+      {{ define("Активные устройства за день по платформе из заголовка приложения. «Без заголовка» — сборки до появления заголовка, августовская 1.0.") }}
+    </div>
+    <div class="card">
+      <h3>Доля за {{ d.app.window }} дн.</h3>
+      {% if d.app.platform_share %}
+      <table class="table">
+        <thead><tr><th>Платформа</th><th class="num">Устройств</th><th class="num">Доля</th></tr></thead>
+        <tbody>{% for r in d.app.platform_share %}<tr><td>{{ r.platform }}</td><td class="num">{{ r.devices }}</td><td class="num">{{ r.share }}</td></tr>{% endfor %}</tbody>
+      </table>
+      {% else %}{{ empty("Активных устройств за окно нет.") }}{% endif %}
+      {% if not d.app.has_header %}{{ empty() }}{% endif %}
+      {{ define("Уникальные устройства окна и их последний известный заголовок.") }}
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Версии</h3>
+      {% if d.app.has_header %}
+      <table class="table">
+        <thead><tr><th>Платформа</th><th>Версия</th><th class="num">Устройств</th><th class="num">Доля</th></tr></thead>
+        <tbody>{% for r in d.app.versions %}
+          <tr{% if r.below %} class="below"{% endif %}><td>{{ r.platform }}</td><td>{{ r.version }}{% if r.below %} <span class="flag">ниже порога</span>{% endif %}</td><td class="num">{{ r.devices }}</td><td class="num">{{ r.share }}</td></tr>
+        {% endfor %}</tbody>
+      </table>
+      {% else %}{{ empty() }}{% endif %}
+      {{ define("Доля — внутри платформы. «Ниже порога» — версия меньше минимальной из «Обновления приложения»: такие устройства видят экран принудительного обновления.") }}
+    </div>
+    <div class="card">
+      <h3>Языки и системы</h3>
+      {% if d.app.langs or d.app.os %}
+      <div class="pair">
+        <table class="table"><thead><tr><th>Язык</th><th class="num">Устройств</th><th class="num">Доля</th></tr></thead>
+          <tbody>{% for r in d.app.langs %}<tr><td>{{ r.lang }}</td><td class="num">{{ r.devices }}</td><td class="num">{{ r.share }}</td></tr>{% endfor %}</tbody></table>
+        <table class="table"><thead><tr><th>Система</th><th class="num">Устройств</th></tr></thead>
+          <tbody>{% for r in d.app.os %}<tr><td>{{ r.platform }} {{ r.os }}</td><td class="num">{{ r.devices }}</td></tr>{% endfor %}</tbody></table>
+      </div>
+      {% else %}{{ empty() }}{% endif %}
+      {{ define("Язык интерфейса и старшая версия системы из заголовка приложения.") }}
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Онбординг и разрешения</h3>
+      {% if d.app.has_onboarding or d.app.has_permissions %}
+      {% set o = d.app.onboarding %}
+      <table class="table kv"><tbody>
+        <tr><td>Дошли до конца</td><td class="num">{{ o.done }} <span class="muted">({{ o.done_share }})</span></td></tr>
+        <tr><td>Пропустили</td><td class="num">{{ o.skipped }}{% if o.skips %} <span class="muted">(на слайде {% for n, c in o.skips %}{{ n }}: {{ c }}{% if not loop.last %}, {% endif %}{% endfor %})</span>{% endif %}</td></tr>
+        {% for p in d.app.permissions %}
+        <tr><td>{{ p.label }} — разрешили</td><td class="num">{{ p.yes }} из {{ p.yes + p.no }} <span class="muted">({{ p.share }})</span></td></tr>
+        {% endfor %}
+      </tbody></table>
+      {% else %}{{ empty() }}{% endif %}
+      {{ define("Онбординг: дошли против пропустили и на каком слайде. Разрешения — ответ на системный запрос уведомлений и геопозиции.") }}
+    </div>
+    <div class="card">
+      <h3>Без сети</h3>
+      {% if d.app.offline.opens %}
+      <div class="pair">
+        <div><div class="big">{{ d.app.offline.devices }}</div><div class="tile-note">устройств открывали каталог без сети за {{ d.app.window }} дн.</div></div>
+        <div><div class="big">{{ d.app.offline.opens }}</div><div class="tile-note">открытий из комплекта за период</div></div>
+      </div>
+      {% else %}{{ empty() }}{% endif %}
+      {{ define("Открытия места из встроенного комплекта, когда сети не было. Это и есть «в горах без связи».") }}
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Уведомления</h3>
+    {% if d.app.pushes %}
+    <table class="table">
+      <thead><tr><th>Рассылка</th><th>Когда</th><th class="num">Отправлено</th><th class="num">Не дошло</th><th class="num">Открыто</th><th class="num">Доля</th></tr></thead>
+      <tbody>{% for p in d.app.pushes %}
+        <tr><td>{{ p.title }}</td><td>{{ p.sent_at.strftime('%d.%m %H:%M') }}</td><td class="num">{{ p.sent }}</td><td class="num">{{ p.failed }}</td><td class="num">{{ p.opened }}</td><td class="num">{{ p.share }}</td></tr>
+      {% endfor %}</tbody>
+    </table>
+    {% else %}{{ empty("Рассылок ещё не было.") }}{% endif %}
+    {% if d.app.pushes and not d.app.has_push_opens %}{{ empty() }}{% endif %}
+    <p class="def">Напоминания: еженедельное открыли <b>{{ d.app.reminders.weekly }}</b> раз, накануне выхода — <b>{{ d.app.reminders.eve }}</b>.</p>
+    {{ define("Отправлено и не дошло — со стороны сервера при рассылке; открыто — событие приложения по тапу на уведомление, доля от отправленных.") }}
+  </div>
+</section>
+</main>
+</body>
+</html>

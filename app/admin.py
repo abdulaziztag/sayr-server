@@ -14,8 +14,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette.requests import Request
-from starlette.responses import (FileResponse, HTMLResponse, RedirectResponse,
-                                 Response)
+from starlette.responses import FileResponse, RedirectResponse, Response
 from markupsafe import Markup
 from wtforms import SelectField, SelectMultipleField
 from wtforms.validators import NumberRange
@@ -26,7 +25,7 @@ try:  # расположение менялось между версиями п
 except ImportError:  # pragma: no cover
     from fastapi_storages.base import StorageFile
 
-from . import stats
+from . import stats, stats_dashboard
 from .config import GPX_DIR, REPORTS_DIR, SERVER_DIR, settings
 from .db import SessionLocal, engine
 from .models import (
@@ -475,146 +474,30 @@ class PlaceTrackAdmin(ModelView, model=PlaceTrack):
 
 
 class StatsView(BaseView):
-    """Страница «Статистика»: кто пользуется, что смотрят, что делают.
+    """Страница «Статистика»: пять разделов, период и сортировка — адресом.
 
-    Собственный HTML, а не шаблон sqladmin: страница одна, таблиц пять,
-    и заводить ради них каталог шаблонов с наследованием от темы —
-    больше возни, чем пользы. Сессию берём сами: add_base_view,
-    в отличие от модельных вьюх, session_maker внутрь не отдаёт.
+    Свой шаблон и свой CSS, а не карточки Tabler: это первая часть админки,
+    которая выглядит как Sayr — бумага, Plex, зелёный и терракота. Сессию
+    берём сами: add_view, в отличие от модельных вьюх, session_maker внутрь
+    не отдаёт. Данные собирает stats_dashboard.dashboard.
     """
 
     name = "Статистика"
     icon = "fa-solid fa-chart-simple"
 
     @expose("/stats", methods=["GET"])
-    async def page(self, request: Request) -> HTMLResponse:
+    async def page(self, request: Request) -> Response:
+        raw = request.query_params.get("period", "")
+        period = int(raw) if raw.isdigit() else stats_dashboard.DEFAULT_PERIOD
+        sort = request.query_params.get("sort", "opens")
         async with SessionLocal() as session:
-            data = await stats.dashboard(session)
-        return HTMLResponse(_render(data))
-
-
-def _cells(values, tag: str = "td") -> str:
-    return "".join(f"<{tag}>{v}</{tag}>" for v in values)
-
-
-def _table(headers: list[str], rows: list[list], empty: str) -> str:
-    if not rows:
-        return f'<p class="text-muted">{empty}</p>'
-    body = "".join(f"<tr>{_cells(row)}</tr>" for row in rows)
-    return (
-        '<div class="table-responsive"><table class="table table-sm">'
-        f"<thead><tr>{_cells(headers, 'th')}</tr></thead><tbody>{body}</tbody>"
-        "</table></div>"
-    )
-
-
-def _render(d: dict) -> str:
-    numbers = [
-        ("Сегодня", d["active_today"]),
-        ("Вчера", d["active_yesterday"]),
-        ("За 7 дней", d["wau"]),
-        ("За 30 дней", d["mau"]),
-        ("Новых за неделю", d["new_week"]),
-        ("Всего устройств", d["total_devices"]),
-    ]
-    tiles = "".join(
-        f'<div class="col"><div class="card"><div class="card-body">'
-        f'<div class="h1 m-0">{value}</div>'
-        f'<div class="text-muted">{label}</div></div></div></div>'
-        for label, value in numbers
-    )
-
-    def pace_cell(counts: tuple[int, int, int] | None) -> str:
-        """Как прошли: быстрее · так · дольше.
-
-        Прочерк вместо трёх нулей — чтобы места, про которые ещё никто
-        не ответил, не выглядели как места, где всё сошлось. Разница
-        существенная: во втором случае формулу трогать не надо,
-        в первом — про неё просто ничего не известно.
-        """
-        if not counts or not any(counts):
-            return "—"
-        faster, expected, slower = counts
-        return f"{faster} · {expected} · {slower}"
-
-    def top(rows: list[dict]) -> str:
-        return _table(
-            ["Место", "Открытий", "Устройств", "«Пойду»", "Как прошли", "Загрузок GPX"],
-            [
-                [
-                    r["name"],
-                    r["opens"],
-                    r["devices"],
-                    r["votes"],
-                    pace_cell(r.get("pace")),
-                    r["downloads"],
-                ]
-                for r in rows
-            ],
-            "Пока никто ничего не открывал.",
+            data = await stats_dashboard.dashboard(session, period, sort)
+        return await self.templates.TemplateResponse(
+            request,
+            "stats.html",
+            {"d": data, "periods": stats_dashboard.PERIODS,
+             "retention": settings.stats_retention_days},
         )
-
-    days = _table(
-        ["День", "Активных", "Новых", "Мест", "Каталог", "Треков"],
-        [
-            [
-                r["day"].strftime("%d.%m"),
-                r["active_devices"],
-                r["new_devices"],
-                r["place_opens"],
-                r["catalog_opens"],
-                r["gpx_downloads"],
-            ]
-            for r in d["days"]
-        ],
-        "Событий ещё не было.",
-    )
-    upcoming = _table(
-        ["День", "Место", "Человек"],
-        [[r["day"].strftime("%d.%m"), r["name"], r["people"]] for r in d["upcoming"]],
-        "На ближайшие дни никто не собрался.",
-    )
-    shares = _table(
-        ["Место", "Открытий"],
-        [[r["name"], r["opens"]] for r in d["shares"]],
-        "Ссылками пока не делились.",
-    )
-
-    return f"""<!doctype html>
-<html lang="ru"><head><meta charset="utf-8">
-<title>Статистика — Sayr</title>
-<link rel="stylesheet" href="/admin/statics/css/tabler.min.css">
-</head><body class="antialiased">
-<div class="page-wrapper"><div class="container-xl py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="m-0">Статистика</h1>
-    <a href="/admin" class="btn">В админку</a>
-  </div>
-  <p class="text-muted">Обезличенные счётчики. Сырьё живёт
-     {settings.stats_retention_days} дней, дневные итоги — всегда.<br>
-     «Загрузок GPX» — это обращения за файлом трека, а не осознанные
-     скачивания: приложение подтягивает трек само при открытии места,
-     так что число близко к открытиям мест, у которых трек есть.
-     Повторные открытия отдаёт кэш и сюда не попадают.</p>
-
-  <h2 class="h3 mt-4">Активные устройства</h2>
-  <div class="row row-cards row-cols-2 row-cols-md-3 row-cols-xl-6 g-2">{tiles}</div>
-
-  <h2 class="h3 mt-4">Две недели</h2>
-  {days}
-
-  <h2 class="h3 mt-4">Топ мест за 7 дней</h2>
-  {top(d["top_week"])}
-
-  <h2 class="h3 mt-4">Топ мест за 30 дней</h2>
-  {top(d["top_month"])}
-
-  <h2 class="h3 mt-4">Кто куда собирается</h2>
-  {upcoming}
-
-  <h2 class="h3 mt-4">Открытия ссылок «поделиться» за 30 дней</h2>
-  {shares}
-</div></div></body></html>"""
 
 
 class PlacePlanAdmin(ModelView, model=PlacePlan):

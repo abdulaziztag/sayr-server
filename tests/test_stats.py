@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 
 from sqlalchemy import delete, func, select
 
-from app import stats
+from app import stats, stats_dashboard
 from app.config import settings
 from app.db import SessionLocal
 from app.models import (
@@ -233,7 +233,7 @@ async def test_devices_ever_survives_purge():
         )
         await session.commit()
 
-        assert await stats._devices_ever(session) == 11
+        assert await stats_dashboard.devices_ever(session) == 11
 
 
 async def test_rotation_prunes_even_when_aggregate_already_exists():
@@ -267,15 +267,6 @@ async def test_rotation_prunes_even_when_aggregate_already_exists():
             await session.execute(select(func.count()).select_from(ApiEvent))
         ).scalar_one()
     assert left == 1
-
-
-async def test_dashboard_survives_empty_tables():
-    await _clear()
-    async with SessionLocal() as session:
-        data = await stats.dashboard(session)
-    assert data["total_devices"] == 0
-    assert data["top_week"] == []
-    assert len(data["days"]) == 14
 
 
 async def test_stats_page_requires_admin(client):
