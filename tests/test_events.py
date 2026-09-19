@@ -159,7 +159,8 @@ async def test_header_fills_device_once_per_day(client):
     assert device.app_version == "1.7.1"          # второй заголовок за день не перезаписал
     assert device.lang == "uz"
     assert device.os_major == "26"
-    assert device.last_seen == date.today()
+    # Сервер живёт по UTC (`now.date()` в обработчике); локальная дата расходится с ним до пяти утра по Ташкенту
+    assert device.last_seen == datetime.now(timezone.utc).date()
 
 
 async def test_oversized_batch_is_cut_to_limit_not_rejected(client):
@@ -172,3 +173,14 @@ async def test_oversized_batch_is_cut_to_limit_not_rejected(client):
     assert resp.status_code == 204
     assert len(await _rows()) == BATCH_MAX
 
+
+async def test_trip_day_keys_are_allowed(client):
+    """Третий сегмент «Своё» и вечерний вопрос дня выхода — новые значения старых видов."""
+    await _clear()
+    await _post(client, [
+        _event("e9000001", "tab_own", "trips"),
+        _event("e9000002", "reminder_open", "outcome"),
+        _event("e9000003", "tab_own", "history"),  # такого сегмента нет
+    ])
+    rows = await _rows()
+    assert [(r.kind, r.slug) for r in rows] == [("tab_own", "trips"), ("reminder_open", "outcome")]

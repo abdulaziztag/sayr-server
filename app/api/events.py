@@ -90,11 +90,12 @@ ALLOWED_KINDS: dict[str, re.Pattern[str] | None] = {
     "sticker_share": _slug,
     "file_open": _format,
     "file_save": _format,
-    "tab_own": re.compile(r"^(places|tracks)$"),
+    "tab_own": re.compile(r"^(places|tracks|trips)$"),
     # Каналы. store_ios / store_android здесь нет намеренно: их пишет
     # сервер с редиректа, а клиент подделать клик в магазин не должен
     "push_open": re.compile(r"^\d{1,9}$"),
-    "reminder_open": re.compile(r"^(weekly|eve)$"),
+    # outcome — вечерний вопрос дня выхода «как сходили?»
+    "reminder_open": re.compile(r"^(weekly|eve|outcome)$"),
 }
 
 #: Виды, у которых ключ может быть пустым: запись и наклейка по чужому
