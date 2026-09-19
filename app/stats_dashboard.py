@@ -67,9 +67,9 @@ TRACK_OFFTRAIL_SHARE = 0.5
 TRACK_FINISH_SHARE = 1 / 3
 TOP_LIMIT = 25
 
-#: С какой версии приложения едут клиентские события. Пусто, пока выпуск
-#: не собран, — номера проставляются на этапе выкладки клиентов
-CLIENT_EVENTS_SINCE: dict[str, str | None] = {"ios": None, "android": None}
+#: С какой версии приложения едут клиентские события — обе платформы
+#: выпущены с ними в 1.7.2 (решение владельца, 19 сентября 2026)
+CLIENT_EVENTS_SINCE: dict[str, str | None] = {"ios": "1.7.2", "android": "1.7.2"}
 
 TZ = "Asia/Tashkent"
 WEEKDAYS = ("пн", "вт", "ср", "чт", "пт", "сб", "вс")
