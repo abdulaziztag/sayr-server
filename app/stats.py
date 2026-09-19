@@ -22,6 +22,9 @@ from .config import settings
 from .db import SessionLocal
 from .models import (
     ApiEvent,
+    CohortRetention,
+    DailyCount,
+    DailyPlatform,
     DailyStat,
     Device,
     Place,
@@ -260,9 +263,139 @@ async def rotate(session: AsyncSession, today: date | None = None) -> None:
             .values(**await _totals(session, day))
             .on_conflict_do_nothing(index_elements=[DailyStat.day])
         )
+        await rollup_day(session, day)
     await session.commit()
 
+    await rotate_weeks(session, today)
     await purge(session, today)
+
+
+async def rollup_day(session: AsyncSession, day: date) -> None:
+    """Универсальная свёртка одного дня: `daily_counts` и `daily_platform`.
+
+    Не знает видов: группирует сырьё по `kind` и `key`, какие бы виды
+    ни появились. Перезаписывает, а не прибавляет (`ON CONFLICT DO UPDATE`):
+    повторный прогон того же дня — досчёт, второй воркер, ручной
+    `stats_backfill` — обязан давать те же числа, а не удвоенные.
+    """
+    same_day = cast(ApiEvent.ts, Date) == day
+    key = func.coalesce(ApiEvent.slug, "")
+
+    rows = (
+        await session.execute(
+            select(
+                ApiEvent.kind,
+                key,
+                func.count(),
+                func.count(distinct(ApiEvent.device)),
+            )
+            .where(same_day)
+            .group_by(ApiEvent.kind, key)
+        )
+    ).all()
+    for kind, k, events, devices in rows:
+        stmt = insert(DailyCount).values(day=day, kind=kind, key=k, events=events, devices=devices)
+        await session.execute(
+            stmt.on_conflict_do_update(
+                index_elements=[DailyCount.day, DailyCount.kind, DailyCount.key],
+                set_={"events": stmt.excluded.events, "devices": stmt.excluded.devices},
+            )
+        )
+
+    platform = func.coalesce(Device.platform, "unknown")
+    active_rows = (
+        await session.execute(
+            select(platform, func.count(distinct(ApiEvent.device)))
+            .select_from(ApiEvent)
+            .outerjoin(Device, Device.device == ApiEvent.device)
+            .where(same_day, ApiEvent.device.is_not(None))
+            .group_by(platform)
+        )
+    ).all()
+    new_rows = dict(
+        (
+            await session.execute(
+                select(platform, func.count())
+                .select_from(Device)
+                .where(Device.first_seen == day)
+                .group_by(platform)
+            )
+        ).all()
+    )
+    for plat, active in active_rows:
+        stmt = insert(DailyPlatform).values(
+            day=day, platform=plat, active=active, new=new_rows.get(plat, 0)
+        )
+        await session.execute(
+            stmt.on_conflict_do_update(
+                index_elements=[DailyPlatform.day, DailyPlatform.platform],
+                set_={"active": stmt.excluded.active, "new": stmt.excluded.new},
+            )
+        )
+
+
+def week_start(day: date) -> date:
+    """Понедельник недели, в которую попадает день."""
+    return day - timedelta(days=day.weekday())
+
+
+async def rotate_weeks(session: AsyncSession, today: date | None = None) -> None:
+    """Когорты по закрытым неделям, которых ещё нет в `cohort_retention`.
+
+    Закрытая неделя — та, чьё воскресенье уже прошло. Считать её можно,
+    пока сырьё за неё целиком в окне хранения: 30 дней больше семи,
+    так что окно даёт две-три закрытые недели с запасом, а более старые
+    не досчитываются и не притворяются нулями.
+    """
+    today = today or date.today()
+    this_monday = week_start(today)
+    oldest_raw = today - timedelta(days=settings.stats_retention_days)
+
+    counted = set(
+        (
+            await session.execute(
+                select(CohortRetention.cohort_week, CohortRetention.week_index)
+            )
+        ).all()
+    )
+    weeks_done = {cw + timedelta(weeks=idx) for cw, idx in counted}
+
+    monday = this_monday - timedelta(weeks=1)
+    while monday >= oldest_raw:
+        if monday not in weeks_done:
+            await _rollup_week(session, monday)
+        monday -= timedelta(weeks=1)
+    await session.commit()
+
+
+async def _rollup_week(session: AsyncSession, monday: date) -> None:
+    sunday_end = monday + timedelta(weeks=1)
+    cohort = cast(func.date_trunc("week", Device.first_seen), Date)
+    rows = (
+        await session.execute(
+            select(cohort, func.count(distinct(ApiEvent.device)))
+            .select_from(ApiEvent)
+            .join(Device, Device.device == ApiEvent.device)
+            .where(
+                cast(ApiEvent.ts, Date) >= monday,
+                cast(ApiEvent.ts, Date) < sunday_end,
+            )
+            .group_by(cohort)
+        )
+    ).all()
+    for cohort_week, devices in rows:
+        index = (monday - cohort_week).days // 7
+        if index < 0:
+            continue
+        stmt = insert(CohortRetention).values(
+            cohort_week=cohort_week, week_index=index, devices=devices
+        )
+        await session.execute(
+            stmt.on_conflict_do_update(
+                index_elements=[CohortRetention.cohort_week, CohortRetention.week_index],
+                set_={"devices": stmt.excluded.devices},
+            )
+        )
 
 
 async def purge(session: AsyncSession, today: date | None = None) -> None:

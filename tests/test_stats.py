@@ -5,7 +5,16 @@ from sqlalchemy import delete, func, select
 from app import stats
 from app.config import settings
 from app.db import SessionLocal
-from app.models import ApiEvent, DailyStat, Device, Place, TripIntent
+from app.models import (
+    ApiEvent,
+    CohortRetention,
+    DailyCount,
+    DailyPlatform,
+    DailyStat,
+    Device,
+    Place,
+    TripIntent,
+)
 
 
 async def _events(**where):
@@ -18,10 +27,8 @@ async def _events(**where):
 
 async def _clear():
     async with SessionLocal() as session:
-        await session.execute(delete(ApiEvent))
-        await session.execute(delete(DailyStat))
-        await session.execute(delete(Device))
-        await session.execute(delete(TripIntent))
+        for table in (ApiEvent, DailyStat, DailyCount, DailyPlatform, CohortRetention, Device, TripIntent):
+            await session.execute(delete(table))
         await session.commit()
 
 
@@ -314,4 +321,136 @@ async def test_debug_request_is_not_recorded(client):
     await client.get("/api/v1/places", headers={
         "X-Device-Id": "dev-debug-get", "X-Sayr-App": "android/1.7.0-debug ru 14"})
     assert await _events(kind="catalog") == []
+
+
+# MARK: - Универсальные свёртки и когорты
+
+
+async def test_daily_counts_roll_up_by_kind_and_key():
+    await _clear()
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    async with SessionLocal() as session:
+        session.add_all([
+            ApiEvent(kind="nav_start", slug="a", device="d1", ts=_at(yesterday)),
+            ApiEvent(kind="nav_start", slug="a", device="d1", ts=_at(yesterday)),
+            ApiEvent(kind="nav_start", slug="a", device="d2", ts=_at(yesterday)),
+            ApiEvent(kind="catalog", device="d1", ts=_at(yesterday)),
+            ApiEvent(kind="nav_start", slug="a", device="d9", ts=_at(today)),  # сегодня не закрыт
+        ])
+        await session.commit()
+        await stats.rotate(session, today=today)
+        rows = {
+            (r.kind, r.key): (r.events, r.devices)
+            for r in (await session.execute(select(DailyCount))).scalars().all()
+        }
+    assert rows == {("nav_start", "a"): (3, 2), ("catalog", ""): (1, 1)}
+
+
+async def test_rollup_day_overwrites_instead_of_adding():
+    await _clear()
+    yesterday = date.today() - timedelta(days=1)
+    async with SessionLocal() as session:
+        session.add(ApiEvent(kind="favorite", slug="z", device="d1", ts=_at(yesterday)))
+        await session.commit()
+        await stats.rollup_day(session, yesterday)
+        await stats.rollup_day(session, yesterday)
+        await session.commit()
+        row = (await session.execute(select(DailyCount))).scalar_one()
+    assert (row.events, row.devices) == (1, 1)
+
+
+async def test_daily_platform_splits_known_and_unknown():
+    await _clear()
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    async with SessionLocal() as session:
+        session.add_all([
+            Device(device="ios-1", first_seen=yesterday, platform="ios"),
+            Device(device="and-1", first_seen=yesterday - timedelta(days=5), platform="android"),
+            Device(device="old-1", first_seen=yesterday),  # сборка без заголовка
+            ApiEvent(kind="place", slug="a", device="ios-1", ts=_at(yesterday)),
+            ApiEvent(kind="place", slug="a", device="and-1", ts=_at(yesterday)),
+            ApiEvent(kind="place", slug="a", device="old-1", ts=_at(yesterday)),
+            ApiEvent(kind="landing", device=None, ts=_at(yesterday)),  # без устройства — не в счёт
+        ])
+        await session.commit()
+        await stats.rotate(session, today=today)
+        rows = {
+            r.platform: (r.active, r.new)
+            for r in (await session.execute(select(DailyPlatform))).scalars().all()
+        }
+    assert rows == {"ios": (1, 1), "android": (1, 0), "unknown": (1, 1)}
+
+
+async def test_cohorts_over_three_weeks():
+    """A и B пришли в неделю 1, C — в неделю 2; вернулся на второй неделе только A."""
+    await _clear()
+    today = date.today()
+    this_monday = stats.week_start(today)
+    w2 = this_monday - timedelta(weeks=1)   # последняя закрытая неделя
+    w1 = w2 - timedelta(weeks=1)
+    async with SessionLocal() as session:
+        session.add_all([
+            Device(device="A", first_seen=w1),
+            Device(device="B", first_seen=w1 + timedelta(days=2)),
+            Device(device="C", first_seen=w2 + timedelta(days=1)),
+            ApiEvent(kind="app_open", device="A", ts=_at(w1)),
+            ApiEvent(kind="app_open", device="B", ts=_at(w1 + timedelta(days=2))),
+            ApiEvent(kind="app_open", device="A", ts=_at(w2 + timedelta(days=3))),
+            ApiEvent(kind="app_open", device="C", ts=_at(w2 + timedelta(days=1))),
+        ])
+        await session.commit()
+        await stats.rotate_weeks(session, today=today)
+        rows = {
+            (r.cohort_week, r.week_index): r.devices
+            for r in (await session.execute(select(CohortRetention))).scalars().all()
+        }
+    assert rows == {(w1, 0): 2, (w1, 1): 1, (w2, 0): 1}
+
+
+async def test_rotate_weeks_skips_weeks_already_counted():
+    await _clear()
+    today = date.today()
+    w2 = stats.week_start(today) - timedelta(weeks=1)
+    async with SessionLocal() as session:
+        session.add_all([
+            Device(device="A", first_seen=w2),
+            ApiEvent(kind="app_open", device="A", ts=_at(w2)),
+        ])
+        await session.commit()
+        await stats.rotate_weeks(session, today=today)
+        # Появилось новое устройство задним числом — закрытую неделю не пересчитываем
+        session.add_all([
+            Device(device="Z", first_seen=w2),
+            ApiEvent(kind="app_open", device="Z", ts=_at(w2 + timedelta(days=1))),
+        ])
+        await session.commit()
+        await stats.rotate_weeks(session, today=today)
+        row = (await session.execute(select(CohortRetention))).scalar_one()
+    assert (row.cohort_week, row.week_index, row.devices) == (w2, 0, 1)
+
+
+async def test_backfill_fills_days_the_rotation_skips():
+    """На бою у прошлых дней daily_stats уже есть, и ротация их не трогает."""
+    from app import stats_backfill
+
+    await _clear()
+    today = date.today()
+    d3 = today - timedelta(days=3)
+    async with SessionLocal() as session:
+        session.add_all([
+            DailyStat(day=d3, active_devices=1, new_devices=0, place_opens=1),
+            ApiEvent(kind="place", slug="a", device="d1", ts=_at(d3)),
+            Device(device="d1", first_seen=d3 - timedelta(days=10)),
+        ])
+        await session.commit()
+        await stats.rotate(session, today=today)
+        assert (await session.execute(select(DailyCount))).scalars().all() == []
+
+    done = await stats_backfill.run(days=5, today=today)
+    assert d3 in done and len(done) == 5
+    async with SessionLocal() as session:
+        row = (await session.execute(select(DailyCount))).scalar_one()
+    assert (row.day, row.kind, row.key, row.events, row.devices) == (d3, "place", "a", 1, 1)
 
