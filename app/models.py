@@ -19,6 +19,7 @@ from sqlalchemy import (
     Time,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -504,7 +505,17 @@ class ApiEvent(Base):
     """
 
     __tablename__ = "api_events"
-    __table_args__ = (Index("ix_api_events_kind_ts", "kind", "ts"),)
+    __table_args__ = (
+        Index("ix_api_events_kind_ts", "kind", "ts"),
+        # Частичный: у событий, выведенных сервером из запросов, номера нет,
+        # а NULL в уникальном индексе Postgres и так не сравнивает
+        Index(
+            "ux_api_events_client_id",
+            "client_id",
+            unique=True,
+            postgresql_where=text("client_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     ts: Mapped[datetime] = mapped_column(
@@ -513,9 +524,14 @@ class ApiEvent(Base):
     # Пусто у страницы шеринга (её открывает браузер) и у клиентов,
     # которые ещё не научились слать заголовок
     device: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    kind: Mapped[str] = mapped_column(String(16))
-    # Слаг места; у события gpx — имя файла трека, у каталога пусто
+    # 32, а не 16: sticker_layout и rec_autoresume в шестнадцать не влезают
+    kind: Mapped[str] = mapped_column(String(32))
+    # Слаг места; у события gpx — имя файла трека, у каталога пусто.
+    # У событий с телефона — ключ из перечня (см. api/events.py)
     slug: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    # Случайный номер события с телефона: пачка, ушедшая дважды из-за
+    # потерянного подтверждения, гасится индексом, а не логикой
+    client_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
 
 class DailyStat(Base):
@@ -595,6 +611,59 @@ class Device(Base):
 
     device: Mapped[str] = mapped_column(String(64), primary_key=True)
     first_seen: Mapped[date] = mapped_column(Date, index=True)
+    # Из заголовка X-Sayr-App: последние известные значения, обновляются
+    # не чаще раза в сутки. Города здесь нет и не будет — это приблизительное
+    # местоположение по определениям Google, а анкета говорит «не собираем»
+    platform: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    app_version: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    lang: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    os_major: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    last_seen: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+
+class DailyCount(Base):
+    """Свёртка сырья за сутки по виду и ключу. Живёт вечно.
+
+    Универсальная: ротация группирует по `kind` и `key`, какие бы виды
+    ни появились, — новый вид попадает сюда без миграций. `devices` —
+    уникальные устройства за день; их нельзя досуммировать потом,
+    поэтому считаются при закрытии дня.
+    """
+
+    __tablename__ = "daily_counts"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(32), primary_key=True)
+    # Пустая строка, а не NULL: NULL не бывает частью первичного ключа
+    key: Mapped[str] = mapped_column(String(160), primary_key=True, default="")
+    events: Mapped[int] = mapped_column(Integer, default=0)
+    devices: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class DailyPlatform(Base):
+    """Активные и новые устройства за сутки по платформе. Живёт вечно."""
+
+    __tablename__ = "daily_platform"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    # 'ios', 'android' или 'unknown' — сборки без заголовка
+    platform: Mapped[str] = mapped_column(String(8), primary_key=True)
+    active: Mapped[int] = mapped_column(Integer, default=0)
+    new: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class CohortRetention(Base):
+    """Удержание по неделям: из пришедших в неделю N сколько активны в N+k.
+
+    Считается при закрытии недели из сырья, которого на это хватает
+    (30 дней больше семи). Обезличено по построению: только числа.
+    """
+
+    __tablename__ = "cohort_retention"
+
+    cohort_week: Mapped[date] = mapped_column(Date, primary_key=True)
+    week_index: Mapped[int] = mapped_column(Integer, primary_key=True)
+    devices: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class PushToken(Base):

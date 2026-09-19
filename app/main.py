@@ -8,7 +8,7 @@ from sqlalchemy import text
 from starlette.staticfiles import StaticFiles
 
 from .admin import mount_admin
-from .api import (intents, landing, legal, places, regions, report, seasons,
+from .api import (intents, events, landing, legal, places, regions, report, seasons,
                   seasons_review, share, drive_times, push, app_update)
 from .config import GPX_DIR, PHOTOS_DIR, SERVER_DIR, THUMBS_DIR, settings
 from .db import engine
@@ -71,6 +71,7 @@ app.include_router(share.router)
 app.include_router(legal.router)
 app.include_router(push.router)
 app.include_router(app_update.router)
+app.include_router(events.router)
 app.include_router(report.router)
 app.include_router(seasons.router)
 app.include_router(seasons_review.router)

@@ -275,3 +275,43 @@ async def test_stats_page_requires_admin(client):
     resp = await client.get("/admin/stats", follow_redirects=False)
     assert resp.status_code in (302, 307)
     assert "login" in resp.headers["location"]
+
+
+def test_parse_app_header():
+    info = stats.parse_app_header("android/1.7.0 ru 14")
+    assert (info.platform, info.version, info.lang, info.os_major, info.debug) == (
+        "android", "1.7.0", "ru", "14", False)
+    debug = stats.parse_app_header("ios/1.7.1-debug uz 26.0")
+    assert debug.debug and debug.version == "1.7.1" and debug.os_major == "26.0"
+    bare = stats.parse_app_header("ios/1.7.1")
+    assert bare.lang is None and bare.os_major is None
+    for bad in ("", None, "windows/1.0", "ios/abc", "ios 1.7.1", "android/1.7.0 russian x"):
+        parsed = stats.parse_app_header(bad)
+        assert parsed is None or (parsed.lang is None and parsed.os_major is None), bad
+
+
+def test_clean_mark():
+    assert stats.clean_mark("gorets") == "gorets"
+    assert stats.clean_mark("lider-hikers_2") == "lider-hikers_2"
+    assert stats.clean_mark("<script>alert(1)</script>") == "scriptalert1script"
+    assert stats.clean_mark("") is None and stats.clean_mark(None) is None
+    assert len(stats.clean_mark("x" * 100)) == 32
+
+
+async def test_header_on_regular_request_touches_device(client):
+    await _clear()
+    await client.get("/api/v1/places", headers={
+        "X-Device-Id": "dev-app-header", "X-Sayr-App": "android/1.7.0 ru 14"})
+    async with SessionLocal() as session:
+        device = (await session.execute(select(Device))).scalar_one()
+    assert (device.platform, device.app_version, device.lang, device.os_major) == (
+        "android", "1.7.0", "ru", "14")
+    assert device.last_seen == date.today()
+
+
+async def test_debug_request_is_not_recorded(client):
+    await _clear()
+    await client.get("/api/v1/places", headers={
+        "X-Device-Id": "dev-debug-get", "X-Sayr-App": "android/1.7.0-debug ru 14"})
+    assert await _events(kind="catalog") == []
+

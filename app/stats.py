@@ -7,11 +7,13 @@ X-Device-Id со своим случайным идентификатором.
 
 import asyncio
 import logging
+import re
+from dataclasses import dataclass
 from urllib.parse import parse_qs
 
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import Date, cast, delete, distinct, func, select
+from sqlalchemy import Date, cast, delete, distinct, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -31,6 +33,59 @@ from .models import (
 log = logging.getLogger(__name__)
 
 DEVICE_HEADER = b"x-device-id"
+APP_HEADER = b"x-sayr-app"
+
+# Метка канала из ссылки лендинга (/?from=gorets): до 32 знаков безобидного
+# алфавита, потому что значение попадает в базу. Один очиститель на
+# middleware и на редирект в магазины — чтобы метка в обоих местах
+# нормализовалась одинаково
+_MARK_MAX = 32
+
+
+def clean_mark(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    return "".join(c for c in raw[:_MARK_MAX] if c.isalnum() or c in "-_") or None
+
+
+@dataclass(frozen=True)
+class AppInfo:
+    """Заголовок X-Sayr-App: `android/1.7.0 ru 14` — платформа, версия,
+    язык интерфейса, старшая версия системы. Города здесь нет намеренно."""
+
+    platform: str
+    version: str
+    lang: str | None
+    os_major: str | None
+    debug: bool
+
+
+_PLATFORMS = {"ios", "android"}
+_APP_VERSION = re.compile(r"^\d+(\.\d+){0,3}(-debug)?$")
+
+
+def parse_app_header(value: str | None) -> AppInfo | None:
+    """Разбор заголовка; всё, что не по форме, — None, а не исключение:
+    заголовок ставят клиенты, и кривой заголовок не должен ронять запрос."""
+    if not value:
+        return None
+    parts = value.strip().split()
+    if not parts or "/" not in parts[0]:
+        return None
+    platform, _, version = parts[0].partition("/")
+    platform = platform.lower()
+    if platform not in _PLATFORMS or not _APP_VERSION.match(version):
+        return None
+    debug = version.endswith("-debug")
+    if debug:
+        version = version[: -len("-debug")]
+    lang = None
+    if len(parts) > 1 and parts[1].isalpha() and len(parts[1]) == 2:
+        lang = parts[1].lower()
+    os_major = None
+    if len(parts) > 2 and parts[2].replace(".", "").isdigit():
+        os_major = parts[2][:8]
+    return AppInfo(platform, version[:16], lang, os_major, debug)
 
 # Маршруты, которые считаем. Ключ — path из scope["route"], а не префикс
 # пути: у /places/{slug} есть соседи /weather и /intents, и префиксный
@@ -65,8 +120,7 @@ def _kind_and_slug(scope: Scope) -> tuple[str, str | None] | None:
         # а откуда именно. Чужое в параметре не пускаем дальше 32 знаков
         # безобидного алфавита — это значение попадает в базу
         query = scope.get("query_string", b"").decode("latin-1", "ignore")
-        mark = parse_qs(query).get("from", [""])[0][:32]
-        return kind, "".join(c for c in mark if c.isalnum() or c in "-_") or None
+        return kind, clean_mark(parse_qs(query).get("from", [""])[0])
     return kind, scope.get("path_params", {}).get("slug")
 
 
@@ -104,28 +158,64 @@ class StatsMiddleware:
             return
 
         device = None
+        app_header = None
         for name, value in scope.get("headers", []):
             if name == DEVICE_HEADER:
                 device = value.decode("latin-1", "ignore").strip()[:64] or None
-                break
+            elif name == APP_HEADER:
+                app_header = value.decode("latin-1", "ignore")
+        info = parse_app_header(app_header)
+        # Отладочные сборки не считаются: эмулятор и симулятор ходят на боевой
+        # сервер, и каждая проверка ложилась в статистику живым человеком
+        if info is not None and info.debug and not settings.stats_count_debug:
+            return
 
         # Ответ уже ушёл через send_wrapper — эта запись человека не задержит.
         # Именно await, а не create_task: задача без ссылки на неё может быть
         # собрана сборщиком мусора на полпути, и событие просто пропадёт
-        await _record(event[0], event[1], device)
+        await _record(event[0], event[1], device, info)
 
 
-async def _record(kind: str, slug: str | None, device: str | None) -> None:
+async def touch_device(
+    session: AsyncSession, device: str, info: AppInfo | None, today: date | None = None
+) -> None:
+    """Первое появление — вставить; заголовок — записать не чаще раза в день.
+
+    Раз в день, а не на каждый запрос: за сутки устройство делает десятки
+    обращений, и каждое обновляло бы строку ради тех же значений.
+    """
+    today = today or date.today()
+    await session.execute(
+        insert(Device)
+        .values(device=device, first_seen=today)
+        .on_conflict_do_nothing(index_elements=[Device.device])
+    )
+    if info is None:
+        return
+    await session.execute(
+        update(Device)
+        .where(
+            Device.device == device,
+            or_(Device.last_seen.is_(None), Device.last_seen < today),
+        )
+        .values(
+            platform=info.platform,
+            app_version=info.version,
+            lang=info.lang,
+            os_major=info.os_major,
+            last_seen=today,
+        )
+    )
+
+
+async def _record(
+    kind: str, slug: str | None, device: str | None, info: AppInfo | None = None
+) -> None:
     try:
         async with SessionLocal() as session:
             session.add(ApiEvent(kind=kind, slug=slug, device=device))
             if device:
-                # Первое появление устройства; повторные — молча мимо
-                await session.execute(
-                    insert(Device)
-                    .values(device=device, first_seen=date.today())
-                    .on_conflict_do_nothing(index_elements=[Device.device])
-                )
+                await touch_device(session, device, info)
             await session.commit()
     except Exception:  # noqa: BLE001 — статистика не стоит упавшего запроса
         log.warning("не записал событие статистики", exc_info=True)
