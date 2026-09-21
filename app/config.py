@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     # не отдавать всю админку
     review_password: str = ""
 
+    # Игра «когда сюда идти» (/seasons). Выключена: страница отвечает «игра
+    # закрыта», колода пустая, ответы не принимаются; проверка собранного
+    # (/seasons/review) работает как раньше. Открыть снова —
+    # SAYR_SEASONS_OPEN=1 в .env и перезапуск службы
+    seasons_open: bool = False
+
     # Пусто — CORS выключен. Нативным клиентам он не нужен, список понадобится,
     # только если появится веб-морда: SAYR_CORS_ORIGINS=["https://sayr.uz"]
     cors_origins: list[str] = []

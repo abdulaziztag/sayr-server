@@ -19,6 +19,15 @@ from app.main import app
 from app.models import Place, SeasonVote
 
 
+@pytest.fixture(autouse=True)
+def _game_open(monkeypatch):
+    """По умолчанию игра выключена; эти тесты — про открытую.
+
+    Закрытое состояние проверяют отдельные тесты внизу: они выключают сами.
+    """
+    monkeypatch.setattr(settings, "seasons_open", True)
+
+
 async def _clean() -> None:
     async with SessionLocal() as session:
         await session.execute(delete(SeasonVote))
@@ -530,3 +539,46 @@ async def test_факты_правятся_в_админке_и_форма_ме�
                 .values(**{key: value for key, value in before.items() if key != "id"})
             )
             await session.commit()
+
+
+# --- Закрытая игра ---------------------------------------------------------
+
+
+async def test_закрытая_игра_отвечает_страницей_без_колоды_и_cookie(client, monkeypatch):
+    monkeypatch.setattr(settings, "seasons_open", False)
+    for path, words in (("/seasons", "Игра закрыта"), ("/uz/seasons", "Oʻyin yopildi")):
+        resp = await client.get(path)
+        assert resp.status_code == 200
+        assert words in resp.text
+        assert "Пока нечего размечать" not in resp.text
+        # Форма спрятана, блок итога показан — как на честном конце колоды
+        assert 'action="/seasons/vote" hidden>' in resp.text
+        assert "data-done >" in resp.text
+        # display:flex у формы перебивал атрибут hidden — форма торчала над итогом
+        assert ".play[hidden] { display:none; }" in resp.text
+        assert seasons.COOKIE not in resp.cookies
+
+
+async def test_закрытая_игра_не_раздаёт_колоду_и_не_принимает_ответы(client, monkeypatch):
+    await _clean()
+    async with SessionLocal() as session:
+        slug = (await session.execute(select(Place.slug).limit(1))).scalar_one()
+    monkeypatch.setattr(settings, "seasons_open", False)
+
+    assert await _deck(client, "v-closed") == {"places": [], "left": 0}
+
+    refused = await _vote(client, slug, "v-closed", (4, 8))
+    assert refused.status_code == 410
+    # Форма без скрипта не видит ошибку, а возвращается на страницу о закрытии
+    plain = await client.post("/seasons/vote", data={"slug": slug, "lang": "uz", "skip": "1"})
+    assert plain.status_code == 303
+    assert plain.headers["location"] == "/uz/seasons"
+
+    async with SessionLocal() as session:
+        assert (await session.execute(select(SeasonVote))).first() is None
+
+
+async def test_проверка_работает_и_при_закрытой_игре(review_client, monkeypatch):
+    monkeypatch.setattr(settings, "seasons_open", False)
+    resp = await review_client.get("/seasons/review")
+    assert resp.status_code == 200

@@ -12,6 +12,11 @@
 Работает без JavaScript: обычный POST отвечает страницей со следующей
 карточкой. Скрипт нужен, чтобы крутить круг пальцем и не ждать сети
 между карточками.
+
+Игра выключается настройкой `seasons_open`: ссылки на неё разошлись
+по чатам, поэтому закрытая игра отвечает не 404, а той же страницей
+со словами «игра закрыта»; колода пуста, ответы не принимаются.
+Проверка собранного от этого не зависит.
 """
 
 import secrets
@@ -179,6 +184,9 @@ def _with_cookie(response, voter: str):
 
 
 async def _page(request: Request, lang: Lang, session: AsyncSession) -> HTMLResponse:
+    if not settings.seasons_open:
+        # Ни базы, ни cookie: закрытой игре номер устройства ни к чему
+        return HTMLResponse(render_page(lang=lang, deck=[], left=0, mine=0, closed=True))
     voter = _voter_of(request) or _fresh_voter()
     html = render_page(
         lang=lang,
@@ -207,6 +215,9 @@ async def seasons_deck(
 ):
     """Следующая пачка карточек — когда текущая подходит к концу."""
     voter = _voter_of(request)
+    # Закрытая игра для вкладки, открытой до закрытия, выглядит как конец колоды
+    if not settings.seasons_open:
+        return JSONResponse({"places": [], "left": 0})
     if not voter:
         # Без cookie колоду не собрать: непонятно, что этот человек уже видел
         return JSONResponse({"places": [], "left": 0})
@@ -241,6 +252,11 @@ async def seasons_vote(
     сделали бы «согласие большинства» ложью.
     """
     lang = lang if lang in ("ru", "uz") else "ru"
+    if not settings.seasons_open:
+        # Скрипту — отказ, а форме без скрипта — страница со словами о закрытии
+        if "application/json" in accept:
+            raise HTTPException(410, "Игра закрыта")
+        return RedirectResponse("/uz/seasons" if lang == "uz" else "/seasons", status_code=303)
     voter = _voter_of(request) or _fresh_voter()
     if _too_often(request.client.host if request.client else "?"):
         raise HTTPException(429, "Слишком много ответов за час")

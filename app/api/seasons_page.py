@@ -180,6 +180,9 @@ h1 { font-size:1.35rem; line-height:1.15; margin:0; letter-spacing:-.02em; }
 .lede { color:var(--ink2); margin:.25rem 0 0; font-size:.86rem; }
 
 .play { flex:1; min-height:0; display:flex; flex-direction:column; gap:.75rem; }
+/* display:flex выше перебивает атрибут hidden: без этого правила форма
+   оставалась на экране рядом со «Спасибо!» и с «Игра закрыта» */
+.play[hidden] { display:none; }
 
 /* Карточка — полоса фото с подписью поверх: место узнаётся по кадру,
    а высоты уходит вдвое меньше, чем у кадра с подписью под ним */
@@ -526,6 +529,9 @@ RU = {
                    "остальное уже разобрали или ждёт проверки.",
     "empty_head": "Пока нечего размечать",
     "empty_body": "Все места уже с сезоном или ждут проверки. Загляните позже.",
+    "closed_head": "Игра закрыта",
+    "closed_body": "Спасибо всем, кто отвечал: ответы сохранены, по ним "
+                   "у мест в приложении появляются сезоны.",
     "back": "На главную",
     "back_href": "/",
     "months": SHORT_RU,
@@ -563,6 +569,9 @@ UZ = {
                    "joy qolmadi — qolganlari tekshiruvda.",
     "empty_head": "Hozircha belgilaydigan joy yoʻq",
     "empty_body": "Hamma joyda mavsum bor yoki tekshiruvda. Keyinroq kiring.",
+    "closed_head": "Oʻyin yopildi",
+    "closed_body": "Javob berganlarning barchasiga rahmat: javoblar saqlandi, "
+                   "ular asosida ilovadagi joylarga mavsum qoʻyiladi.",
     "back": "Bosh sahifaga",
     "back_href": "/uz",
     "months": SHORT_UZ,
@@ -856,9 +865,18 @@ def _meta(card: dict) -> str:
     return " · ".join(bit for bit in bits if bit)
 
 
-def render_page(lang: str, deck: list[dict], left: int, mine: int) -> str:
-    """Страница игры: первая карточка разметкой, остальные — колодой в скрипте."""
+def render_page(lang: str, deck: list[dict], left: int, mine: int, closed: bool = False) -> str:
+    """Страница игры: первая карточка разметкой, остальные — колодой в скрипте.
+
+    `closed` — игра выключена: та же страница без колоды, с «игра закрыта»
+    на месте «спасибо». Скрипту отдаются те же слова на оба исхода, иначе
+    пустая колода перерисовала бы блок в «пока нечего размечать».
+    """
     t = _T[lang if lang in _T else "ru"]
+    if closed:
+        deck, left, mine = [], 0, 0
+        t = dict(t, lede="", thanks_head=t["closed_head"], thanks_body=t["closed_body"],
+                 empty_head=t["closed_head"], empty_body=t["closed_body"])
     cards = [dict(card, meta=_meta(card)) for card in deck]
     first = cards[0] if cards else None
     done_head = t["thanks_head"] if mine else t["empty_head"]
