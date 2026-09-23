@@ -45,6 +45,7 @@ from .models import (
     ReportStatus,
     Season,
     TesterSignup,
+    User,
     photo_storage,
 )
 from .reports import STATUS_RU, telegram_url, topic_names
@@ -1157,6 +1158,54 @@ class PushTokenAdmin(ModelView, model=PushToken):
     can_edit = False
 
 
+class UserAdmin(ModelView, model=User):
+    """Люди с аккаунтом. Только смотреть и, по письменной просьбе, удалять.
+
+    Номер показан маской: он нужен, чтобы узнать человека по последним
+    цифрам из его же письма, а не чтобы читать список телефонов. Править
+    чужую анкету отсюда нельзя — это его данные, а не наши.
+    """
+
+    name = "Человек"
+    name_plural = "Люди"
+    icon = "fa-solid fa-user"
+    column_list = [
+        User.id,
+        User.phone,
+        User.first_name,
+        User.gender,
+        User.created_at,
+        User.last_login_at,
+        User.profile_filled_at,
+    ]
+    column_default_sort = ("created_at", True)
+    column_sortable_list = [User.id, User.created_at, User.last_login_at]
+    column_labels = {
+        User.id: "Номер",
+        User.phone: "Телефон",
+        User.first_name: "Имя",
+        User.last_name: "Фамилия",
+        User.gender: "Пол",
+        User.birth_year: "Год рождения",
+        User.telegram_username: "Телеграм",
+        User.created_at: "Завёл аккаунт",
+        User.last_login_at: "Последний вход",
+        User.profile_filled_at: "Заполнил анкету",
+    }
+    column_formatters = {User.phone: lambda row, _: _masked_phone(row.phone)}
+    column_formatters_detail = {User.phone: lambda row, _: _masked_phone(row.phone)}
+    can_create = False
+    can_edit = False
+
+
+def _masked_phone(phone: str | None) -> str:
+    """+998 90 ***-**-67 — узнать своего человека хватает, а читать
+    список телефонов в админке незачем."""
+    if not phone or len(phone) < 6:
+        return phone or ""
+    return f"{phone[:7]} ***-**-{phone[-2:]}"
+
+
 def mount_admin(app: FastAPI) -> Admin:
     admin = Admin(
         app,
@@ -1188,5 +1237,6 @@ def mount_admin(app: FastAPI) -> Admin:
     admin.add_view(AnnouncementAdmin)
     admin.add_view(PushTokenAdmin)
     admin.add_view(AppUpdateAdmin)
+    admin.add_view(UserAdmin)
     admin.add_view(StatsView)
     return admin

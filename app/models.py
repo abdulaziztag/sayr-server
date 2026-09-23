@@ -447,18 +447,37 @@ class PlaceNeighbor(Base):
 
 
 class TripIntent(Base):
-    """«Я пойду сюда в этот день». Аккаунтов нет — голос привязан к устройству."""
+    """«Я пойду сюда в этот день».
+
+    У гостя голос привязан к устройству, у вошедшего — к человеку: при входе
+    планы этого устройства достаются ему, и дальше они видны на всех его
+    телефонах. Оба пути живут рядом, иначе старые версии приложений
+    сломались бы в день выката сервера.
+    """
 
     __tablename__ = "trip_intents"
     __table_args__ = (
         UniqueConstraint("place_id", "day", "device_id", name="uq_intent_place_day_device"),
         Index("ix_trip_intents_place_day", "place_id", "day"),
+        # У вошедшего один голос на место и день независимо от числа телефонов
+        Index(
+            "ux_trip_intents_user_day",
+            "place_id",
+            "day",
+            "user_id",
+            unique=True,
+            postgresql_where=text("user_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     place_id: Mapped[int] = mapped_column(ForeignKey("places.id", ondelete="CASCADE"))
     day: Mapped[date] = mapped_column(Date, index=True)
     device_id: Mapped[str] = mapped_column(String(64))
+    #: Пусто у гостя. Удаление аккаунта уносит его планы вместе с ним
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -1049,3 +1068,79 @@ class LoginRequest(Base):
     status: Mapped[str] = mapped_column(String(16), default="sent", server_default="sent")
     device_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+
+
+class UserFavorite(Base):
+    """Избранное человека. Живёт рядом с избранным на телефоне, а не вместо:
+    гость продолжает работать без аккаунта, вошедший получает то же самое
+    на всех своих телефонах.
+
+    Удаление — отметкой времени, а не пропажей строки: иначе снятое
+    сердечко на одном телефоне не доедет до второго и вернётся обратно
+    следующей сверкой.
+    """
+
+    __tablename__ = "user_favorites"
+    __table_args__ = (UniqueConstraint("user_id", "place_id", name="uq_user_favorite"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    place_id: Mapped[int] = mapped_column(ForeignKey("places.id", ondelete="CASCADE"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class UserTripDay(Base):
+    """История выходов: место, день, чем кончилось.
+
+    Координат здесь нет — только место из каталога и дата. Сами записанные
+    треки остаются на телефоне, это обещано в политике.
+    """
+
+    __tablename__ = "user_trip_days"
+    __table_args__ = (
+        UniqueConstraint("user_id", "place_id", "day", name="uq_user_trip_day"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    place_id: Mapped[int] = mapped_column(ForeignKey("places.id", ondelete="CASCADE"))
+    day: Mapped[date] = mapped_column(Date)
+    #: planned | went | skipped | unmarked — как в дневнике на телефоне
+    outcome: Mapped[str] = mapped_column(String(16), default="planned")
+    pace: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    distance_km: Mapped[float | None] = mapped_column(Float, nullable=True)
+    elevation_gain_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    answered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class UserSetting(Base):
+    """Настройки, которые должны переезжать. Пока одна — город выезда:
+    фильтры и тема привязаны к привычке на конкретном телефоне.
+    """
+
+    __tablename__ = "user_settings"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    departure_city: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

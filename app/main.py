@@ -8,9 +8,9 @@ from sqlalchemy import text
 from starlette.staticfiles import StaticFiles
 
 from .admin import mount_admin
-from .api import (auth, intents, events, landing, legal, places, regions, report, seasons,
-                  seasons_review, share, drive_times, push, app_update)
-from .config import GPX_DIR, PHOTOS_DIR, SERVER_DIR, THUMBS_DIR, settings
+from .api import (auth, intents, events, landing, legal, me, places, regions, report,
+                  seasons, seasons_review, share, sync, drive_times, push, app_update)
+from .config import AVATARS_DIR, GPX_DIR, PHOTOS_DIR, SERVER_DIR, THUMBS_DIR, settings
 from .db import engine
 from .stats import StatsMiddleware, rotate_forever
 
@@ -60,6 +60,9 @@ app.add_middleware(StatsMiddleware)
 app.mount("/media/photos", StaticFiles(directory=PHOTOS_DIR), name="media-photos")
 app.mount("/media/thumbs", StaticFiles(directory=THUMBS_DIR), name="media-thumbs")
 app.mount("/media/gpx", StaticFiles(directory=GPX_DIR), name="media-gpx")
+# Фото из анкет. Отдаются так же открыто, как снимки мест: имя файла
+# случайное, угадать его нельзя, а показывать фото попутчику надо
+app.mount("/media/avatars", StaticFiles(directory=AVATARS_DIR), name="media-avatars")
 # Шрифты и картинки лендинга. Отдельно от media: то — пользовательский
 # контент, это — часть страницы, и живёт вместе с кодом
 app.mount("/static", StaticFiles(directory=SERVER_DIR / "static"), name="static")
@@ -73,6 +76,8 @@ app.include_router(push.router)
 app.include_router(app_update.router)
 app.include_router(events.router)
 app.include_router(auth.router)
+app.include_router(me.router)
+app.include_router(sync.router)
 app.include_router(report.router)
 app.include_router(seasons.router)
 app.include_router(seasons_review.router)

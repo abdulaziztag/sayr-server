@@ -19,8 +19,9 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from ..auth.gateway import (
     CODE_EXPIRED,
@@ -36,7 +37,7 @@ from ..auth.telegram import TelegramGateway
 from ..auth.tokens import current_session, new_token
 from ..config import settings
 from ..db import get_session
-from ..models import LoginRequest, User, UserSession
+from ..models import LoginRequest, TripIntent, User, UserSession
 from ..stats import parse_app_header
 
 log = logging.getLogger(__name__)
@@ -236,6 +237,7 @@ async def verify_code(
             session.add(user)
             await session.flush()
         user.last_login_at = now
+        await _adopt_intents(session, user, row.device_id)
         token, digest = new_token()
         session.add(
             UserSession(
@@ -267,6 +269,37 @@ async def verify_code(
     # Канал ответил незнакомым: попытку не сжигаем, человек не виноват
     log.warning("вход: канал ответил непонятным статусом для заявки %s", row.id)
     raise HTTPException(status_code=502, detail="channel_failed")
+
+
+async def _adopt_intents(session: AsyncSession, user: User, device_id: str | None) -> None:
+    """Планы этого устройства достаются человеку.
+
+    Он отмечал «Пойду» гостем, а теперь вошёл — терять отметки нельзя.
+    Сначала убираем гостевые, на которые у него уже есть свой голос
+    с другого телефона: иначе один человек считался бы дважды.
+    """
+    if not device_id:
+        return
+    mine = aliased(TripIntent)
+    already = (
+        select(mine.id)
+        .where(
+            mine.user_id == user.id,
+            mine.place_id == TripIntent.place_id,
+            mine.day == TripIntent.day,
+        )
+        .exists()
+    )
+    await session.execute(
+        delete(TripIntent).where(
+            TripIntent.device_id == device_id, TripIntent.user_id.is_(None), already
+        )
+    )
+    await session.execute(
+        update(TripIntent)
+        .where(TripIntent.device_id == device_id, TripIntent.user_id.is_(None))
+        .values(user_id=user.id)
+    )
 
 
 @router.post("/logout", status_code=204)

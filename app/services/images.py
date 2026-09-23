@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
-from ..config import DELETED_PHOTOS_DIR, PHOTOS_DIR, THUMBS_DIR
+from ..config import AVATARS_DIR, DELETED_PHOTOS_DIR, PHOTOS_DIR, THUMBS_DIR
 
 THUMB_SIZE = (640, 400)
 
@@ -68,6 +68,41 @@ def store_upload(data: bytes, slug: str) -> str:
         im.save(PHOTOS_DIR / name, "JPEG", quality=88)
     make_thumbnail(name)
     return name
+
+
+#: Фото из анкеты. 512 пикселей хватает и кружку в профиле, и карточке
+#: попутчика: крупнее оно нигде не показывается, а место и трафик экономит
+AVATAR_SIDE = 512
+MAX_AVATAR_BYTES = 8 * 1024 * 1024
+
+
+def store_avatar(data: bytes, user_id: int) -> str:
+    """Кладёт фото анкеты и отдаёт имя файла.
+
+    Пересобираем в JPEG по той же причине, что и снимки мест: EXIF
+    с координатами съёмки и серийным номером камеры остаётся за бортом.
+    HEIC сюда не доезжает — Pillow его не открывает без отдельной
+    библиотеки, поэтому в JPEG кадр перекодирует само приложение
+    (обе платформы умеют это одной строкой).
+    """
+    if len(data) > MAX_AVATAR_BYTES:
+        raise ValueError("файл больше допустимого")
+    name = f"u{user_id}-{hashlib.sha1(data).hexdigest()[:8]}.jpg"
+    with Image.open(io.BytesIO(data)) as im:
+        im = ImageOps.exif_transpose(im).convert("RGB")
+        im.thumbnail((AVATAR_SIDE, AVATAR_SIDE), Image.Resampling.LANCZOS)
+        im.save(AVATARS_DIR / name, "JPEG", quality=85)
+    return name
+
+
+def drop_avatar(name: str) -> None:
+    """Убирает фото анкеты совсем, без корзины.
+
+    У снимков мест корзина есть: их отбирает владелец и вправе промахнуться.
+    Здесь наоборот — человек попросил удалить своё лицо, и держать его
+    копию «на всякий случай» нельзя.
+    """
+    (AVATARS_DIR / Path(name).name).unlink(missing_ok=True)
 
 
 def retire_photo(photo_filename: str) -> list[Path]:

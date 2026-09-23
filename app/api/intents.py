@@ -3,12 +3,14 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import and_ as sa_and
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth.tokens import optional_user
 from ..db import get_session
-from ..models import Place, PlacePaceStats, TripIntent
+from ..models import Place, PlacePaceStats, TripIntent, User
 
 router = APIRouter(prefix="/api/v1", tags=["intents"])
 
@@ -45,6 +47,19 @@ class PaceIn(BaseModel):
     pace: Pace | None = None
 
 
+def _mine(user: User | None, device_id: str | None):
+    """Чьи это отметки.
+
+    У вошедшего — его собственные, с любого телефона. У гостя — отметки
+    его устройства, но только те, что ещё никому не достались: после входа
+    они принадлежат человеку, и вторым голосом с того же телефона быть
+    не должны.
+    """
+    if user is not None:
+        return TripIntent.user_id == user.id
+    return sa_and(TripIntent.device_id == device_id, TripIntent.user_id.is_(None))
+
+
 async def _place_id(slug: str, session: AsyncSession) -> int:
     stmt = select(Place.id).where(Place.slug == slug, Place.is_published)
     place_id = (await session.execute(stmt)).scalar_one_or_none()
@@ -59,6 +74,7 @@ async def list_intents(
     device_id: str | None = None,
     days: int = Query(DEFAULT_DAYS, ge=1, le=180),
     session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(optional_user),
 ):
     """Сколько человек собирается в место по дням — числа под датами календаря."""
     place_id = await _place_id(slug, session)
@@ -79,14 +95,14 @@ async def list_intents(
     ).all()
 
     mine: set[date] = set()
-    if device_id:
+    if user is not None or device_id:
         mine = {
             row[0]
             for row in (
                 await session.execute(
                     select(TripIntent.day).where(
                         TripIntent.place_id == place_id,
-                        TripIntent.device_id == device_id,
+                        _mine(user, device_id),
                         TripIntent.day >= today,
                     )
                 )
@@ -100,9 +116,12 @@ async def list_intents(
 
 @router.post("/places/{slug}/intents", response_model=IntentsOut)
 async def add_intent(
-    slug: str, body: IntentIn, session: AsyncSession = Depends(get_session)
+    slug: str,
+    body: IntentIn,
+    session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(optional_user),
 ):
-    """Отметиться на дату. Одно устройство — один голос на день (повтор не удваивает)."""
+    """Отметиться на дату. Один голос на день (повтор не удваивает)."""
     place_id = await _place_id(slug, session)
     if body.date < date.today():
         raise HTTPException(422, "Дата в прошлом")
@@ -110,22 +129,26 @@ async def add_intent(
     if body.date > date.today() + timedelta(days=180):
         raise HTTPException(422, "Дата слишком далеко")
 
-    # Устройство идёт куда-то одно в день: старая отметка на эту же дату снимается
+    # В день идут куда-то одно: старая отметка на эту же дату снимается.
+    # У вошедшего — на всех его телефонах сразу
     await session.execute(
-        delete(TripIntent).where(
-            TripIntent.device_id == body.device_id, TripIntent.day == body.date
-        )
+        delete(TripIntent).where(_mine(user, body.device_id), TripIntent.day == body.date)
     )
     await session.execute(
         insert(TripIntent)
-        .values(place_id=place_id, day=body.date, device_id=body.device_id)
+        .values(
+            place_id=place_id,
+            day=body.date,
+            device_id=body.device_id,
+            user_id=user.id if user else None,
+        )
         .on_conflict_do_nothing(constraint="uq_intent_place_day_device")
     )
     await session.commit()
     # Тот же горизонт, что у GET: с зашитыми здесь 60 ответ сразу после
     # отметки оказывался на два дня короче обычного — ровно та поломка,
     # ради которой дефолт и поднимали до 62
-    return await list_intents(slug, body.device_id, DEFAULT_DAYS, session)
+    return await list_intents(slug, body.device_id, DEFAULT_DAYS, session, user)
 
 
 @router.delete("/places/{slug}/intents", response_model=IntentsOut)
@@ -134,21 +157,27 @@ async def remove_intent(
     date_: date = Query(alias="date"),
     device_id: str = Query(min_length=8, max_length=64),
     session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(optional_user),
 ):
     place_id = await _place_id(slug, session)
     await session.execute(
         delete(TripIntent).where(
             TripIntent.place_id == place_id,
             TripIntent.day == date_,
-            TripIntent.device_id == device_id,
+            _mine(user, device_id),
         )
     )
     await session.commit()
-    return await list_intents(slug, device_id, DEFAULT_DAYS, session)
+    return await list_intents(slug, device_id, DEFAULT_DAYS, session, user)
 
 
 @router.post("/places/{slug}/pace", response_model=IntentsOut)
-async def set_pace(slug: str, body: PaceIn, session: AsyncSession = Depends(get_session)):
+async def set_pace(
+    slug: str,
+    body: PaceIn,
+    session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(optional_user),
+):
     """Как прошёл выход: состоялся ли и разошёлся ли с расчётным временем.
 
     Приходит вечером дня выхода, когда приложение спрашивает «были?».
@@ -166,7 +195,7 @@ async def set_pace(slug: str, body: PaceIn, session: AsyncSession = Depends(get_
             select(TripIntent).where(
                 TripIntent.place_id == place_id,
                 TripIntent.day == body.date,
-                TripIntent.device_id == body.device_id,
+                _mine(user, body.device_id),
             )
         )
     ).scalar_one_or_none()
@@ -184,7 +213,7 @@ async def set_pace(slug: str, body: PaceIn, session: AsyncSession = Depends(get_
         await _move_vote(place_id, was, fresh, session)
 
     await session.commit()
-    return await list_intents(slug, body.device_id, DEFAULT_DAYS, session)
+    return await list_intents(slug, body.device_id, DEFAULT_DAYS, session, user)
 
 
 async def _move_vote(
