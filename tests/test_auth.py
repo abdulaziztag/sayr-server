@@ -277,3 +277,26 @@ async def test_ошибка_проверки_кода(client, channel):
     )
     assert resp.status_code == 410
     assert resp.json()["detail"] == "code_expired"
+
+
+async def test_тестовый_номер_проверяющего_входит_без_канала(client, monkeypatch):
+    """Проверяющим App Store и Play код в телеграм не приходит: номер из
+    настроек заводит заявку без канала, а код сравнивается с настройкой"""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "login_test_phone", "+998900000000")
+    monkeypatch.setattr(settings, "login_test_code", "424242")
+    r = await _request(client, phone="+998900000000")
+    assert r.status_code == 200, r.text
+    rid = r.json()["request_id"]
+    bad = await client.post("/api/v1/auth/verify", json={"request_id": rid, "code": "000000"})
+    assert bad.status_code == 400
+    ok = await client.post("/api/v1/auth/verify", json={"request_id": rid, "code": "424242"})
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["user"]["phone"] == "+998900000000"
+
+
+async def test_без_настройки_тестового_номера_обхода_нет(client):
+    # Канала нет и обход не задан — 503, как для всех
+    r = await _request(client, phone="+998900000000")
+    assert r.status_code == 503

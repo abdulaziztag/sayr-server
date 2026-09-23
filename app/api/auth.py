@@ -76,6 +76,15 @@ def _too_often(bucket: str, key: str) -> bool:
     return False
 
 
+def _is_test_phone(phone: str) -> bool:
+    """Номер проверяющего из магазина: заявка без канала, код из настроек"""
+    return bool(
+        settings.login_test_phone
+        and settings.login_test_code
+        and phone == normalize_phone(settings.login_test_phone)
+    )
+
+
 def normalize_phone(raw: str) -> str | None:
     """Номер к виду +998901234567.
 
@@ -148,12 +157,13 @@ async def request_code(
     if body.channel != "telegram":
         # СМС ждёт юрлица и согласования имени отправителя у операторов
         raise HTTPException(status_code=503, detail="channel_not_ready")
-    if channel is None:
-        raise HTTPException(status_code=503, detail="channel_off")
 
     phone = normalize_phone(body.phone)
     if phone is None:
         raise HTTPException(status_code=422, detail="phone_invalid")
+    test_phone = _is_test_phone(phone)
+    if channel is None and not test_phone:
+        raise HTTPException(status_code=503, detail="channel_off")
 
     device, platform = _device(request)
     ip = request.client.host if request.client else ""
@@ -165,6 +175,28 @@ async def request_code(
     ):
         raise HTTPException(status_code=429, detail="too_often")
 
+    now = datetime.now(timezone.utc)
+    if test_phone:
+        # Проверяющему App Store и Play код в телеграм не приходит: заявка
+        # заводится без канала, а код сравнивается с настройкой при проверке
+        row = LoginRequest(
+            id=str(uuid.uuid4()),
+            phone=phone,
+            channel="test",
+            expires_at=now + timedelta(seconds=settings.login_code_ttl_sec),
+            device_id=device,
+            ip=ip[:45] or None,
+        )
+        session.add(row)
+        await session.commit()
+        return RequestOut(
+            request_id=row.id,
+            channel="telegram",
+            expires_at=row.expires_at,
+            resend_after=settings.login_resend_after_sec,
+        )
+
+    assert channel is not None
     sent = await channel.send(
         phone,
         ttl_sec=settings.login_code_ttl_sec,
@@ -179,7 +211,6 @@ async def request_code(
         log.warning("вход: канал %s не отправил код (%s)", channel.name, sent.error)
         raise HTTPException(status_code=502, detail="channel_failed")
 
-    now = datetime.now(timezone.utc)
     row = LoginRequest(
         id=str(uuid.uuid4()),
         phone=phone,
@@ -206,14 +237,14 @@ async def verify_code(
     channel: CodeChannel | None = Depends(get_channel),
     session: AsyncSession = Depends(get_session),
 ) -> VerifyOut:
-    if channel is None:
-        raise HTTPException(status_code=503, detail="channel_off")
     if not _CODE.match(body.code):
         raise HTTPException(status_code=422, detail="code_invalid_format")
 
     row = await session.get(LoginRequest, body.request_id)
     if row is None:
         raise HTTPException(status_code=404, detail="request_not_found")
+    if channel is None and row.channel != "test":
+        raise HTTPException(status_code=503, detail="channel_off")
     now = datetime.now(timezone.utc)
     if (
         row.status != "sent"
@@ -225,7 +256,16 @@ async def verify_code(
             await session.commit()
         raise HTTPException(status_code=410, detail="code_expired")
 
-    status = await channel.check(row.gateway_request_id or "", body.code)
+    if row.channel == "test":
+        # Настройка могла смениться после заявки: сравниваем с текущей
+        status = (
+            CODE_VALID
+            if settings.login_test_code and body.code == settings.login_test_code
+            else CODE_INVALID
+        )
+    else:
+        assert channel is not None
+        status = await channel.check(row.gateway_request_id or "", body.code)
 
     if status == CODE_VALID:
         row.status = "verified"

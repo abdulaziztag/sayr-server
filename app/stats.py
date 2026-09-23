@@ -30,6 +30,7 @@ from .models import (
     DailyStat,
     Device,
     TripIntent,
+    LoginRequest,
 )
 
 log = logging.getLogger(__name__)
@@ -420,6 +421,10 @@ async def purge(session: AsyncSession, today: date | None = None) -> None:
     cutoff_ts = datetime.now().astimezone() - timedelta(days=settings.stats_retention_days)
 
     await session.execute(delete(ApiEvent).where(ApiEvent.ts < cutoff_ts))
+
+    # Заявки на вход: номер, устройство и адрес нужны только пока живёт
+    # код и считаются лимиты. Политика обещает те же 30 дней
+    await session.execute(delete(LoginRequest).where(LoginRequest.created_at < cutoff_ts))
 
     # Прошедшие отметки. Порог тот же, а не «всё прошедшее»: колонка votes
     # в топе мест считает голоса за последние 7 и 30 дней, и рубить их
