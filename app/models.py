@@ -24,7 +24,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from .config import GPX_DIR, PHOTOS_DIR
+from .config import AVATARS_DIR, GPX_DIR, PHOTOS_DIR
 
 
 class Base(DeclarativeBase):
@@ -98,6 +98,8 @@ class PlanStepKind(str, enum.Enum):
 
 photo_storage = FileSystemStorage(path=str(PHOTOS_DIR))
 gpx_storage = FileSystemStorage(path=str(GPX_DIR))
+avatar_storage = FileSystemStorage(path=str(AVATARS_DIR))
+avatar_storage.OVERWRITE_EXISTING_FILES = False
 # Иначе photo.jpg, загруженный ко второму месту, молча перетирает файл первого:
 # write() коллизий не проверяет, а с этим флагом StorageFile сам дописывает _1
 photo_storage.OVERWRITE_EXISTING_FILES = False
@@ -935,3 +937,115 @@ class PlaceReportFile(Base):
 
     def __str__(self) -> str:
         return self.original_name or self.name
+
+
+class Gender(str, enum.Enum):
+    male = "male"
+    female = "female"
+    unspecified = "unspecified"
+
+
+class User(Base):
+    """Человек. Заводится первым успешным входом по номеру телефона.
+
+    Номер — единственное, что обязательно: пароля нет, почты нет, анкета
+    необязательная и до попутчиков не видна никому, кроме самого человека
+    (спека docs/superpowers/specs/2026-09-23-account-login-design.md).
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    #: E.164 без пробелов: +998901234567
+    phone: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Анкета. Пустая до тех пор, пока человек её не заполнит: экран
+    # пропускается кнопкой «Заполнить позже», и это нормальное состояние
+    first_name: Mapped[str] = mapped_column(String(60), default="", server_default="")
+    last_name: Mapped[str] = mapped_column(String(60), default="", server_default="")
+    gender: Mapped[Gender | None] = mapped_column(
+        Enum(Gender, name="gender"), nullable=True
+    )
+    #: Год рождения, а не возраст: возраст через год устаревает молча
+    birth_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Ник в телеграме без @ — по нему попутчики пишут. Номер телефона
+    #: им не показывается никогда
+    telegram_username: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    avatar = mapped_column(FileType(storage=avatar_storage), nullable=True)
+    profile_filled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    sessions: Mapped[list["UserSession"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+    def __str__(self) -> str:
+        return self.first_name or self.phone
+
+
+class UserSession(Base):
+    """Вход на одном устройстве.
+
+    Хранится отпечаток токена, а не сам токен: утечка базы не должна
+    давать доступ к аккаунтам. Строка на устройство — выход гасит одну,
+    удаление аккаунта уносит все.
+    """
+
+    __tablename__ = "user_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    #: sha256 в hex от выданного токена
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    #: X-Device-Id — чтобы человек в Профиле узнавал свои телефоны
+    device_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    platform: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    #: Обновляется не чаще раза в сутки: запись на каждый запрос ради
+    #: этой отметки не окупается
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    user: Mapped[User] = relationship(back_populates="sessions")
+
+
+class LoginRequest(Base):
+    """Заявка на код.
+
+    Самого кода здесь нет: его придумывает и проверяет шлюз, мы держим
+    только номер заявки у шлюза. Если базу утащат, кодов в ней не найдут.
+    """
+
+    __tablename__ = "login_requests"
+
+    #: Свой uuid, а не номер заявки шлюза: наружу отдаём его, чтобы
+    #: не светить внутренности канала
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    phone: Mapped[str] = mapped_column(String(20), index=True)
+    #: telegram или sms — второй канал появится, когда будет юрлицо
+    channel: Mapped[str] = mapped_column(String(16))
+    gateway_request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    #: sent → verified | expired | failed
+    status: Mapped[str] = mapped_column(String(16), default="sent", server_default="sent")
+    device_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ip: Mapped[str | None] = mapped_column(String(45), nullable=True)

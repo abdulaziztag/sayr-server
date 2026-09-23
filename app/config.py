@@ -55,6 +55,29 @@ class Settings(BaseSettings):
     # чтобы проверять свою же работу против своего же сервера
     stats_count_debug: bool = False
 
+    # Вход по номеру телефона. Пустой токен — канал выключен, и ручка входа
+    # честно отвечает «вход недоступен», а не падает: сервер должен
+    # подниматься и без шлюза — локально, в тестах и на бою до того, как
+    # владелец пополнит счёт в Fragment
+    tg_gateway_token: str = ""
+    # Проверенный канал-отправитель в телеграме. Пусто — код придёт
+    # от служебного аккаунта шлюза, это нормальный режим
+    tg_gateway_sender: str = ""
+    # Куда шлюз шлёт отчёт о доставке. Пусто — отчётов нет, и о том, что код
+    # не дошёл, мы узнаем только по истечении времени жизни
+    tg_gateway_callback_url: str = ""
+    # Ключ в адресе отчёта о доставке. Пусто — ручка отчётов выключена:
+    # открытая наружу, она позволяла бы гасить чужие заявки
+    tg_gateway_callback_key: str = ""
+    # Код живёт пять минут: меньше — человек не успеет переключиться
+    # в телеграм и обратно, больше — заявка висит без дела
+    login_code_ttl_sec: int = 300
+    login_code_length: int = 6
+    # Пока тикает, кнопка «Отправить ещё раз» спит: каждая отправка платная
+    login_resend_after_sec: int = 60
+    # Попыток ввода на заявку. Три — столько же, сколько даёт сам шлюз
+    login_max_attempts: int = 3
+
     # Пуши. Пустой путь — платформа не настроена: планировщик пропустит её
     # устройства и запишет это в last_error объявления, а не упадёт целиком.
     # APNs — ключ .p8 из Apple Developer и его Key ID; тема — bundle id
@@ -76,6 +99,10 @@ settings = Settings()
 PHOTOS_DIR = settings.media_dir / "photos"
 THUMBS_DIR = settings.media_dir / "thumbs"
 GPX_DIR = settings.media_dir / "gpx"
+# Фото из анкеты. Отдельно от photos: снимки мест ставит владелец, а это
+# чужие лица, и правила у них разные — удаление аккаунта уносит файл сразу,
+# без корзины
+AVATARS_DIR = settings.media_dir / "avatars"
 
 # Файлы, приложенные к заявкам с формы /report. Лежат внутри media_dir,
 # потому что это единственный каталог на томе docker: всё остальное внутри
@@ -111,5 +138,5 @@ REPORTS_DIR = settings.media_dir / "reports"
 DELETED_PHOTOS_DIR = settings.media_dir / "deleted-photos"
 
 # StaticFiles и FileSystemStorage требуют существующих директорий уже на импорте
-for _d in (PHOTOS_DIR, THUMBS_DIR, GPX_DIR, REPORTS_DIR):
+for _d in (PHOTOS_DIR, THUMBS_DIR, GPX_DIR, REPORTS_DIR, AVATARS_DIR):
     _d.mkdir(parents=True, exist_ok=True)
