@@ -98,6 +98,27 @@ async def test_ник_телеграма_чистится_и_проверяет�
     assert bad.status_code == 422
 
 
+async def test_снятые_поля_анкеты_стираются(client):
+    """Анкета приходит целиком: снятый год, пол и ник должны исчезнуть,
+    а не остаться на сервере и вернуться при следующем открытии"""
+    token, _ = await _login()
+    await client.patch(
+        "/api/v1/me",
+        json={"gender": "female", "birth_year": 1995, "telegram_username": "manopov"},
+        headers=_auth(token),
+    )
+    resp = await client.patch(
+        "/api/v1/me",
+        json={"gender": None, "birth_year": None, "telegram_username": ""},
+        headers=_auth(token),
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["gender"] is None
+    assert body["birth_year"] is None
+    assert body["telegram_username"] is None
+
+
 async def test_год_рождения_с_опечаткой_не_принимается(client):
     token, _ = await _login()
     assert (

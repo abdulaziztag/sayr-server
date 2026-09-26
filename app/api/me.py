@@ -30,7 +30,10 @@ MIN_BIRTH_YEAR = 1930
 
 
 class ProfileIn(BaseModel):
-    """Всё необязательное: анкета пропускается, поля правятся по одному."""
+    """Всё необязательное: анкета пропускается, поля правятся по одному.
+
+    Чего нет в теле, того не трогаем; поле с `null` — стираем. Так приложение
+    снимает год рождения и пол, которые человек передумал показывать."""
 
     first_name: str | None = Field(default=None, max_length=60)
     last_name: str | None = Field(default=None, max_length=60)
@@ -45,7 +48,9 @@ class ProfileIn(BaseModel):
             return None
         nick = value.strip().lstrip("@")
         if not nick:
-            return ""
+            # Стёртое поле — «ника нет», а не пустая строка: иначе анкета
+            # показывала бы при следующем открытии одинокое «@»
+            return None
         if not nick.replace("_", "").isalnum() or len(nick) < 4:
             raise ValueError("ник в телеграме выглядит неправильно")
         return nick

@@ -34,7 +34,8 @@ class UserOut(BaseModel):
             last_name=user.last_name or "",
             gender=user.gender,
             birth_year=user.birth_year,
-            telegram_username=user.telegram_username,
+            # Пустая строка осталась от прежней версии ручки — это тоже «нет ника»
+            telegram_username=user.telegram_username or None,
             avatar_url=f"/media/avatars/{name}" if name else None,
             profile_filled=user.profile_filled_at is not None,
             created_at=user.created_at,
