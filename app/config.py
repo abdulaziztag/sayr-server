@@ -105,6 +105,17 @@ class Settings(BaseSettings):
     #: в комнату https://sayr.info/r/…
     public_url: str = "https://sayr.info"
 
+    # Sayr Admin — аккаунт Telegram, который заводит группы комнат (служба
+    # sayr-tg, python -m app.tg.worker). Ключи с my.telegram.org и строка
+    # сессии из python -m app.tg.login. Пусто — служба ждёт входа и ничего
+    # не делает, комнаты живут без групп
+    tg_api_id: int = 0
+    tg_api_hash: str = ""
+    tg_session: str = ""
+    #: Не больше стольких новых групп в час: аккаунт, который создаёт группы
+    #: пачками, Telegram помечает как спамера
+    tg_groups_per_hour: int = 10
+
     # «Универсальные» ссылки sayr.info/p/… и /r/…: сайт подтверждает, что
     # открывать их вправе наше приложение. iOS — «TEAMID.bundle id»; Android —
     # пакет и SHA-256 сертификатов подписи через запятую: ключ загрузки

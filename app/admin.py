@@ -46,6 +46,9 @@ from .models import (
     Room,
     RoomReport,
     Season,
+    TgJob,
+    TgMessage,
+    TgStatus,
     TesterSignup,
     User,
     photo_storage,
@@ -1303,6 +1306,86 @@ class RoomReportAdmin(ModelView, model=RoomReport):
         return await self._resolve(request, ban=True)
 
 
+class TgStatusAdmin(ModelView, model=TgStatus):
+    """Как дела у Sayr Admin. «restricted» — Telegram ограничил аккаунт,
+    группы не создаются. Тревогу снимает человек, правкой состояния на «ok»,
+    когда разобрался: служба сама её не снимет."""
+
+    name = "Sayr Admin"
+    name_plural = "Sayr Admin: состояние"
+    icon = "fa-brands fa-telegram"
+    column_list = [TgStatus.state, TgStatus.last_seen_at, TgStatus.groups, TgStatus.note]
+    column_labels = {
+        TgStatus.state: "Состояние",
+        TgStatus.last_seen_at: "На связи",
+        TgStatus.groups: "Групп сейчас",
+        TgStatus.note: "Заметка",
+    }
+    form_columns = [TgStatus.state, TgStatus.note]
+    can_create = False
+    can_delete = False
+
+
+class TgJobAdmin(ModelView, model=TgJob):
+    """Задания службе. «Повторить» — снова в очередь с нуля попыток."""
+
+    name = "Задание"
+    name_plural = "Sayr Admin: задания"
+    icon = "fa-solid fa-list-check"
+    column_list = [
+        TgJob.id,
+        TgJob.kind,
+        TgJob.room_id,
+        TgJob.status,
+        TgJob.attempts,
+        TgJob.run_after,
+        TgJob.last_error,
+    ]
+    column_default_sort = ("id", True)
+    column_labels = {
+        TgJob.kind: "Что",
+        TgJob.room_id: "Комната",
+        TgJob.status: "Состояние",
+        TgJob.attempts: "Попыток",
+        TgJob.run_after: "Не раньше",
+        TgJob.last_error: "Ошибка",
+    }
+    can_create = False
+    can_edit = False
+
+    @action(name="retry", label="Повторить", add_in_detail=True, add_in_list=True)
+    async def retry(self, request: Request) -> Response:
+        from datetime import datetime, timezone
+
+        ids = [int(pk) for pk in request.query_params.get("pks", "").split(",") if pk]
+        async with SessionLocal() as session:
+            for job in (await session.execute(select(TgJob).where(TgJob.id.in_(ids)))).scalars():
+                job.status, job.attempts, job.last_error = "pending", 0, None
+                job.run_after = datetime.now(timezone.utc)
+            await session.commit()
+        return RedirectResponse(request.url_for("admin:list", identity=self.identity), status_code=302)
+
+
+class TgMessageAdmin(ModelView, model=TgMessage):
+    """Переписка групп глазами Sayr Admin — ради сведений о тропах.
+    Только читать: живёт полгода, по /leave и удалению аккаунта стирается."""
+
+    name = "Сообщение"
+    name_plural = "Sayr Admin: переписка"
+    icon = "fa-solid fa-comments"
+    column_list = [TgMessage.sent_at, TgMessage.room, TgMessage.text, TgMessage.has_media]
+    column_default_sort = ("sent_at", True)
+    column_searchable_list = [TgMessage.text]
+    column_labels = {
+        TgMessage.sent_at: "Когда",
+        TgMessage.room: "Комната",
+        TgMessage.text: "Текст",
+        TgMessage.has_media: "С медиа",
+    }
+    can_create = False
+    can_edit = False
+
+
 def _masked_phone(phone: str | None) -> str:
     """+998 90 ***-**-67 — узнать своего человека хватает, а читать
     список телефонов в админке незачем."""
@@ -1345,5 +1428,8 @@ def mount_admin(app: FastAPI) -> Admin:
     admin.add_view(UserAdmin)
     admin.add_view(RoomAdmin)
     admin.add_view(RoomReportAdmin)
+    admin.add_view(TgStatusAdmin)
+    admin.add_view(TgJobAdmin)
+    admin.add_view(TgMessageAdmin)
     admin.add_view(StatsView)
     return admin

@@ -333,7 +333,7 @@ async def test_удалённого_убирают_из_группы_и_по_с�
     out = await client.delete(f"/api/v1/rooms/{room['code']}/members/{member_id}", headers=org)
     assert out.status_code == 200
     kicks = await jobs("kick")
-    assert len(kicks) == 1 and kicks[0].payload == {"tg_user_id": 555}
+    assert len(kicks) == 1 and kicks[0].payload == {"tg_user_id": 555, "tg_user_hash": None}
     assert "room_removed" in await pushes(friend_id)
     back = await client.post(f"/api/v1/invites/{invite}/join", headers=friend)
     assert back.status_code == 403 and back.json()["detail"] == "removed"

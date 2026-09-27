@@ -1,0 +1,32 @@
+# /etc/systemd/system/sayr-tg.service
+#
+# Sayr Admin — аккаунт Telegram, который заводит группы комнат попутчиков
+# (app/tg). Держит один вход в Telegram постоянно, поэтому отдельно от API:
+# тот перезапускается каждую выкатку. Тот же каталог и venv, что у sayr.service;
+# ключи и строка сессии — в .env (SAYR_TG_API_ID, SAYR_TG_API_HASH,
+# SAYR_TG_SESSION). Без них служба живёт и ждёт входа.
+#
+# Установка один раз:
+#   cp deploy/sayr-tg.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now sayr-tg
+# Первый вход: cd /root/Projects/sayr-server && .venv/bin/python -m app.tg.login
+[Unit]
+Description=Sayr Admin (группы Telegram для комнат попутчиков)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+WorkingDirectory=/root/Projects/sayr-server
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/root/Projects/sayr-server/.venv/bin/python -m app.tg.worker
+Restart=always
+RestartSec=10
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

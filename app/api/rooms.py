@@ -37,6 +37,7 @@ from ..models import (
     RoomMember,
     RoomReport,
     TgJob,
+    TgMessage,
     User,
     UserBlock,
 )
@@ -381,7 +382,7 @@ def kick(session: AsyncSession, room: Room, member: RoomMember) -> None:
                 kind="kick",
                 room_id=room.id,
                 member_id=member.id,
-                payload={"tg_user_id": member.tg_user_id},
+                payload={"tg_user_id": member.tg_user_id, "tg_user_hash": member.tg_user_hash},
             )
         )
 
@@ -1013,6 +1014,8 @@ async def housekeeping(session: AsyncSession, day: date) -> None:
         )
     )
     await session.execute(delete(PushOutbox).where(PushOutbox.created_at < now - timedelta(days=7)))
+    # Переписку групп храним полгода — так обещано в политике
+    await session.execute(delete(TgMessage).where(TgMessage.sent_at < now - FORGET_AFTER))
     await session.execute(
         delete(TgJob).where(
             TgJob.status.in_(("done", "failed")), TgJob.done_at < now - timedelta(days=30)
@@ -1075,3 +1078,5 @@ async def on_account_deleted(session: AsyncSession, user: User) -> None:
             cancel(session, room)
         elif mine.status == "joined":
             kick(session, room, mine)
+    # Его сообщения из групп — тоже: удаление аккаунта уносит всё его
+    await session.execute(delete(TgMessage).where(TgMessage.user_id == user.id))

@@ -138,6 +138,12 @@ wait_healthy() {
 
 log "systemctl restart $SERVICE"
 systemctl restart "$SERVICE"
+# Служба Sayr Admin держит свой вход в Telegram и тоже живёт на новом коде.
+# Не установлена — пропускаем: без неё комнаты живут без групп
+if systemctl list-unit-files sayr-tg.service --no-legend 2>/dev/null | grep -q sayr-tg; then
+    log "systemctl restart sayr-tg"
+    systemctl restart sayr-tg || warn "sayr-tg не перезапустилась — смотрите journalctl -u sayr-tg"
+fi
 
 if wait_healthy; then
     log "готово: $SERVICE работает на коммите $NEW"

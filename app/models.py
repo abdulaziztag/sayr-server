@@ -1201,7 +1201,10 @@ class Room(Base):
     )
     #: Группа в Telegram. none → pending (служба создаёт) → ready → left;
     #: failed — создать не вышло, комната живёт без группы
-    tg_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    tg_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    #: Ключ доступа к группе для вызовов Telegram: без него после перезапуска
+    #: службы группу не адресовать — строка сессии кэша не хранит
+    tg_access_hash: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     tg_state: Mapped[str] = mapped_column(String(16), default="none", server_default="none")
     tg_left_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -1249,6 +1252,8 @@ class RoomMember(Base):
     #: Аккаунт Telegram — узнаём, когда человек входит в группу по своей
     #: личной одноразовой ссылке
     tg_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    #: Ключ доступа к аккаунту — чтобы сделать админом или убрать из группы
+    tg_user_hash: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     tg_link: Mapped[str | None] = mapped_column(String(64), nullable=True)
     tg_link_used: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false"
@@ -1369,4 +1374,47 @@ class PushOutbox(Base):
     sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )
+
+
+class TgMessage(Base):
+    """Сообщение из группы комнаты, как его увидел Sayr Admin.
+
+    Только текст и подпись к медиа — сами файлы не качаем. Храним полгода,
+    стираем вместе с аккаунтом автора и целиком по /leave организатора
+    (спека попутчиков, часть 2).
+    """
+
+    __tablename__ = "tg_messages"
+    __table_args__ = (UniqueConstraint("room_id", "tg_message_id", name="uq_tg_message"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    room_id: Mapped[int] = mapped_column(
+        ForeignKey("rooms.id", ondelete="CASCADE"), index=True
+    )
+    tg_message_id: Mapped[int] = mapped_column(BigInteger)
+    tg_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    #: Человек в Sayr, если служба знает его аккаунт Telegram
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    text: Mapped[str] = mapped_column(Text, default="", server_default="")
+    has_media: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
+    room: Mapped[Room] = relationship()
+
+
+class TgStatus(Base):
+    """Одна строка: как дела у Sayr Admin. Служба отмечается раз в минуту,
+    админка показывает тревогу, если она молчит или аккаунт ограничили."""
+
+    __tablename__ = "tg_status"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    #: ok | waiting_login | session_invalid | restricted
+    state: Mapped[str] = mapped_column(String(24))
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    groups: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
