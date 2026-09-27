@@ -528,7 +528,10 @@ async def test_файлы_универсальных_ссылок(client):
     assert {"/": "/r/*"} in detail["components"] and {"/": "/p/*"} in detail["components"]
     links = (await client.get("/.well-known/assetlinks.json")).json()
     assert links[0]["target"]["package_name"] == "uz.sayr.android"
-    assert links[0]["target"]["sha256_cert_fingerprints"][0].startswith("8E:08:07")
+    prints = links[0]["target"]["sha256_cert_fingerprints"]
+    # Ключ загрузки и оба ключа подписи Play — классический и постквантовый
+    assert [p[:8] for p in prints] == ["8E:08:07", "09:8D:22", "E1:3A:97"]
+    assert all(len(p.split(":")) == 32 for p in prints)
 
 
 async def test_запрет_попутчиков_убирает_отовсюду(client):
