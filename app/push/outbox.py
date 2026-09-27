@@ -18,6 +18,8 @@ from ..models import PushOutbox, PushToken, UserSession
 #: Не дошло за двое суток — уже неактуально: «вас взяли» через неделю
 #: только путает
 STALE_AFTER = timedelta(days=2)
+#: Канал уведомлений Android и стопка iOS: попутчики отдельно от новостей
+CHANNEL = "rooms"
 
 _MONTHS = {
     "ru": [
@@ -129,7 +131,9 @@ async def send_outbox(session: AsyncSession, transports: dict) -> int:
                 continue
             title, body = render(row.kind, row.params, token.lang)
             extra = {"room": row.room_code} if row.room_code else None
-            result = await transport(token.token, title, body, None, None, extra=extra)
+            result = await transport(
+                token.token, title, body, None, None, extra=extra, channel=CHANNEL
+            )
             if result.ok:
                 sent += 1
             elif result.invalid_token:

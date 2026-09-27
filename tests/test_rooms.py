@@ -482,18 +482,19 @@ async def test_личный_пуш_уходит_на_устройства_чел
 
     calls = []
 
-    async def ios(token, title, body, slug, announcement_id, extra=None):
-        calls.append((token, title, body, announcement_id, extra))
+    async def ios(token, title, body, slug, announcement_id, extra=None, channel=None):
+        calls.append((token, title, body, announcement_id, extra, channel))
         return SendResult(ok=True)
 
     async with SessionLocal() as session:
         assert await send_outbox(session, {"ios": ios}) == 1
     assert len(calls) == 1
-    token, title, body, announcement_id, extra = calls[0]
+    token, title, body, announcement_id, extra, channel = calls[0]
     assert token == "ios-token"
     assert title == "Мадина siz bilan bormoqchi"
     assert body.endswith(f"{DAY.day}-{['yanvar','fevral','mart','aprel','may','iyun','iyul','avgust','sentabr','oktabr','noyabr','dekabr'][DAY.month-1]}")
     assert announcement_id is None and extra == {"room": room["code"]}
+    assert channel == "rooms"
     async with SessionLocal() as session:
         assert await send_outbox(session, {"ios": ios}) == 0
 

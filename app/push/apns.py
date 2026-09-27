@@ -51,10 +51,14 @@ class ApnsSender:
         slug: str | None,
         announcement_id: int | None,
         extra: dict[str, str] | None = None,
+        channel: str | None = None,
     ) -> SendResult:
         payload: dict = {
             "aps": {"alert": {"title": title, "body": body}, "sound": "default"},
         }
+        if channel:
+            # Попутчики — отдельной стопкой в центре уведомлений
+            payload["aps"]["thread-id"] = channel
         if announcement_id is not None:
             # По номеру приложение сообщает открытие рассылки. У личных
             # пушей (комнаты попутчиков) номера нет

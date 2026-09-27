@@ -55,6 +55,7 @@ class FcmSender:
         slug: str | None,
         announcement_id: int | None,
         extra: dict[str, str] | None = None,
+        channel: str | None = None,
     ) -> SendResult:
         message: dict = {
             "message": {
@@ -63,6 +64,10 @@ class FcmSender:
                 "android": {"priority": "high"},
             }
         }
+        if channel:
+            # Свой канал уведомлений: выключенные «Новости» не глушат попутчиков.
+            # У старых версий такого канала нет — FCM возьмёт канал из манифеста
+            message["message"]["android"]["notification"] = {"channel_id": channel}
         # data в FCM — только строки. Номер рассылки едет всегда: по нему
         # приложение сообщает открытие; slug — когда есть куда вести
         data: dict[str, str] = {}
