@@ -48,7 +48,13 @@ class FcmSender:
         return self._access
 
     async def send(
-        self, token: str, title: str, body: str, slug: str | None, announcement_id: int
+        self,
+        token: str,
+        title: str,
+        body: str,
+        slug: str | None,
+        announcement_id: int | None,
+        extra: dict[str, str] | None = None,
     ) -> SendResult:
         message: dict = {
             "message": {
@@ -59,9 +65,13 @@ class FcmSender:
         }
         # data в FCM — только строки. Номер рассылки едет всегда: по нему
         # приложение сообщает открытие; slug — когда есть куда вести
-        data = {"announcement_id": str(announcement_id)}
+        data: dict[str, str] = {}
+        if announcement_id is not None:
+            data["announcement_id"] = str(announcement_id)
         if slug:
             data["slug"] = slug
+        # Куда вести по нажатию помимо места: код комнаты попутчиков
+        data.update(extra or {})
         message["message"]["data"] = data
         try:
             access = await self._access_token()

@@ -25,6 +25,10 @@ class AppUpdateOut(BaseModel):
     force: bool
     min_version: str | None = None
     store_url: str | None = None
+    #: Что сервер уже включил. Приложения выходят в магазины раньше, чем
+    #: включается фича, и показывают её по этому полю, без обновления.
+    #: Старые версии поле не знают и молча пропускают
+    features: dict[str, bool] = {}
 
 
 def parse_version(value: str) -> tuple[int, ...]:
@@ -53,10 +57,14 @@ async def app_update(
     session: AsyncSession = Depends(get_session),
 ) -> AppUpdateOut:
     store = settings.app_store_url if platform == "ios" else settings.play_store_url
+    features = {"rooms": settings.rooms_open}
     row = await session.get(AppUpdate, platform)
     if row is None:
-        return AppUpdateOut(force=False, store_url=store or None)
+        return AppUpdateOut(force=False, store_url=store or None, features=features)
     outdated = parse_version(version) < parse_version(row.min_version)
     return AppUpdateOut(
-        force=bool(row.force and outdated), min_version=row.min_version, store_url=store or None
+        force=bool(row.force and outdated),
+        min_version=row.min_version,
+        store_url=store or None,
+        features=features,
     )

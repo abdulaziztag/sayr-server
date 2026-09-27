@@ -44,17 +44,27 @@ class ApnsSender:
         return self._jwt
 
     async def send(
-        self, token: str, title: str, body: str, slug: str | None, announcement_id: int
+        self,
+        token: str,
+        title: str,
+        body: str,
+        slug: str | None,
+        announcement_id: int | None,
+        extra: dict[str, str] | None = None,
     ) -> SendResult:
         payload: dict = {
             "aps": {"alert": {"title": title, "body": body}, "sound": "default"},
-            # По номеру приложение сообщает открытие рассылки
-            "announcement_id": announcement_id,
         }
+        if announcement_id is not None:
+            # По номеру приложение сообщает открытие рассылки. У личных
+            # пушей (комнаты попутчиков) номера нет
+            payload["announcement_id"] = announcement_id
         if slug:
             # Тот же ключ, что у локальных напоминаний: делегат в приложении
             # уже умеет открывать место по нему
             payload["slug"] = slug
+        # Куда вести по нажатию помимо места: код комнаты попутчиков
+        payload.update(extra or {})
         headers = {
             "authorization": f"bearer {self._bearer()}",
             "apns-topic": self._topic,

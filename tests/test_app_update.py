@@ -52,7 +52,13 @@ async def test_flag_hits_only_versions_below_threshold(client):
 async def test_threshold_without_flag_is_silent(client):
     await _set("ios", "9.9.9", force=False)
     resp = await client.get("/api/v1/app/update", params={"platform": "ios", "version": "1.0.0"})
-    assert resp.json() == {"force": False, "min_version": "9.9.9", "store_url": None}
+    assert resp.json() == {
+        "force": False,
+        "min_version": "9.9.9",
+        "store_url": None,
+        # Флаги включённых фич едут с тем же ответом; попутчики по умолчанию выключены
+        "features": {"rooms": False},
+    }
 
 
 async def test_unknown_platform_is_rejected(client):

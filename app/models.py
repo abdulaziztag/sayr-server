@@ -6,6 +6,8 @@ from pathlib import Path
 from fastapi_storages import FileSystemStorage
 from fastapi_storages.integrations.sqlalchemy import FileType
 from sqlalchemy import (
+    JSON,
+    BigInteger,
     Boolean,
     Date,
     DateTime,
@@ -1000,6 +1002,11 @@ class User(Base):
     profile_filled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    #: «Запретить попутчиков» по жалобе: не открывает комнаты и не просится,
+    #: из живых комнат снят. Остальное приложение работает как было
+    companions_banned_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     sessions: Mapped[list["UserSession"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
@@ -1144,3 +1151,222 @@ class UserSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+# MARK: - Попутчики
+
+
+class Room(Base):
+    """Комната попутчиков: организатор, место и день похода.
+
+    Своих зовут ссылкой с секретом `invite` — по ней вступают сразу.
+    Открытую (`is_open`) видно тем, кто собрался туда же и в тот же день:
+    они просятся, организатор одобряет. Группу в Telegram заводит служба
+    sayr-tg, когда в комнате появляется второй человек
+    (спека docs/superpowers/specs/2026-09-27-companions-design.md).
+    """
+
+    __tablename__ = "rooms"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    #: Публичный код: по нему комнату видно в поиске и открывают пуши
+    code: Mapped[str] = mapped_column(String(8), unique=True, index=True)
+    #: Секрет ссылки «Позвать своих». Отдельно от кода: иначе любой
+    #: из открытого поиска вступал бы мимо организатора
+    invite: Mapped[str] = mapped_column(String(16), unique=True, index=True)
+    place_id: Mapped[int] = mapped_column(
+        ForeignKey("places.id", ondelete="CASCADE"), index=True
+    )
+    #: Пусто, если организатор удалил аккаунт: комната к тому времени
+    #: отменена, но служба ещё должна выйти из её группы
+    organizer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    day: Mapped[date] = mapped_column(Date, index=True)
+    #: Дней похода: у многодневки комната занимает их все
+    days: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    is_open: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    #: active | cancelled | archived
+    status: Mapped[str] = mapped_column(
+        String(16), default="active", server_default="active", index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    #: Группа в Telegram. none → pending (служба создаёт) → ready → left;
+    #: failed — создать не вышло, комната живёт без группы
+    tg_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    tg_state: Mapped[str] = mapped_column(String(16), default="none", server_default="none")
+    tg_left_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    place: Mapped["Place"] = relationship()
+    members: Mapped[list["RoomMember"]] = relationship(
+        back_populates="room", cascade="all, delete-orphan"
+    )
+
+    def __str__(self) -> str:
+        return f"{self.code} · {self.day:%d.%m}"
+
+
+class RoomMember(Base):
+    """Человек в комнате: организатор, участник или тот, кто просится."""
+
+    __tablename__ = "room_members"
+    __table_args__ = (UniqueConstraint("room_id", "user_id", name="uq_room_member"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    room_id: Mapped[int] = mapped_column(
+        ForeignKey("rooms.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    #: organizer | member
+    role: Mapped[str] = mapped_column(String(16), default="member")
+    #: requested | joined | declined | left | removed
+    status: Mapped[str] = mapped_column(String(16), index=True)
+    #: organizer | link | request — как попал
+    source: Mapped[str] = mapped_column(String(16))
+    #: own_car | need_car | self — как добирается этот человек
+    transport: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    #: Свободных мест в своей машине; только у own_car
+    seats: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    note: Mapped[str] = mapped_column(String(140), default="", server_default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    #: Аккаунт Telegram — узнаём, когда человек входит в группу по своей
+    #: личной одноразовой ссылке
+    tg_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    tg_link: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    tg_link_used: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+
+    room: Mapped[Room] = relationship(back_populates="members")
+    user: Mapped["User"] = relationship()
+
+
+class RoomReport(Base):
+    """Жалоба на человека или комнату. Разбирается в админке."""
+
+    __tablename__ = "room_reports"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    reporter_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    target_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    room_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rooms.id", ondelete="SET NULL"), nullable=True
+    )
+    #: abuse | danger | fake | spam | other
+    reason: Mapped[str] = mapped_column(String(16))
+    text: Mapped[str] = mapped_column(String(500), default="", server_default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    resolution: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    reporter: Mapped["User | None"] = relationship(foreign_keys=[reporter_id])
+    target: Mapped["User | None"] = relationship(foreign_keys=[target_user_id])
+    room: Mapped["Room | None"] = relationship()
+
+
+class UserBlock(Base):
+    """«Не показывать мне этого человека». Действует в обе стороны:
+    заблокированные друг друга не видят и в комнаты друг к другу не попадают."""
+
+    __tablename__ = "user_blocks"
+
+    blocker_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    blocked_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class TgJob(Base):
+    """Задание службе sayr-tg. Ставит API, выполняет служба.
+
+    Очередь — таблицей в той же базе: заданий десятки в день, а отдельный
+    брокер ради них был бы ещё одним сервисом, который может упасть.
+    """
+
+    __tablename__ = "tg_jobs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    #: create_group | invite_link | promote | kick | post | leave | forget
+    kind: Mapped[str] = mapped_column(String(16))
+    room_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rooms.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    member_id: Mapped[int | None] = mapped_column(
+        ForeignKey("room_members.id", ondelete="SET NULL"), nullable=True
+    )
+    #: Что нужно заданию помимо комнаты: текст сообщения, аккаунт Telegram
+    #: человека, которого уже нет в базе
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    #: pending | running | done | failed
+    status: Mapped[str] = mapped_column(
+        String(16), default="pending", server_default="pending", index=True
+    )
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    #: Не раньше чем: паузы Telegram (FLOOD_WAIT) и отложенные задания
+    run_after: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    done_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class PushOutbox(Base):
+    """Личный пуш одному человеку: «просится», «вас взяли», «группа готова».
+
+    Текст не хранится — только вид и данные: язык выбирается на отправке,
+    по каждому устройству свой. Отправляет тот же таймер sayr-push раз
+    в минуту, что и объявления.
+    """
+
+    __tablename__ = "push_outbox"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(32))
+    params: Mapped[dict] = mapped_column(JSON, default=dict)
+    #: Код комнаты — куда пуш ведёт по нажатию
+    room_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+

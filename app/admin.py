@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import FastAPI
-from sqladmin import Admin, BaseView, ModelView, expose
+from sqladmin import Admin, BaseView, ModelView, action, expose
 from sqladmin.authentication import AuthenticationBackend
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,6 +43,8 @@ from .models import (
     PushToken,
     Region,
     ReportStatus,
+    Room,
+    RoomReport,
     Season,
     TesterSignup,
     User,
@@ -1177,6 +1179,7 @@ class UserAdmin(ModelView, model=User):
         User.created_at,
         User.last_login_at,
         User.profile_filled_at,
+        User.companions_banned_at,
     ]
     column_default_sort = ("created_at", True)
     column_sortable_list = [User.id, User.created_at, User.last_login_at]
@@ -1191,11 +1194,113 @@ class UserAdmin(ModelView, model=User):
         User.created_at: "Завёл аккаунт",
         User.last_login_at: "Последний вход",
         User.profile_filled_at: "Заполнил анкету",
+        User.companions_banned_at: "Попутчики запрещены",
     }
     column_formatters = {User.phone: lambda row, _: _masked_phone(row.phone)}
     column_formatters_detail = {User.phone: lambda row, _: _masked_phone(row.phone)}
     can_create = False
     can_edit = False
+
+
+class RoomAdmin(ModelView, model=Room):
+    """Комнаты попутчиков. Только смотреть: правят их сами люди в приложении."""
+
+    name = "Комната"
+    name_plural = "Комнаты попутчиков"
+    icon = "fa-solid fa-people-group"
+    column_list = [
+        Room.code,
+        Room.place,
+        Room.day,
+        Room.days,
+        Room.is_open,
+        Room.status,
+        Room.tg_state,
+        Room.created_at,
+    ]
+    column_default_sort = ("day", True)
+    column_sortable_list = [Room.day, Room.created_at]
+    column_labels = {
+        Room.code: "Код",
+        Room.place: "Место",
+        Room.day: "День",
+        Room.days: "Дней",
+        Room.is_open: "Открыта",
+        Room.status: "Состояние",
+        Room.tg_state: "Группа",
+        Room.created_at: "Открыта когда",
+    }
+    can_create = False
+    can_edit = False
+    can_delete = False
+
+
+class RoomReportAdmin(ModelView, model=RoomReport):
+    """Жалобы на попутчиков. Магазины ждут разбора в течение суток.
+
+    «Разобрано» — жалоба закрыта без мер. «Запретить попутчиков» — человек
+    больше не открывает комнаты и не просится, его походы отменяются,
+    из чужих комнат и групп его убирают. Остальное приложение ему доступно.
+    """
+
+    name = "Жалоба"
+    name_plural = "Жалобы на попутчиков"
+    icon = "fa-solid fa-triangle-exclamation"
+    column_list = [
+        RoomReport.created_at,
+        RoomReport.reason,
+        RoomReport.target,
+        RoomReport.room,
+        RoomReport.text,
+        RoomReport.resolved_at,
+        RoomReport.resolution,
+    ]
+    column_default_sort = ("created_at", True)
+    column_labels = {
+        RoomReport.created_at: "Когда",
+        RoomReport.reason: "Причина",
+        RoomReport.target: "На кого",
+        RoomReport.room: "Комната",
+        RoomReport.text: "Текст",
+        RoomReport.resolved_at: "Разобрана",
+        RoomReport.resolution: "Решение",
+        RoomReport.reporter: "Кто пожаловался",
+    }
+    can_create = False
+    can_edit = False
+
+    async def _resolve(self, request: Request, ban: bool) -> Response:
+        from datetime import datetime, timezone
+
+        from .api.rooms import ban_companions
+
+        ids = [int(pk) for pk in request.query_params.get("pks", "").split(",") if pk]
+        async with SessionLocal() as session:
+            for report in (
+                await session.execute(select(RoomReport).where(RoomReport.id.in_(ids)))
+            ).scalars():
+                if ban and report.target_user_id:
+                    target = await session.get(User, report.target_user_id)
+                    if target is not None and target.companions_banned_at is None:
+                        await ban_companions(session, target)
+                report.resolved_at = datetime.now(timezone.utc)
+                report.resolution = "попутчики запрещены" if ban else "без мер"
+            await session.commit()
+        return RedirectResponse(request.url_for("admin:list", identity=self.identity), status_code=302)
+
+    @action(name="resolve", label="Разобрано", add_in_detail=True, add_in_list=True)
+    async def resolve(self, request: Request) -> Response:
+        return await self._resolve(request, ban=False)
+
+    @action(
+        name="ban",
+        label="Запретить попутчиков",
+        confirmation_message="Запретить этому человеку попутчиков? Его походы отменятся.",
+        add_in_detail=True,
+        add_in_list=True,
+    )
+    async def ban(self, request: Request) -> Response:
+        return await self._resolve(request, ban=True)
 
 
 def _masked_phone(phone: str | None) -> str:
@@ -1238,5 +1343,7 @@ def mount_admin(app: FastAPI) -> Admin:
     admin.add_view(PushTokenAdmin)
     admin.add_view(AppUpdateAdmin)
     admin.add_view(UserAdmin)
+    admin.add_view(RoomAdmin)
+    admin.add_view(RoomReportAdmin)
     admin.add_view(StatsView)
     return admin

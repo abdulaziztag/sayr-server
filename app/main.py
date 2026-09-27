@@ -9,7 +9,7 @@ from starlette.staticfiles import StaticFiles
 
 from .admin import mount_admin
 from .api import (auth, intents, events, landing, legal, me, places, regions, report,
-                  seasons, seasons_review, share, sync, drive_times, push, app_update)
+                  seasons, seasons_review, share, sync, drive_times, push, app_update, rooms, room_page)
 from .config import AVATARS_DIR, GPX_DIR, PHOTOS_DIR, SERVER_DIR, THUMBS_DIR, settings
 from .db import engine
 from .stats import StatsMiddleware, rotate_forever
@@ -78,6 +78,8 @@ app.include_router(events.router)
 app.include_router(auth.router)
 app.include_router(me.router)
 app.include_router(sync.router)
+app.include_router(rooms.router)
+app.include_router(room_page.router)
 app.include_router(report.router)
 app.include_router(seasons.router)
 app.include_router(seasons_review.router)

@@ -18,7 +18,9 @@ from ..auth.schemas import UserOut
 from ..auth.tokens import current_user
 from ..db import get_session
 from ..models import Gender, User, avatar_storage
+from ..moderation import is_clean
 from ..services.images import drop_avatar, store_avatar
+from .rooms import on_account_deleted
 
 log = logging.getLogger(__name__)
 
@@ -71,6 +73,9 @@ async def update_me(
         year = datetime.now(timezone.utc).year
         if not MIN_BIRTH_YEAR <= body.birth_year <= year:
             raise HTTPException(status_code=422, detail="birth_year_invalid")
+    # Имя видят попутчики: мат в нём — то же, что мат в заметке комнаты
+    if not is_clean(body.first_name) or not is_clean(body.last_name):
+        raise HTTPException(status_code=422, detail="bad_text")
 
     fields = body.model_dump(exclude_unset=True)
     for name, value in fields.items():
@@ -133,6 +138,9 @@ async def delete_me(
     их с человеком нечем.
     """
     avatar = Path(user.avatar.name).name if user.avatar else None
+    # Походы человека отменяются, из чужих групп Telegram его уберут —
+    # до удаления: строки участия уйдут каскадом вместе с ним
+    await on_account_deleted(session, user)
     await session.delete(user)
     await session.commit()
     if avatar:

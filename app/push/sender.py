@@ -19,9 +19,11 @@ from ..models import Announcement, AnnouncementStatus, PushToken
 from . import SendResult
 
 TASHKENT = ZoneInfo("Asia/Tashkent")
-#: токен, заголовок, текст, slug места, номер рассылки. Номер едет всегда:
-#: по нему приложение сообщает открытие, и у рассылки появляется процент
-Transport = Callable[[str, str, str, str | None, int], Awaitable[SendResult]]
+#: токен, заголовок, текст, slug места, номер рассылки. Номер едет у всех
+#: объявлений: по нему приложение сообщает открытие, и у рассылки появляется
+#: процент. Личные пуши (outbox.py) шлют без номера и с `extra=` — кодом
+#: комнаты
+Transport = Callable[..., Awaitable[SendResult]]
 
 # Сколько запросов держим в воздухе разом: и APNs, и FCM спокойно берут больше,
 # но нам важнее не упереться в лимиты соединений на маленьком VPS
@@ -125,6 +127,11 @@ async def run_once(
     due = await due_announcements(session, now or now_tashkent())
     for announcement in due:
         await send_announcement(session, announcement, transports)
+    # Личные пуши — тем же тиком: отдельный таймер ради них не нужен,
+    # минута задержки для «вас взяли в компанию» не беда
+    from .outbox import send_outbox
+
+    await send_outbox(session, transports)
     await prune_tokens(session)
     return due
 

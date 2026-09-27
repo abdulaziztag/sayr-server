@@ -443,6 +443,13 @@ async def purge(session: AsyncSession, today: date | None = None) -> None:
             .exists(),
         )
     )
+
+    # Комнаты попутчиков: архив через две недели после похода, уход Sayr
+    # Admin из группы, отказы старше полугода. Тем же часовым проходом —
+    # отдельный цикл ради этого не нужен
+    from .api.rooms import housekeeping
+
+    await housekeeping(session, today)
     await session.commit()
 
 

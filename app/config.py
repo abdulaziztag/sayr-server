@@ -96,6 +96,26 @@ class Settings(BaseSettings):
     # FCM — сервисный ключ проекта Firebase (JSON)
     fcm_service_account_path: Path | None = None
 
+    # Попутчики (спека docs/superpowers/specs/2026-09-27-companions-design.md).
+    # Выключены, пока не готовы Sayr Admin и политика: ручки комнат отвечают
+    # 404, а приложения узнают об этом из features.rooms в /app/update и прячут
+    # блок «Попутчики» — сборки уходят в магазины раньше, чем включаемся
+    rooms_open: bool = False
+    #: Адрес сайта для ссылок, которые сервер отдаёт сам: приглашение
+    #: в комнату https://sayr.info/r/…
+    public_url: str = "https://sayr.info"
+
+    # «Универсальные» ссылки sayr.info/p/… и /r/…: сайт подтверждает, что
+    # открывать их вправе наше приложение. iOS — «TEAMID.bundle id»; Android —
+    # пакет и SHA-256 сертификатов подписи через запятую: ключ загрузки
+    # (локальные релизные сборки) и ключ подписи Play из Play Console
+    ios_app_ids: str = "Z39Z5TJZCG.uz.sayr.ios"
+    android_package: str = "uz.sayr.android"
+    android_cert_sha256: str = (
+        "8E:08:07:49:AA:43:7E:E7:87:8B:C4:13:91:5D:1F:15:"
+        "C3:31:65:39:B5:05:E2:A8:F0:6C:CC:A3:7C:18:85:13"
+    )
+
     model_config = {"env_file": SERVER_DIR / ".env", "env_prefix": "SAYR_"}
 
 
