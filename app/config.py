@@ -126,6 +126,10 @@ class Settings(BaseSettings):
         "8E:08:07:49:AA:43:7E:E7:87:8B:C4:13:91:5D:1F:15:"
         "C3:31:65:39:B5:05:E2:A8:F0:6C:CC:A3:7C:18:85:13"
     )
+    #: iPhone, открывший /p/…, уводим в App Store (app_links.py). Включать,
+    #: когда у людей сборка с «универсальными» ссылками: у старых версий ссылка
+    #: не открывает приложение сама, и в магазин ушли бы те, у кого оно есть
+    ios_store_redirect: bool = False
 
     model_config = {"env_file": SERVER_DIR / ".env", "env_prefix": "SAYR_"}
 

@@ -20,6 +20,7 @@ from ..db import get_session
 from ..models import Place, Room, RoomMember
 from ..push.outbox import day_text
 from ..schemas import DEFAULT_LANG, Lang, pick
+from .app_links import smart_banner, store_buttons
 from .rooms import _organizer
 
 router = APIRouter(tags=["links"])
@@ -73,6 +74,7 @@ _PAGE = """<!doctype html>
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{desc}">
 {og_image}
+{banner}
 <style>
   body {{ margin: 0; font-family: -apple-system, system-ui, sans-serif;
          background: #F3EEE3; color: #161A17; }}
@@ -119,8 +121,6 @@ _T = {
         "Откройте приглашение в приложении, чтобы вступить.",
         "open": "Открыть в приложении",
         "hint": "Работает, если приложение Sayr установлено",
-        "ios": "Скачать в App Store",
-        "android": "Скачать в Google Play",
         "gone_title": "Ссылка больше не действует",
         "gone_text": "Поход отменён или прошёл, либо организатор сменил ссылку.",
         "days": "{n} дн.",
@@ -132,8 +132,6 @@ _T = {
         "Qoʻshilish uchun taklifni ilovada oching.",
         "open": "Ilovada ochish",
         "hint": "Sayr ilovasi oʻrnatilgan boʻlsa ishlaydi",
-        "ios": "App Store'dan yuklab olish",
-        "android": "Google Play'dan yuklab olish",
         "gone_title": "Havola endi ishlamaydi",
         "gone_text": "Sayohat bekor qilingan yoki oʻtib ketgan, yoki tashkilotchi havolani almashtirgan.",
         "days": "{n} kun",
@@ -173,13 +171,6 @@ async def invite_page(
     photo = (
         f"{settings.public_url}{room.place.photos[0].url}" if room.place.photos else None
     )
-    stores = []
-    if settings.app_store_url:
-        stores.append(f'<a class="btn store" href="{escape(settings.app_store_url)}">{t["ios"]}</a>')
-    if settings.play_store_url:
-        stores.append(
-            f'<a class="btn store" href="{escape(settings.play_store_url)}">{t["android"]}</a>'
-        )
     return HTMLResponse(
         _PAGE.format(
             lang=lang,
@@ -191,6 +182,10 @@ async def invite_page(
             invite=escape(room.invite),
             open_label=t["open"],
             hint=t["hint"],
-            stores="\n  ".join(stores),
+            # Приглашение остаётся страницей и на телефоне: без приложения
+            # человеку важно увидеть, кто и куда зовёт, а после установки —
+            # открыть ту же ссылку снова
+            stores=store_buttons(lang, "invite"),
+            banner=smart_banner(f"{settings.public_url}/r/{room.invite}"),
         )
     )
