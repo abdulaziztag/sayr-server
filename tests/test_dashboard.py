@@ -288,6 +288,7 @@ async def test_app_versions_below_threshold_and_headerless_row():
               for dev in ("ios-new", "ios-old", "and-1", "aug-1")],
             DailyCount(day=today - timedelta(days=1), kind="onboarding", key="done", events=6, devices=6),
             DailyCount(day=today - timedelta(days=1), kind="onboarding", key="skip:2", events=2, devices=2),
+            DailyCount(day=today - timedelta(days=1), kind="onboarding", key="lang:uz", events=3, devices=3),
             DailyCount(day=today - timedelta(days=1), kind="permission", key="notif:yes", events=3, devices=3),
             DailyCount(day=today - timedelta(days=1), kind="permission", key="notif:no", events=1, devices=1),
             DailyCount(day=today - timedelta(days=1), kind="reminder_open", key="eve", events=2, devices=2),
@@ -307,6 +308,8 @@ async def test_app_versions_below_threshold_and_headerless_row():
     assert {r["lang"]: r["devices"] for r in app["langs"]} == {"ru": 2, "uz": 1}
     assert app["onboarding"]["done_share"] == "75 %"
     assert app["onboarding"]["skips"] == [("2", 2)]
+    # Смена языка не считается ни дошедшим, ни пропуском
+    assert (app["onboarding"]["lang_uz"], app["onboarding"]["lang_ru"]) == (3, 0)
     assert app["permissions"][0]["share"] == "75 %"
     assert app["reminders"] == {"weekly": 0, "eve": 2}
     assert "<title>" in app["platforms"]  # стопка за сегодня из сырья

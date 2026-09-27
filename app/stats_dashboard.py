@@ -945,6 +945,8 @@ async def _app(session: AsyncSession, counts: Counts, daily: Daily, days: list[d
     skips = sorted(((k.split(":")[1], n) for k, n in onboarding.items() if k.startswith("skip:")),
                    key=lambda t: int(t[0]))
     skipped = sum(n for _, n in skips)
+    # Сменили язык на первом слайде: сколько раз на какой
+    langs = {k.split(":")[1]: n for k, n in onboarding.items() if k.startswith("lang:")}
     permissions = []
     for key, label in (("notif", "Уведомления"), ("geo", "Геопозиция")):
         yes, no = counts.get("permission", f"{key}:yes"), counts.get("permission", f"{key}:no")
@@ -997,7 +999,8 @@ async def _app(session: AsyncSession, counts: Counts, daily: Daily, days: list[d
         "langs": lang_rows,
         "os": os_rows,
         "onboarding": {"done": done, "skipped": skipped, "skips": skips,
-                       "done_share": pct_text(done, done + skipped)},
+                       "done_share": pct_text(done, done + skipped),
+                       "lang_uz": langs.get("uz", 0), "lang_ru": langs.get("ru", 0)},
         "permissions": permissions,
         "offline": {"devices": int(offline_devices), "opens": counts.total("offline_use")},
         "pushes": pushes,

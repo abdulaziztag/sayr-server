@@ -47,7 +47,8 @@ _format = re.compile(r"^(gpx|kml|kmz)$")
 ALLOWED_KINDS: dict[str, re.Pattern[str] | None] = {
     # Жизнь приложения
     "app_open": None,
-    "onboarding": re.compile(r"^(done|skip:[1-9])$"),
+    # lang:… — сменили язык на первом слайде приветствия
+    "onboarding": re.compile(r"^(done|skip:[1-9]|lang:(ru|uz))$"),
     "permission": re.compile(r"^(notif|geo):(yes|no)$"),
     "update_gate": re.compile(r"^\d+(\.\d+){0,3}$"),
     "offline_use": _slug,

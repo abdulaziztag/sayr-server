@@ -325,12 +325,15 @@
       <table class="table kv"><tbody>
         <tr><td>Дошли до конца</td><td class="num">{{ o.done }} <span class="muted">({{ o.done_share }})</span></td></tr>
         <tr><td>Пропустили</td><td class="num">{{ o.skipped }}{% if o.skips %} <span class="muted">(на слайде {% for n, c in o.skips %}{{ n }}: {{ c }}{% if not loop.last %}, {% endif %}{% endfor %})</span>{% endif %}</td></tr>
+        {% if o.lang_uz or o.lang_ru %}
+        <tr><td>Сменили язык на приветствии</td><td class="num">на узбекский {{ o.lang_uz }}, на русский {{ o.lang_ru }}</td></tr>
+        {% endif %}
         {% for p in d.app.permissions %}
         <tr><td>{{ p.label }} — разрешили</td><td class="num">{{ p.yes }} из {{ p.yes + p.no }} <span class="muted">({{ p.share }})</span></td></tr>
         {% endfor %}
       </tbody></table>
       {% else %}{{ empty() }}{% endif %}
-      {{ define("Онбординг: дошли против пропустили и на каком слайде. Разрешения — ответ на системный запрос уведомлений и геопозиции.") }}
+      {{ define("Онбординг: дошли против пропустили и на каком слайде, сколько раз сменили язык на первом слайде. Разрешения — ответ на системный запрос уведомлений и геопозиции.") }}
     </div>
     <div class="card">
       <h3>Без сети</h3>
