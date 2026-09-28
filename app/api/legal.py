@@ -271,6 +271,75 @@ _SUPPORT = f"""
 """
 
 
+# Страница удаления аккаунта. Google Play требует её ссылкой в «Безопасности
+# данных» у любого приложения, где заводят аккаунт: удалить должно быть
+# можно и без приложения — если его уже снесли
+_DELETE = f"""
+<h1>Удаление аккаунта</h1>
+<div class="upd"><a href="/uz/delete-account">Oʻzbekcha</a></div>
+<p>Аккаунт Sayr — это номер телефона и анкета: имя, фото, пол, год рождения,
+ник в Telegram. Вместе с ним на сервере лежат избранное, планы и история
+выходов, участие в комнатах попутчиков и сессии входа.</p>
+
+<h2>В приложении</h2>
+<p>Откройте «Профиль» → «Удалить аккаунт» и подтвердите. Всё перечисленное
+уходит с сервера сразу, письмо не нужно. Если вы собирали поход, он
+отменяется, а участники получают уведомление. Записанные треки и избранное
+на самом телефоне остаются: приложение работает и без входа.</p>
+
+<h2>Без приложения</h2>
+<p>Напишите на <a href="mailto:{SUPPORT_EMAIL}?subject=Удалить аккаунт Sayr">{SUPPORT_EMAIL}</a>
+с темой «Удалить аккаунт» и укажите номер телефона, с которым входили.
+Чтобы никто не удалил чужой аккаунт, попросим подтвердить номер кодом
+в Telegram. Удалим то же, что и кнопка в приложении, не позже чем через
+30 дней и ответим письмом.</p>
+
+<h2>Что остаётся</h2>
+<p>Обезличенная статистика: в ней нет ни номера, ни имени, и она стирается
+сама не позже чем через 30 дней. Подробнее — в
+<a href="/privacy">политике конфиденциальности</a>.</p>
+"""
+
+_DELETE_UZ = f"""
+<h1>Akkauntni o‘chirish</h1>
+<div class="upd"><a href="/delete-account">Русский</a></div>
+<p>Sayr akkaunti — bu telefon raqami va anketa: ism, surat, jins, tug‘ilgan
+yil, Telegram‘dagi nik. U bilan birga serverda sevimli joylar, rejalar va
+yurishlar tarixi, hamrohlar xonalaridagi ishtirok va kirish seanslari
+saqlanadi.</p>
+
+<h2>Ilovada</h2>
+<p>«Profil» → «Akkauntni o‘chirish»ni oching va tasdiqlang. Yuqoridagilarning
+barchasi serverdan darhol o‘chadi, xat yozish shart emas. Agar siz yurish
+yig‘gan bo‘lsangiz, u bekor qilinadi va ishtirokchilarga xabar boradi.
+Telefonning o‘zidagi treklar va sevimlilar qoladi: ilova kirishsiz ham
+ishlaydi.</p>
+
+<h2>Ilovasiz</h2>
+<p><a href="mailto:{SUPPORT_EMAIL}?subject=Sayr akkauntini o‘chirish">{SUPPORT_EMAIL}</a>
+manziliga «Akkauntni o‘chirish» mavzusi bilan yozing va kirgan telefon
+raqamingizni ko‘rsating. Birovning akkaunti o‘chirilmasligi uchun raqamni
+Telegram‘dagi kod bilan tasdiqlashni so‘raymiz. Ilovadagi tugma o‘chiradigan
+narsalarni 30 kundan kechiktirmay o‘chiramiz va xat bilan javob beramiz.</p>
+
+<h2>Nima qoladi</h2>
+<p>Anonim statistika: unda raqam ham, ism ham yo‘q, u 30 kundan kechiktirmay
+o‘zi o‘chadi. Batafsil — <a href="/privacy">maxfiylik siyosatida</a>
+(rus tilida).</p>
+"""
+
+
+@router.get("/delete-account", response_class=HTMLResponse)
+async def delete_account() -> str:
+    return _LAYOUT.format(title="Удаление аккаунта", body=_DELETE)
+
+
+@router.get("/uz/delete-account", response_class=HTMLResponse)
+async def delete_account_uz() -> str:
+    page = _LAYOUT.format(title="Akkauntni o‘chirish", body=_DELETE_UZ)
+    return page.replace('<html lang="ru">', '<html lang="uz">', 1)
+
+
 @router.get("/privacy", response_class=HTMLResponse)
 async def privacy() -> str:
     return _LAYOUT.format(title="Политика конфиденциальности", body=_PRIVACY)
