@@ -546,7 +546,7 @@ async def test_факты_правятся_в_админке_и_форма_ме�
 
 async def test_закрытая_игра_отвечает_страницей_без_колоды_и_cookie(client, monkeypatch):
     monkeypatch.setattr(settings, "seasons_open", False)
-    for path, words in (("/seasons", "Игра закрыта"), ("/uz/seasons", "Oʻyin yopildi")):
+    for path, words in (("/seasons", "Игра закрыта"), ("/uz/seasons", "O\u2018yin yopildi")):
         resp = await client.get(path)
         assert resp.status_code == 200
         assert words in resp.text

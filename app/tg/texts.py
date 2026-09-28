@@ -8,6 +8,7 @@ from datetime import date
 
 from ..config import settings
 from ..push.outbox import day_text
+from ..typography import uz_display
 
 
 def title(place: str, day: date) -> str:
@@ -19,7 +20,7 @@ def about(place: str, day: date, slug: str) -> str:
 
 
 def first_message(place: str, place_uz: str, day: date, slug: str) -> str:
-    return (
+    return uz_display(
         f"Привет! Это группа похода на {place}, {day_text(day, 'ru')}. Её создал Sayr, "
         "чтобы вам было где договориться. Я — Sayr Admin: собираю отсюда, что вы "
         "рассказываете о тропе и месте, чтобы данные в приложении были точнее. "
@@ -33,15 +34,15 @@ def first_message(place: str, place_uz: str, day: date, slug: str) -> str:
 
 
 TEXTS = {
-    "cancelled": (
+    "cancelled": uz_display(
         "Организатор отменил поход. Группа остаётся — договаривайтесь, если идёте всё равно.\n\n"
         "Tashkilotchi sayohatni bekor qildi. Guruh qoladi — baribir borsangiz, shu yerda kelishing."
     ),
-    "farewell": (
+    "farewell": uz_display(
         "Спасибо, что ходили с Sayr! Я выхожу из группы — она остаётся вашей.\n\n"
         "Sayr bilan borganingiz uchun rahmat! Men guruhdan chiqaman — u sizniki boʻlib qoladi."
     ),
-    "bye": (
+    "bye": uz_display(
         "Хорошо, выхожу. Всё, что успел сохранить из этой группы, удалено.\n\n"
         "Xoʻp, chiqaman. Bu guruhdan saqlaganlarimning hammasi oʻchirildi."
     ),

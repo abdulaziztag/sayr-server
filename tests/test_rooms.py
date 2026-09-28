@@ -507,6 +507,16 @@ def test_тексты_пушей_на_русском():
     assert body == "Большой Чимган, 25 сентября"
 
 
+def test_тексты_пушей_на_узбекском_без_разорванных_букв():
+    """oʻ и gʻ — и в тексте, и в имени человека — уходят с узкой «‘»."""
+    params = {"name": "G\u02bbayrat", "place": "Большой Чимган",
+              "place_uz": "Katta Chimyon", "day": "2026-09-25"}
+    title, body = render("group_ready", params, "uz")
+    assert body == "Katta Chimyon, 25-sentabr — qo\u2018shiling"
+    title, _ = render("room_request", params, "uz")
+    assert title == "G\u2018ayrat siz bilan bormoqchi"
+
+
 # --- Ссылки, открывающие приложение ---------------------------------------------
 
 
@@ -519,6 +529,18 @@ async def test_страница_приглашения(client):
     assert "Азиз зовёт на Тестовый пик" in page.text
     assert f"sayr://invite/{invite}" in page.text
     assert (await client.get("/r/nothing")).status_code == 404
+
+
+async def test_страница_приглашения_на_узбекском_без_разорванных_букв(client):
+    org, _ = await person()
+    room = await open_room(client, org, is_open=False)
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    page = await client.get(f"/r/{invite}", params={"lang": "uz"})
+    assert "O\u2018zbekiston joylari" in page.text
+    gone = await client.get("/r/nothing", params={"lang": "uz"})
+    assert "o\u2018tib ketgan" in gone.text
+    for text in (page.text, gone.text):
+        assert "\u02bb" not in text and "\u02bc" not in text
 
 
 async def test_файлы_универсальных_ссылок(client):

@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from .models import (Difficulty, OvernightType, Place, PlaceCategory, PlacePhoto, PlacePlan,
                      PlaceTrack, PlanDay, PlanStep)
+from .typography import uz_display
 
 # Язык ответа. Список закрытый и совпадает с тем, что зашито в клиентах
 # (AppLanguage на обеих платформах); «как в системе» там нет, и здесь тоже
@@ -22,10 +23,11 @@ def pick(ru: str, uz: str | None, lang: Lang) -> str:
     Фолбэк молчаливый: перевод каталога наливается порциями, и место
     с готовым названием, но ещё не переведённым описанием, должно
     показываться целиком, а не наполовину.
+
+    Отдаётся текст для экрана: oʻ и gʻ — через «‘» (`uz_display`). На обоих
+    языках: русское описание тоже цитирует узбекское название.
     """
-    if lang == "uz" and uz:
-        return uz
-    return ru
+    return uz_display(uz if lang == "uz" and uz else ru)
 
 
 class RegionOut(BaseModel):
@@ -162,8 +164,15 @@ class WeatherOut(BaseModel):
     hours: list[WeatherHour] = []
 
 
+def _credit(text: str | None) -> str | None:
+    """Подпись автора — имя человека, часто узбекское: «Фото: Ulugʻbek»."""
+    return uz_display(text) if text else text
+
+
 def photo_out(p: PlacePhoto) -> PhotoOut:
-    return PhotoOut(url=p.url or "", thumb_url=p.thumb_url or p.url or "", credit=p.credit)
+    return PhotoOut(
+        url=p.url or "", thumb_url=p.thumb_url or p.url or "", credit=_credit(p.credit)
+    )
 
 
 def _base_fields(p: Place, lang: Lang = DEFAULT_LANG) -> dict:
@@ -213,7 +222,7 @@ def track_out(t: PlaceTrack, lang: Lang = DEFAULT_LANG) -> TrackOut:
         id=t.id,
         name=pick(t.name, t.name_uz, lang),
         gpx_url=t.gpx_url or "",
-        credit=t.gpx_credit,
+        credit=_credit(t.gpx_credit),
         distance_km=t.distance_km,
         ascent_m=t.ascent_m,
         start_lat=t.start_lat,
@@ -277,7 +286,7 @@ def place_detail(
         photos=[photo_out(ph) for ph in p.photos],
         tracks=[track_out(t, lang) for t in p.tracks],
         gpx_url=primary.gpx_url if primary else None,
-        gpx_credit=primary.gpx_credit if primary else None,
+        gpx_credit=_credit(primary.gpx_credit) if primary else None,
         nearby=nearby or [],
         plans=[plan_out(plan, lang) for plan in p.plans],
     )

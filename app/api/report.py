@@ -28,6 +28,7 @@ from ..models import Place, PlaceReport, PlaceReportFile
 from ..reports import CATEGORY, TOPIC_CODES, TOPICS, normalize_contact
 from ..schemas import Lang, pick
 from ..services import attachments
+from ..typography import fold_apostrophes, uz_display
 
 router = APIRouter(tags=["report"])
 
@@ -499,11 +500,14 @@ def _resolve(rows: list[tuple[Place, str]], typed: str) -> int | None:
     Ловим три способа попасть: выбранная из списка подпись, одно голое имя
     (если оно в каталоге одно) и slug — по нему приходят со страницы места.
     Не узнали — не беда, текст уедет в `place_note` как есть.
+
+    Апострофы не различаем: на странице «Koʻl» стоит как «Ko‘l», а руками
+    его набирают и через «'», и через «ʻ».
     """
-    needle = typed.strip().casefold()
+    needle = _key(typed)
     if not needle:
         return None
-    by_label = {label.casefold(): place.id for place, label in rows}
+    by_label = {_key(label): place.id for place, label in rows}
     if needle in by_label:
         return by_label[needle]
     by_slug = {place.slug.casefold(): place.id for place, _ in rows}
@@ -511,9 +515,13 @@ def _resolve(rows: list[tuple[Place, str]], typed: str) -> int | None:
         return by_slug[needle]
     names: dict[str, list[int]] = {}
     for place, label in rows:
-        names.setdefault(label.split(" — ")[0].casefold(), []).append(place.id)
+        names.setdefault(_key(label.split(" — ")[0]), []).append(place.id)
     hit = names.get(needle)
     return hit[0] if hit and len(hit) == 1 else None
+
+
+def _key(text: str) -> str:
+    return fold_apostrophes(text.strip().casefold())
 
 
 #: Сколько заявок с одного адреса принимаем за час. Счётчик живёт в памяти
@@ -548,7 +556,7 @@ def _render(t: dict, rows: list[tuple[Place, str]], place_value: str) -> str:
         f'value="{code}"><span>{ru if t["lang"] == "ru" else uz}</span></label>'
         for code, ru, uz in TOPICS
     )
-    return _PAGE.format(
+    page = _PAGE.format(
         options=options,
         chips=chips,
         max_files=attachments.MAX_FILES,
@@ -561,6 +569,8 @@ def _render(t: dict, rows: list[tuple[Place, str]], place_value: str) -> str:
         privacy="Конфиденциальность" if t["lang"] == "ru" else "Maxfiylik",
         **{k: v for k, v in t.items() if k != "other"},
     )
+    # Вся страница, а не только узбекская: на русской тоже есть «Oʻzbekcha»
+    return uz_display(page)
 
 
 @router.get("/report", response_class=HTMLResponse)
@@ -600,7 +610,7 @@ async def _attached(files: list[UploadFile], t: dict) -> list[PlaceReportFile]:
     обрывает толстое тело, не доводя его до приложения.
     """
     if len(files) > attachments.MAX_FILES:
-        raise HTTPException(422, t["too_many"])
+        raise HTTPException(422, uz_display(t["too_many"]))
 
     rows: list[PlaceReportFile] = []
     written: list[str] = []
@@ -615,7 +625,7 @@ async def _attached(files: list[UploadFile], t: dict) -> list[PlaceReportFile]:
             data = await upload.read()
             total += len(data)
             if total > attachments.MAX_TOTAL:
-                raise HTTPException(422, t["too_heavy"])
+                raise HTTPException(422, uz_display(t["too_heavy"]))
             name, mime, size, fresh = attachments.save(data, named)
             if fresh:
                 written.append(name)
@@ -632,7 +642,7 @@ async def _attached(files: list[UploadFile], t: dict) -> list[PlaceReportFile]:
         # «Пустой файл» отдельного разговора не стоит: браузер присылает
         # такое, когда файл читается не до конца
         reason = "bad_type" if no.reason == "empty" else no.reason
-        raise HTTPException(422, t[reason].format(name=no.filename)) from no
+        raise HTTPException(422, uz_display(t[reason].format(name=no.filename))) from no
     except HTTPException:
         # Отказ на третьем файле не повод оставлять на диске два первых:
         # заявки не будет, а байты остались бы навсегда
@@ -680,13 +690,13 @@ async def report_submit(
     sent = [f for f in files if f is not None and f.filename]
     # Один снимок развилки — уже заявка: он объясняет больше, чем абзац
     if not comment and not picked and not sent:
-        raise HTTPException(422, t["empty"])
+        raise HTTPException(422, uz_display(t["empty"]))
 
     # Приманка отвечает боту как всем: разный ответ подсказал бы ему,
     # что поле-ловушку надо оставить пустым
     if not website:
         if _too_often(request.client.host if request.client else "?"):
-            raise HTTPException(429, t["too_often"])
+            raise HTTPException(429, uz_display(t["too_often"]))
         rows = await _catalog(session, lang)
         typed = place.strip()[:200]
         place_id = _resolve(rows, typed)
@@ -707,9 +717,9 @@ async def report_submit(
 
     if "application/json" in accept:
         return JSONResponse({"ok": True})
-    return HTMLResponse(
+    return HTMLResponse(uz_display(
         _THANKS.format(
             lang=lang, head=t["ok_head"], body=t["ok_body"],
             back=t["back_href"], back_label=t["back"],
         )
-    )
+    ))

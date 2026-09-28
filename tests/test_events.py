@@ -105,6 +105,13 @@ async def test_search_is_lowercased_and_bounded():
     assert not ok
 
 
+def test_search_takes_every_apostrophe():
+    """Поиск в приложениях апострофы не различает: «ko‘l» находит «Koʻl»,
+    и такой запрос — тоже ключ, а не мусор."""
+    for query in ("ko\u02bbl", "ko\u2018l", "ko\u2019l", "ko\u02bcl", "ko'l", "ko`l"):
+        assert validate_key("search", query) == (True, query)
+
+
 def test_clamp_at_keeps_day_within_window():
     now = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
     future = clamp_at("2026-09-25T00:00:00Z", now, 30)

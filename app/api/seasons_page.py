@@ -18,6 +18,7 @@ from ..reports import CATEGORY
 from ..seasons import (DEFAULT_ARC, FROM_RU, FULL_RU_UP, FULL_UZ_UP, LIMIT_CODES,
                        LIMITS, MONTHS_UZ, SHORT_RU, SHORT_UZ, arc_text, centre_lines,
                        median, touches_winter)
+from ..typography import uz_display
 
 # Круг: 300 × 300, середина 150. Дорожка радиусом 104 и толщиной 24,
 # подписи месяцев — внутри, по 76; слова сезонов — снаружи, по 138.
@@ -881,7 +882,7 @@ def render_page(lang: str, deck: list[dict], left: int, mine: int, closed: bool 
     first = cards[0] if cards else None
     done_head = t["thanks_head"] if mine else t["empty_head"]
     done_body = (t["thanks_body"] if mine else t["empty_body"]).replace("{n}", str(mine))
-    return _fill(
+    page = _fill(
         _PAGE,
         lang=t["lang"],
         title=escape(t["title"]),
@@ -940,6 +941,8 @@ def render_page(lang: str, deck: list[dict], left: int, mine: int, closed: bool 
         empty_head=json.dumps(t["empty_head"], ensure_ascii=False),
         empty_body=json.dumps(t["empty_body"], ensure_ascii=False),
     )
+    # Вся страница, а не только узбекская: на русской тоже есть «Oʻzbekcha»
+    return uz_display(page)
 
 
 # --- Страница проверяющего ------------------------------------------------

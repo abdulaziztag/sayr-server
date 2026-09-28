@@ -20,6 +20,7 @@ from ..db import get_session
 from ..models import Place, Room, RoomMember
 from ..push.outbox import day_text
 from ..schemas import DEFAULT_LANG, Lang, pick
+from ..typography import uz_display
 from .app_links import smart_banner, store_buttons
 from .rooms import _organizer
 
@@ -158,7 +159,7 @@ async def invite_page(
     ).scalar_one_or_none()
     if room is None or room.status != "active" or not settings.rooms_open:
         page = _GONE.format(lang=lang, title=t["gone_title"], text=t["gone_text"])
-        return HTMLResponse(page, status_code=404)
+        return HTMLResponse(uz_display(page), status_code=404)
 
     place = pick(room.place.name, room.place.name_uz, lang)
     organizer = _organizer(room)
@@ -171,21 +172,20 @@ async def invite_page(
     photo = (
         f"{settings.public_url}{room.place.photos[0].url}" if room.place.photos else None
     )
-    return HTMLResponse(
-        _PAGE.format(
-            lang=lang,
-            title=escape(title),
-            desc=escape(t["desc"]),
-            meta=escape(" · ".join(meta)),
-            cover=f'<img class="cover" src="{photo}" alt="">' if photo else "",
-            og_image=f'<meta property="og:image" content="{photo}">' if photo else "",
-            invite=escape(room.invite),
-            open_label=t["open"],
-            hint=t["hint"],
-            # Приглашение остаётся страницей и на телефоне: без приложения
-            # человеку важно увидеть, кто и куда зовёт, а после установки —
-            # открыть ту же ссылку снова
-            stores=store_buttons(lang, "invite"),
-            banner=smart_banner(f"{settings.public_url}/r/{room.invite}"),
-        )
+    page = _PAGE.format(
+        lang=lang,
+        title=escape(title),
+        desc=escape(t["desc"]),
+        meta=escape(" · ".join(meta)),
+        cover=f'<img class="cover" src="{photo}" alt="">' if photo else "",
+        og_image=f'<meta property="og:image" content="{photo}">' if photo else "",
+        invite=escape(room.invite),
+        open_label=t["open"],
+        hint=t["hint"],
+        # Приглашение остаётся страницей и на телефоне: без приложения
+        # человеку важно увидеть, кто и куда зовёт, а после установки —
+        # открыть ту же ссылку снова
+        stores=store_buttons(lang, "invite"),
+        banner=smart_banner(f"{settings.public_url}/r/{room.invite}"),
     )
+    return HTMLResponse(uz_display(page))

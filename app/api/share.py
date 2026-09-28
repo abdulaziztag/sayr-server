@@ -19,6 +19,7 @@ from ..config import settings
 from ..db import get_session
 from ..models import Place
 from ..schemas import DEFAULT_LANG, Lang, pick
+from ..typography import uz_display
 from .app_links import phone_redirect, smart_banner, store_buttons
 
 router = APIRouter(tags=["share"])
@@ -157,4 +158,4 @@ async def share_page(
         banner=smart_banner(f"{settings.public_url}/p/{place.slug}"),
         stores=store_buttons(lang, "share"),
     )
-    return HTMLResponse(page, headers=vary)
+    return HTMLResponse(uz_display(page), headers=vary)

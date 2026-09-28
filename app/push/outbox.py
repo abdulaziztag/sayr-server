@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import PushOutbox, PushToken, UserSession
+from ..typography import uz_display
 
 #: Не дошло за двое суток — уже неактуально: «вас взяли» через неделю
 #: только путает
@@ -83,7 +84,8 @@ def render(kind: str, params: dict, lang: str) -> tuple[str, str]:
         "place": place,
         "date": day_text(date.fromisoformat(params["day"]), lang) if params.get("day") else "",
     }
-    return title.format(**fields), body.format(**fields)
+    # Узбекские знаки — и в имени человека, и в названии места
+    return uz_display(title.format(**fields)), uz_display(body.format(**fields))
 
 
 def enqueue(

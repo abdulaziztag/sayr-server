@@ -34,7 +34,8 @@ async def test_detail_falls_back_field_by_field(client):
     """У водопада переведено описание, но не «как добраться»."""
     resp = await client.get("/api/v1/places/test-waterfall", params={"lang": "uz"})
     data = resp.json()
-    assert data["description_md"] == "Sharsharaning oʻzbekcha tavsifi"
+    # oʻ уходит узкой кавычкой «‘»: знак орфографии IBM Plex рисует отдельно
+    assert data["description_md"] == "Sharsharaning o\u2018zbekcha tavsifi"
     assert data["how_to_get_md"] == "Ехать на маршрутке"
 
 

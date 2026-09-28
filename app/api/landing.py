@@ -24,6 +24,7 @@ from ..config import settings
 from ..db import get_session
 from ..models import TesterSignup
 from ..stats import clean_mark, record_event
+from ..typography import uz_display
 
 router = APIRouter(tags=["landing"])
 
@@ -568,7 +569,7 @@ def _render(t: dict, mark: str | None = None) -> str:
         f'<h2>{head}</h2><p>{body}</p></figure>'
         for file, (head, body) in zip(_SHOT_FILES, t["shots"])
     )
-    return _PAGE.format(
+    page = _PAGE.format(
         lang=t["lang"],
         title=t["title"],
         tagline=t["tagline"],
@@ -587,6 +588,8 @@ def _render(t: dict, mark: str | None = None) -> str:
         made=t["made"],
         script=script,
     )
+    # Вся страница, а не только узбекская: на русской тоже есть «Oʻzbekcha»
+    return uz_display(page)
 
 
 _THANKS = """<!doctype html>
@@ -641,9 +644,9 @@ async def android_tester_signup(
     if "application/json" in accept:
         return JSONResponse({"ok": True})
     head, body, back, back_label = _THANKS_T[lang]
-    return HTMLResponse(
+    return HTMLResponse(uz_display(
         _THANKS.format(lang=lang, head=head, body=body, back=back, back_label=back_label)
-    )
+    ))
 
 
 @router.get("/", response_class=HTMLResponse)

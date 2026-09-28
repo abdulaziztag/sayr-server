@@ -34,6 +34,7 @@ from ..models import Place, SeasonVote
 from ..reports import CATEGORY
 from ..schemas import Lang, pick
 from ..seasons import DECK_SIZE, ENOUGH_VOTES, LIMIT_CODES, score, touches_winter, valid
+from ..typography import uz_display
 from .seasons_page import render_page
 
 router = APIRouter(tags=["seasons"])
@@ -147,7 +148,8 @@ def _card(place: Place, lang: Lang) -> dict:
         "region": pick(place.region.name, place.region.name_uz, lang)
         if place.region
         else "",
-        "category": CATEGORY[lang].get(place.category.value, ""),
+        # Колода догружается JSON-ом мимо страницы — знаки меняем здесь
+        "category": uz_display(CATEGORY[lang].get(place.category.value, "")),
         "thumb": (cover.thumb_url or cover.url) if cover else None,
         "km": place.distance_km,
         "hours": place.duration_hours,

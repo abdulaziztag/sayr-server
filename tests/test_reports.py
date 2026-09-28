@@ -163,8 +163,34 @@ async def test_form_prefills_place_from_the_link(client):
     assert 'name="topics" value="duration"' in ru.text
 
     uz = await client.get("/uz/report", params={"place": "test-lake"})
-    assert 'value="Test koʻli — Test viloyati"' in uz.text
+    assert 'value="Test ko\u2018li — Test viloyati"' in uz.text
     assert "Boshqa" in uz.text, "темы не перевелись"
+
+
+async def test_place_typed_with_any_apostrophe_resolves(client):
+    """На странице «Test ko‘li», а руками набирают и «'», и «ʻ» — место то же."""
+    try:
+        for typed in ("Test ko'li — Test viloyati", "Test ko\u02bbli"):
+            resp = await client.post(
+                "/report",
+                data={"place": typed, "comment": "suv kam", "lang": "uz", "website": ""},
+            )
+            assert resp.status_code == 200
+        rows = await _rows()
+        assert len(rows) == 2
+        assert {row.place.slug for row in rows} == {"test-lake"}
+        assert all(row.place_note is None for row in rows)
+    finally:
+        await _cleanup()
+
+
+async def test_refusal_reaches_the_page_without_torn_letters(client):
+    """Отказ показывает скрипт страницы — его текст тоже уходит с «‘»."""
+    resp = await client.post(
+        "/report", data={"place": "", "comment": "", "lang": "uz", "website": ""}
+    )
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "Mavzuni belgilang yoki nima noto\u2018g\u2018riligini yozing."
 
 
 async def test_place_page_invites_to_the_form(client):
