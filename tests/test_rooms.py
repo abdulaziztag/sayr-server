@@ -15,6 +15,7 @@ from app.auth.tokens import new_token
 from app.config import settings
 from app.db import SessionLocal
 from app.models import (
+    Gender,
     Place,
     PushOutbox,
     PushToken,
@@ -56,6 +57,7 @@ async def person(
     photo: bool = True,
     telegram: str | None = "aziz_tg",
     device: str | None = None,
+    gender: Gender | None = None,
 ) -> tuple[dict, int]:
     """Человек с анкетой и токеном: (заголовки, id)"""
     token, digest = new_token()
@@ -66,6 +68,7 @@ async def person(
             first_name=name,
             birth_year=birth_year,
             telegram_username=telegram,
+            gender=gender,
         )
         if photo:
             user.avatar = StorageFile(name=f"{name}.jpg", storage=avatar_storage)
@@ -230,6 +233,25 @@ async def test_чужой_видит_организатора_но_не_учас
     assert view["people"] == 2
     assert view["members"] == [] and view["invite_url"] is None and view["group"] is None
     assert view["organizer"]["telegram_username"] is None
+
+
+async def test_чужой_видит_сколько_мужчин_и_женщин(client):
+    org, _ = await person(gender=Gender.male)
+    room = await open_room(client, org)
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    for name, gender in (("Лола", Gender.female), ("Тимур", Gender.male), ("Сабина", None)):
+        friend, _ = await person(name=name, telegram=None, gender=gender)
+        await client.post(f"/api/v1/invites/{invite}/join", headers=friend)
+    # Заявка — ещё не в комнате и в счёт не идёт
+    asking, _ = await person(name="Мадина", gender=Gender.female)
+    await client.post(f"/api/v1/rooms/{room['code']}/requests", json={}, headers=asking)
+
+    stranger, _ = await person(name="Гость")
+    view = (await client.get(f"/api/v1/rooms/{room['code']}", headers=stranger)).json()
+    assert (view["people"], view["men"], view["women"]) == (4, 2, 1)
+    assert view["members"] == []
+    inside = (await client.get(f"/api/v1/rooms/{room['code']}", headers=org)).json()
+    assert (inside["men"], inside["women"]) == (2, 1)
 
 
 async def test_закрытую_комнату_чужой_не_видит(client):

@@ -32,6 +32,7 @@ from ..db import get_session
 from ..moderation import is_clean
 from ..models import (
     Difficulty,
+    Gender,
     Place,
     PushOutbox,
     Room,
@@ -124,6 +125,11 @@ class RoomOut(BaseModel):
     status: str
     #: Сколько человек в комнате вместе с организатором
     people: int
+    #: Сколько среди них мужчин и женщин — видно и тем, кто ещё не вступил:
+    #: состав компании решает, проситься ли. Кто пол не указал, не попадает
+    #: ни в одно число
+    men: int = 0
+    women: int = 0
     organizer: CardOut | None = None
     #: organizer | joined | requested | declined | removed | left | none
     my_role: str
@@ -230,11 +236,18 @@ def _people(room: Room) -> int:
     return sum(1 for m in room.members if m.status == "joined")
 
 
+def _genders(room: Room) -> tuple[int, int]:
+    """Мужчины и женщины среди вступивших, организатор тоже вступивший"""
+    joined = [m.user.gender for m in room.members if m.status == "joined"]
+    return joined.count(Gender.male), joined.count(Gender.female)
+
+
 def _out(room: Room, viewer: User, lang: Lang) -> RoomOut:
     mine = _mine(room, viewer)
     role = _role(mine)
     insider = role in ("organizer", "joined")
     organizer = _organizer(room)
+    men, women = _genders(room)
     out = RoomOut(
         code=room.code,
         place_slug=room.place.slug,
@@ -244,6 +257,8 @@ def _out(room: Room, viewer: User, lang: Lang) -> RoomOut:
         is_open=room.is_open,
         status=room.status,
         people=_people(room),
+        men=men,
+        women=women,
         organizer=_card(organizer, contact=insider) if organizer else None,
         my_role=role,
     )
