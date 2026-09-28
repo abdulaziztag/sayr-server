@@ -15,6 +15,7 @@ from app.auth.tokens import new_token
 from app.config import settings
 from app.db import SessionLocal
 from app.models import (
+    Place,
     PushOutbox,
     PushToken,
     Room,
@@ -111,6 +112,7 @@ async def test_без_флага_комнат_нет(client, monkeypatch):
     monkeypatch.setattr(settings, "rooms_open", False)
     h, _ = await person()
     assert (await client.get("/api/v1/places/test-peak/rooms")).status_code == 404
+    assert (await client.get("/api/v1/rooms")).status_code == 404
     resp = await client.post(
         "/api/v1/rooms", json={"place": "test-peak", "day": DAY.isoformat()}, headers=h
     )
@@ -236,6 +238,85 @@ async def test_закрытую_комнату_чужой_не_видит(client
     stranger, _ = await person(name="Мадина")
     resp = await client.get(f"/api/v1/rooms/{room['code']}", headers=stranger)
     assert resp.status_code == 404
+
+
+# --- Лента «Походы» ---------------------------------------------------------
+
+
+async def test_лента_собирает_открытые_комнаты_всех_мест(client):
+    aziz, _ = await person(telegram="secret_nick")
+    await open_room(client, aziz, transport="own_car", seats=2)
+    madina, _ = await person(name="Мадина")
+    later = (DAY + timedelta(days=1)).isoformat()
+    await open_room(client, madina, place="test-lake", day=later)
+    # Комната для своих в ленту не попадает, как и в поиск места
+    await open_room(client, (await person(name="Друг"))[0], place="test-waterfall", is_open=False)
+
+    viewer, _ = await person(name="Сардор")
+    body = (await client.get("/api/v1/rooms", headers=viewer)).json()
+    assert [r["place_slug"] for r in body["rooms"]] == ["test-peak", "test-lake"]
+    assert body["days"] == [
+        {"place_slug": "test-peak", "day": DAY.isoformat(), "rooms": 1},
+        {"place_slug": "test-lake", "day": later, "rooms": 1},
+    ]
+    places = {p["slug"]: p for p in body["places"]}
+    assert set(places) == {"test-peak", "test-lake"}
+    assert places["test-peak"]["region_name"] == "Тестовый регион"
+    card = body["rooms"][0]["organizer"]
+    assert card["seats"] == 2 and card["telegram_username"] is None
+
+
+async def test_лента_гостю_только_числа(client):
+    await open_room(client, (await person())[0])
+    body = (await client.get("/api/v1/rooms")).json()
+    assert body["rooms"] == []
+    assert body["days"] == [{"place_slug": "test-peak", "day": DAY.isoformat(), "rooms": 1}]
+    assert body["places"][0]["name"] == "Тестовый пик"
+
+
+async def test_лента_по_узбекски(client):
+    await open_room(client, (await person())[0], place="test-lake")
+    body = (await client.get("/api/v1/rooms", params={"lang": "uz"})).json()
+    assert body["places"][0]["name"] == "Test ko\u2018li"
+    assert body["places"][0]["region_name"] == "Test viloyati"
+
+
+async def test_лента_без_заблокированных_и_запрещённых(client):
+    org, org_id = await person()
+    await open_room(client, org)
+    banned, banned_id = await person(name="Бахтиёр")
+    await open_room(client, banned, place="test-lake")
+    async with SessionLocal() as session:
+        (await session.get(User, banned_id)).companions_banned_at = datetime.now(timezone.utc)
+        await session.commit()
+    madina, madina_id = await person(name="Мадина")
+    # Блок в любую сторону: организатор заблокировал Мадину — она его не видит
+    await client.post("/api/v1/blocks", json={"user_id": madina_id}, headers=org)
+    body = (await client.get("/api/v1/rooms", headers=madina)).json()
+    assert body["rooms"] == [] and body["days"] == []
+    # Другим организатор виден, а запрещённый — никому
+    viewer, _ = await person(name="Сардор")
+    body = (await client.get("/api/v1/rooms", headers=viewer)).json()
+    assert [r["organizer"]["user_id"] for r in body["rooms"]] == [org_id]
+
+
+async def test_лента_только_на_месяц_вперёд_и_по_опубликованным(client):
+    far = await open_room(client, (await person())[0])
+    await set_room(far["code"], day=TODAY + timedelta(days=rooms_api.AHEAD_DAYS + 1))
+    await open_room(client, (await person(name="Мадина"))[0], place="test-lake")
+    async with SessionLocal() as session:
+        lake = (await session.execute(select(Place).where(Place.slug == "test-lake"))).scalar_one()
+        lake.is_published = False
+        await session.commit()
+    try:
+        viewer, _ = await person(name="Сардор")
+        body = (await client.get("/api/v1/rooms", headers=viewer)).json()
+        assert body["rooms"] == [] and body["places"] == []
+    finally:
+        async with SessionLocal() as session:
+            lake = (await session.execute(select(Place).where(Place.slug == "test-lake"))).scalar_one()
+            lake.is_published = True
+            await session.commit()
 
 
 # --- Ссылка и заявки --------------------------------------------------------

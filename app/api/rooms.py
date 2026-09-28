@@ -156,6 +156,36 @@ class PlaceRoomsOut(BaseModel):
     rooms: list[RoomBrief] = []
 
 
+class FeedPlace(BaseModel):
+    """Место в ленте «Походы»: нарисовать строку и отфильтровать по региону
+    без каталога — в нём может не оказаться только что открытого места"""
+
+    slug: str
+    name: str
+    region_id: int
+    region_name: str
+    cover_thumb_url: str | None = None
+
+
+class FeedDay(BaseModel):
+    """Сколько компаний ищут попутчиков в место на день"""
+
+    place_slug: str
+    day: date
+    rooms: int
+
+
+class RoomsFeedOut(BaseModel):
+    """Лента вкладки «Походы»: открытые комнаты во все места. Платные туры
+    придут своей ручкой и своим видом карточки рядом с этой лентой"""
+
+    places: list[FeedPlace]
+    #: Числа по месту и дню — всем; гость видит только их
+    days: list[FeedDay]
+    #: Пусто у гостя: карточки чужих людей — только вошедшим
+    rooms: list[RoomBrief] = []
+
+
 def _card(member: RoomMember, contact: bool) -> CardOut:
     user = member.user
     return CardOut(
@@ -439,25 +469,72 @@ async def place_rooms(
     user: User | None = Depends(optional_user),
     session: AsyncSession = Depends(get_session),
 ) -> PlaceRoomsOut:
+    shown = await _open_rooms(session, user, ahead, slug=slug)
+    counts: dict[date, int] = {}
+    for room in shown:
+        counts[room.day] = counts.get(room.day, 0) + 1
+    return PlaceRoomsOut(
+        days=[DayCount(day=d, rooms=n) for d, n in sorted(counts.items())],
+        rooms=[_brief(r, user, lang) for r in shown] if user else [],
+    )
+
+
+@router.get("/rooms", response_model=RoomsFeedOut, dependencies=[Depends(rooms_on)])
+async def rooms_feed(
+    lang: Lang = Query(DEFAULT_LANG),
+    ahead: int = Query(AHEAD_DAYS, ge=1, le=60),
+    user: User | None = Depends(optional_user),
+    session: AsyncSession = Depends(get_session),
+) -> RoomsFeedOut:
+    """Вкладка «Походы»: открытые комнаты во все места на месяц вперёд.
+    Правила те же, что у комнат места: гостю — числа, вошедшему — карточки"""
+    shown = await _open_rooms(session, user, ahead)
+    places: dict[str, FeedPlace] = {}
+    counts: dict[tuple[date, str], int] = {}
+    for room in shown:
+        place = room.place
+        if place.slug not in places:
+            cover = place.photos[0] if place.photos else None
+            places[place.slug] = FeedPlace(
+                slug=place.slug,
+                name=pick(place.name, place.name_uz, lang),
+                region_id=place.region_id,
+                region_name=pick(place.region.name, place.region.name_uz, lang),
+                cover_thumb_url=(cover.thumb_url or cover.url) if cover else None,
+            )
+        counts[(room.day, place.slug)] = counts.get((room.day, place.slug), 0) + 1
+    return RoomsFeedOut(
+        places=list(places.values()),
+        days=[FeedDay(place_slug=s, day=d, rooms=n) for (d, s), n in sorted(counts.items())],
+        rooms=[_brief(r, user, lang) for r in shown] if user else [],
+    )
+
+
+async def _open_rooms(
+    session: AsyncSession, user: User | None, ahead: int, slug: str | None = None
+) -> list[Room]:
+    """Живые открытые комнаты на `ahead` дней вперёд — одного места или всех
+    опубликованных. Без организаторов под запретом и без тех, с кем у
+    смотрящего блокировка в любую сторону"""
     start = today()
-    rooms = (
-        await session.execute(
-            select(Room)
-            .join(Place, Place.id == Room.place_id)
-            .where(
-                Place.slug == slug,
-                Room.status == "active",
-                Room.is_open,
-                Room.day >= start,
-                Room.day <= start + timedelta(days=ahead),
-            )
-            .options(
-                selectinload(Room.place),
-                selectinload(Room.members).selectinload(RoomMember.user),
-            )
-            .order_by(Room.day, Room.id)
+    query = (
+        select(Room)
+        .join(Place, Place.id == Room.place_id)
+        .where(
+            Room.status == "active",
+            Room.is_open,
+            Room.day >= start,
+            Room.day <= start + timedelta(days=ahead),
         )
-    ).scalars()
+        .options(
+            selectinload(Room.place).selectinload(Place.region),
+            selectinload(Room.place).selectinload(Place.photos),
+            selectinload(Room.members).selectinload(RoomMember.user),
+        )
+        .order_by(Room.day, Room.id)
+    )
+    query = query.where(Place.slug == slug) if slug is not None else query.where(Place.is_published)
+    rooms = (await session.execute(query)).scalars()
     hidden = await blocked_ids(session, user.id) if user else set()
     shown = []
     for room in rooms:
@@ -467,13 +544,7 @@ async def place_rooms(
         if organizer.user_id in hidden:
             continue
         shown.append(room)
-    counts: dict[date, int] = {}
-    for room in shown:
-        counts[room.day] = counts.get(room.day, 0) + 1
-    return PlaceRoomsOut(
-        days=[DayCount(day=d, rooms=n) for d, n in sorted(counts.items())],
-        rooms=[_brief(r, user, lang) for r in shown] if user else [],
-    )
+    return shown
 
 
 @router.post("/rooms", response_model=RoomOut, status_code=201, dependencies=[Depends(rooms_on)])

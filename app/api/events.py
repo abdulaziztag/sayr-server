@@ -62,6 +62,8 @@ ALLOWED_KINDS: dict[str, re.Pattern[str] | None] = {
         r"|day|kids|region:\d{1,6}|collection:[a-z0-9-]{1,64}|season)$"
     ),
     "tab_map": None,
+    # Открыл вкладку «Походы» — ленту попутчиков
+    "tab_hikes": None,
     "map_pin": _slug,
     "favorite": _slug,
     "photo_full": _slug,

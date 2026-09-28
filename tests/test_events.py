@@ -90,6 +90,11 @@ async def test_optional_key_kinds_accept_empty(client):
     assert [(r.kind, r.slug) for r in rows] == [("rec_finish", None), ("rec_finish", "test-peak")]
 
 
+def test_hikes_tab_is_counted_without_key():
+    assert validate_key("tab_hikes", None) == (True, None)
+    assert validate_key("tab_hikes", "test-peak")[0] is False
+
+
 def test_onboarding_language_switch_is_accepted():
     assert validate_key("onboarding", "lang:uz") == (True, "lang:uz")
     assert validate_key("onboarding", "lang:ru") == (True, "lang:ru")
