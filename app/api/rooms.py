@@ -31,6 +31,7 @@ from ..config import settings
 from ..db import get_session
 from ..moderation import is_clean
 from ..models import (
+    Difficulty,
     Place,
     PushOutbox,
     Room,
@@ -157,13 +158,22 @@ class PlaceRoomsOut(BaseModel):
 
 
 class FeedPlace(BaseModel):
-    """Место в ленте «Походы»: нарисовать строку и отфильтровать по региону
-    без каталога — в нём может не оказаться только что открытого места"""
+    """Место в ленте «Походы»: нарисовать строку и отфильтровать без каталога —
+    в нём может не оказаться только что открытого места. Категория, сложность
+    и регион с областью — ради тех же фильтров, что на главной"""
 
     slug: str
     name: str
+    category: str
+    #: Три ступени, как в каталоге; четвёртая приходит флагом `alpine`
+    difficulty: str
+    alpine: bool = False
     region_id: int
     region_name: str
+    #: Область региона — группировка в фильтре, как на главной
+    region_area: str | None = None
+    #: Порядок региона в фильтре — тот же, что у каталога
+    region_order: int = 0
     cover_thumb_url: str | None = None
 
 
@@ -495,11 +505,19 @@ async def rooms_feed(
         place = room.place
         if place.slug not in places:
             cover = place.photos[0] if place.photos else None
+            region = place.region
+            extreme = place.difficulty is Difficulty.extreme
             places[place.slug] = FeedPlace(
                 slug=place.slug,
                 name=pick(place.name, place.name_uz, lang),
+                category=place.category.value,
+                # Как в каталоге: наружу только три ступени, четвёртая — флагом
+                difficulty=(Difficulty.hard if extreme else place.difficulty).value,
+                alpine=extreme,
                 region_id=place.region_id,
-                region_name=pick(place.region.name, place.region.name_uz, lang),
+                region_name=pick(region.name, region.name_uz, lang),
+                region_area=pick(region.area, region.area_uz, lang) if region.area else None,
+                region_order=region.sort_order,
                 cover_thumb_url=(cover.thumb_url or cover.url) if cover else None,
             )
         counts[(room.day, place.slug)] = counts.get((room.day, place.slug), 0) + 1

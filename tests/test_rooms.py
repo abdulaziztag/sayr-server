@@ -262,6 +262,11 @@ async def test_лента_собирает_открытые_комнаты_вс�
     places = {p["slug"]: p for p in body["places"]}
     assert set(places) == {"test-peak", "test-lake"}
     assert places["test-peak"]["region_name"] == "Тестовый регион"
+    # Категория и сложность — для фильтров, как на главной
+    assert places["test-peak"]["category"] == "peak"
+    assert places["test-peak"]["difficulty"] == "hard"
+    assert places["test-lake"]["difficulty"] == "easy"
+    assert places["test-peak"]["alpine"] is False
     card = body["rooms"][0]["organizer"]
     assert card["seats"] == 2 and card["telegram_username"] is None
 
@@ -298,6 +303,12 @@ async def test_лента_без_заблокированных_и_запрещ�
     viewer, _ = await person(name="Сардор")
     body = (await client.get("/api/v1/rooms", headers=viewer)).json()
     assert [r["organizer"]["user_id"] for r in body["rooms"]] == [org_id]
+
+
+async def test_лента_четвёртая_ступень_приходит_флагом(client):
+    await open_room(client, (await person())[0], place="test-alpine-peak")
+    place = (await client.get("/api/v1/rooms")).json()["places"][0]
+    assert place["difficulty"] == "hard" and place["alpine"] is True
 
 
 async def test_лента_только_на_месяц_вперёд_и_по_опубликованным(client):
