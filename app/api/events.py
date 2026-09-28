@@ -73,6 +73,8 @@ ALLOWED_KINDS: dict[str, re.Pattern[str] | None] = {
     "plan_day": _slug,
     "weather": _slug,
     "date_pick": _slug,
+    # Открыл комнату попутчиков из листа «Пойду»
+    "room_open": _slug,
     # Тропа
     "nav_start": _slug,
     "nav_offtrail": _slug,
