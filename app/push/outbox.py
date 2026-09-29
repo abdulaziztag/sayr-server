@@ -12,6 +12,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from ..models import PushOutbox, PushToken, UserSession
 from ..typography import uz_display
@@ -99,17 +100,25 @@ def enqueue(
 async def send_outbox(session: AsyncSession, transports: dict) -> int:
     """Разослать очередь по устройствам людей. Возвращает, сколько ушло.
 
-    Устройство человека — то, где он вошёл (живая сессия), с живым
+    Устройство человека — то, где он вошёл последним (живая сессия,
+    после которой с этим номером устройства никто не входил), с живым
     push-токеном этого же устройства. Нет таких — пуш просто снимается:
     в приложении человек и так увидит всё в комнате.
 
+    Последним — потому что выход без сети гасит токен только в телефоне,
+    и сессия прежнего аккаунта живёт на сервере дальше. Кто вошёл на этом
+    телефоне следом, тот и хозяин (api/push.py): пуши прежнего сюда
+    больше не идут, даже если токен ещё не прислан заново. Вход и выход
+    того же человека считаются так же — вышел последним, значит, пушей нет.
+
     Токен при этом должен быть прислан после входа. Гость не может
-    привязать токен к устройству, где кто-то вошёл (api/push.py), но
-    до входа устройство свободно: токен, присланный под чужим номером
-    заранее, дождался бы, пока хозяин номера войдёт, и получал бы его
-    пуши. Прислан после входа — значит, прислан под этой сессией.
-    Своё приложение присылает токен заново само: iOS — при каждом
-    возврате на экран, Android — при каждом запуске.
+    привязать токен к устройству, где кто-то вошёл, но до входа
+    устройство свободно: токен, присланный под чужим номером заранее,
+    дождался бы, пока хозяин номера войдёт, и получал бы его пуши.
+    Прислан после входа — значит, прислан под этой сессией. Своё
+    приложение присылает токен заново само: iOS — при каждом возврате
+    на экран, Android — при запуске. Сразу после входа — пока нет,
+    и до ближайшего такого раза личные пуши вошедшему не доходят.
     """
     now = datetime.now(timezone.utc)
     rows = list(
@@ -122,6 +131,15 @@ async def send_outbox(session: AsyncSession, transports: dict) -> int:
             )
         ).scalars()
     )
+    # Вход позже этого на том же устройстве — чей угодно, живой или нет.
+    # Порядок входов — по id, как в api/push.py: номер строки строго
+    # растёт, а created_at у входов в одной транзакции совпал бы
+    later = aliased(UserSession)
+    newer = (
+        select(later.id)
+        .where(later.device_id == UserSession.device_id, later.id > UserSession.id)
+        .exists()
+    )
     sent = 0
     for row in rows:
         tokens = (
@@ -131,6 +149,7 @@ async def send_outbox(session: AsyncSession, transports: dict) -> int:
                 .where(
                     UserSession.user_id == row.user_id,
                     UserSession.revoked_at.is_(None),
+                    ~newer,
                     PushToken.last_seen >= UserSession.created_at,
                     PushToken.disabled_at.is_(None),
                 )

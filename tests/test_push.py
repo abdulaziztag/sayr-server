@@ -281,9 +281,42 @@ async def test_второй_аккаунт_с_тем_же_номером_уст�
     await _register(client, TOKEN_A, victim_headers)
     thief_headers, thief = await _person("phone-a-0001")
     await _register(client, TOKEN_B, thief_headers)
-    assert (await _token(TOKEN_B)).device is None
-    assert await _deliver(victim) == [TOKEN_A]
-    assert await _deliver(thief) == []
+    # Устройство держит последний вход: вошедший следом получает на свой
+    # токен только свои пуши. Хозяину это глушит личные пуши — цена
+    # правила, описанная в api/push.py, — но чужому они не уходят
+    assert await _deliver(thief) == [TOKEN_B]
+    assert await _deliver(victim) == []
+
+    # Хозяин присылает свой токен заново — устройство уже не его
+    await _register(client, TOKEN_A, victim_headers)
+    assert (await _token(TOKEN_A)).device is None
+    assert await _deliver(victim) == []
+    assert await _deliver(thief) == [TOKEN_B]
+
+
+async def test_выход_без_сети_не_оставляет_телефон_прежнему_аккаунту(client):
+    """Выход без сети гасит токен только в телефоне, а сессия на сервере
+    живёт. Раньше она держала устройство вечно: вошедший на этом телефоне
+    следом регистрировал токен без устройства и личных пушей не получал."""
+    first_headers, first = await _person("phone-a-0001")
+    await _register(client, TOKEN_A, first_headers)
+    assert await _deliver(first) == [TOKEN_A]
+
+    # Выход до сервера не дошёл, на том же телефоне входит другой человек.
+    # Токен телефона ещё не прислан заново, но прежнему он уже не служит
+    second_headers, second = await _person("phone-a-0001")
+    assert await _deliver(first) == []
+
+    await _register(client, TOKEN_A, second_headers)
+    assert (await _token(TOKEN_A)).device == "phone-a-0001"
+    assert await _deliver(second) == [TOKEN_A]
+    assert await _deliver(first) == []
+
+    # Второй вышел как следует — телефон не возвращается к первому
+    resp = await client.post("/api/v1/auth/logout", headers=second_headers)
+    assert resp.status_code == 204
+    assert await _deliver(second) == []
+    assert await _deliver(first) == []
 
 
 async def test_nul_в_токене_это_422(client):
