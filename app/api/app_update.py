@@ -35,12 +35,14 @@ def parse_version(value: str) -> tuple[int, ...]:
     """«1.2.3» → (1, 2, 3); хвосты вроде «1.2.3-beta» и «(42)» отбрасываются.
 
     Сравнивать надо числами: строкой «1.10.0» оказалась бы старше «1.9.0».
+    Цифры — только ASCII: isdigit() пропускает и «²», а int() на ней падает,
+    и кривая версия в запросе давала 500 вместо ответа
     """
     parts: list[int] = []
     for chunk in value.strip().split(".")[:4]:
         digits = ""
         for ch in chunk:
-            if ch.isdigit():
+            if ch in "0123456789":
                 digits += ch
             else:
                 break
