@@ -43,3 +43,11 @@ def test_test_в_любом_месте_имени_годится():
 def test_хост_с_test_не_делает_базу_тестовой():
     run = _collect("postgresql+psycopg://sayr:sayr@test-db:1/sayr")
     assert run.returncode != 0, run.stdout[-500:]
+
+
+def test_test_внутри_другого_слова_не_считается():
+    # sayr_latest — естественное имя для базы со свежим дампом с боя
+    for name in ("sayr_latest", "sayr_contest"):
+        run = _collect(f"postgresql+psycopg://sayr:sayr@127.0.0.1:1/{name}")
+        assert run.returncode != 0, name
+        assert "тесты её сотрут" in run.stderr + run.stdout, name

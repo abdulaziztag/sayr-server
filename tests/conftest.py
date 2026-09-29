@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 
 os.environ.setdefault(
@@ -24,12 +25,14 @@ def pytest_configure(config):
     # Сьют начинает и заканчивает drop_all: база из SAYR_DATABASE_URL
     # стирается целиком. Экспортированная строка к рабочей базе ушла бы
     # в тесты молча, поэтому без «test» в имени базы не стартуем. Имя,
-    # а не весь адрес: хост test-db не делает базу sayr тестовой
+    # а не весь адрес: хост test-db не делает базу sayr тестовой. И «test»
+    # отдельным словом, а не подстрокой: sayr_latest — естественное имя
+    # для базы, куда развернули свежий дамп с боя, — тестовой не станет
     name = make_url(os.environ["SAYR_DATABASE_URL"]).database or ""
-    if "test" not in name:
+    if not any(re.fullmatch(r"tests?\d*", word) for word in re.split(r"[^a-z0-9]+", name.lower())):
         raise pytest.UsageError(
             f"SAYR_DATABASE_URL смотрит в базу «{name}»: тесты её сотрут. "
-            "Нужна отдельная база с «test» в имени, например sayr_test"
+            "Нужна отдельная база со словом test в имени, например sayr_test"
         )
 
 # Ташкент ~ (41.31, 69.28). Гулькам-тест ~85 км, «ближнее озеро» ~60 км, Заамин ~200 км.
