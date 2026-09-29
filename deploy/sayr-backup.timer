@@ -1,0 +1,18 @@
+# /etc/systemd/system/sayr-backup.timer
+#
+# Установка один раз, руками:
+#   cp deploy/sayr-backup.{service,timer} /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now sayr-backup.timer
+#   systemctl start sayr-backup && journalctl -u sayr-backup -n 30 --no-pager
+[Unit]
+Description=Sayr: бэкап каждую ночь
+
+[Timer]
+# По Ташкенту, а не по часам сервера: ночь — у тех, кто пользуется
+OnCalendar=*-*-* 03:30:00 Asia/Tashkent
+# Сервер лежал в это время — прогон сразу после загрузки, а не через сутки
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

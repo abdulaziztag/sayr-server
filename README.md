@@ -132,7 +132,7 @@ docker compose -f compose.prod.yml exec app python -m seed.seed
   Лежат на том же томе, но наружу не отдаются: под `/media` смонтированы
   `photos`, `thumbs` и `gpx` поимённо, а не весь каталог. Владельцу они
   открываются из админки (`/admin/report-file/{id}`), по сессии.
-- **Бэкап** — `deploy/backup.sh` в cron: дамп БД плюс архив `media`.
+- **Бэкап** — `deploy/backup.sh` по таймеру `sayr-backup.timer`, см. ниже.
 - **Здоровье** — `GET /healthz` ходит в БД, годится для мониторинга.
 - **Сид идемпотентен** — повторный запуск обновит поля мест и не продублирует
   фото. Реальные фотографии есть у 15 мест в `seed/data/photos/`, остальным
@@ -227,3 +227,26 @@ systemctl daemon-reload && systemctl enable --now sayr-push.timer
 journalctl -u sayr-push.service -n 20     # что ушло на последнем тике
 ```
 
+## Бэкапы
+
+Каждую ночь в 03:30 по Ташкенту `sayr-backup.timer` запускает
+`deploy/backup.sh`: дамп базы в `/var/backups/sayr/daily` (14 последних),
+первый дамп недели и архив `media` без миниатюр — в
+`/var/backups/sayr/weekly` (8 последних недель). Пустой или оборванный
+дамп, упавший `pg_dump` — служба failed, это видно в `systemctl --failed`.
+
+Всё это лежит на том же диске, что и база. Копия вне сервера включается
+строкой в `.env`: `SAYR_BACKUP_REMOTE=user@host:/путь` (rsync по ssh
+с ключом root, без пароля) или `SAYR_BACKUP_REMOTE=rclone:<remote>:<путь>`.
+На той стороне в `daily/` и `weekly/` зеркалится ровно то же, что здесь.
+Для rsync один раз зайти туда руками от root (`ssh user@host`) и принять
+отпечаток: ночью спросить будет некого, и копия упадёт.
+
+```bash
+cp deploy/sayr-backup.{service,timer} /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now sayr-backup.timer
+systemctl start sayr-backup && journalctl -u sayr-backup -n 30 --no-pager
+```
+
+Восстановление — в пустую базу:
+`gzip -dc /var/backups/sayr/daily/db-ГГГГ-ММ-ДД.sql.gz | sudo -u postgres psql sayr`.
