@@ -18,6 +18,11 @@ WorkingDirectory=/root/Projects/sayr-server
 # Через bash, а не напрямую: права на исполнение в рабочей копии держит git,
 # и потерянный +x молча выключил бы бэкапы
 ExecStart=/bin/bash /root/Projects/sayr-server/deploy/backup.sh
+# У oneshot по умолчанию срока нет. Зависший pg_dump (ждёт блокировку
+# застрявшей миграции) или копия на умершую связь держали бы службу
+# activating вечно: таймер пропускал бы ночь за ночью, а в systemctl
+# --failed не было бы ничего. С потолком зависание — это failed
+TimeoutStartSec=3h
 # Сервер общий, ночью на нём живут и чужие сайты: дамп и gzip — в последнюю
 # очередь. NoNewPrivileges не ставим — pg_dump идёт через sudo от postgres
 Nice=10
