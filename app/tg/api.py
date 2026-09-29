@@ -2,7 +2,8 @@
 
 Логика (`service.py`) знает только этот набор действий, поэтому проверяется
 на подменном клиенте, без сети и без настоящего аккаунта. Ошибки Telethon
-переводятся в три своих: подождать, аккаунт ограничен, группы больше нет.
+переводятся в свои: подождать, аккаунт ограничен, группы больше нет,
+человека в группе нет.
 
 Всё проверено по документации Telegram API и Telethon 1.45 (спека
 попутчиков, «Проверено по Telegram API»): группу может создать только
@@ -36,7 +37,12 @@ class Restricted(TgError):
 
 
 class Gone(TgError):
-    """Группы или человека в ней больше нет — делать нечего"""
+    """Группы больше нет или нас в ней нет — с группой делать нечего"""
+
+
+class NotParticipant(TgError):
+    """Человека в группе нет — вышел сам. С группой всё в порядке: это не
+    Gone, иначе один вышедший «закрывал» бы службе всю группу"""
 
 
 class TgApi(Protocol):
@@ -68,13 +74,10 @@ class TelethonApi:
             raise FloodWait(e.seconds) from e
         except (errors.UserRestrictedError, errors.ChannelsTooMuchError) as e:
             raise Restricted(type(e).__name__) from e
-        except (
-            errors.ChannelPrivateError,
-            errors.ChannelInvalidError,
-            errors.UserNotParticipantError,
-            errors.ParticipantIdInvalidError,
-        ) as e:
+        except (errors.ChannelPrivateError, errors.ChannelInvalidError) as e:
             raise Gone(type(e).__name__) from e
+        except (errors.UserNotParticipantError, errors.ParticipantIdInvalidError) as e:
+            raise NotParticipant(type(e).__name__) from e
 
     @staticmethod
     def _channel(chat: Chat):
@@ -145,7 +148,8 @@ class TelethonApi:
 
     async def revoke_link(self, chat: Chat, link: str) -> None:
         """Погасить личную ссылку. Истёкшая или уже погашенная — не ошибка:
-        войти по ней и так нельзя, а это всё, что нужно"""
+        войти по ней и так нельзя, а это всё, что нужно. CHAT_NOT_MODIFIED —
+        тоже: так Telegram может ответить на повторное гашение"""
         from telethon import errors
         from telethon.tl.functions.messages import EditExportedChatInviteRequest
 
@@ -157,6 +161,7 @@ class TelethonApi:
             errors.InviteHashExpiredError,
             errors.InviteHashInvalidError,
             errors.InviteRevokedMissingError,
+            errors.ChatNotModifiedError,
         ):
             pass
 

@@ -261,7 +261,11 @@ def _out(room: Room, viewer: User, lang: Lang, hidden: set[int]) -> RoomOut:
         people=_people(room),
         men=men,
         women=women,
-        organizer=_card(organizer, contact=insider) if organizer else None,
+        organizer=(
+            _card(organizer, contact=insider and organizer.user_id not in hidden)
+            if organizer
+            else None
+        ),
         my_role=role,
     )
     if insider:
@@ -356,7 +360,11 @@ async def blocked_ids(session: AsyncSession, user_id: int) -> set[int]:
 def _blocked(room: Room, hidden: set[int]) -> bool:
     """В комнате есть тот, с кем блокировка: организатор или любой вступивший.
     Не только организатор — иначе двое, заблокировавшие друг друга, сошлись бы
-    в одной комнате и увидели ники друг друга"""
+    в одной комнате и увидели ники друг друга. Проверяется там, где в комнату
+    входят: по ссылке и при одобрении заявки. Лента, чужой просмотр и заявка
+    смотрят только на организатора: кто вступил, со стороны не видно, и
+    пропавшая комната выдала бы заблокированному, куда идёт тот, кто его
+    заблокировал"""
     return any(m.user_id in hidden for m in room.members if m.status == "joined")
 
 
@@ -390,21 +398,26 @@ async def _busy(
     return any(r.id != skip_room and _end(r) >= day for r in rows)
 
 
-async def _load(session: AsyncSession, **where) -> Room | None:
+async def _load(session: AsyncSession, *, lock: bool = False, **where) -> Room | None:
+    """`lock` — держать строку комнаты до конца транзакции: вступление по
+    ссылке и одобрение идут в комнату по одному, и двое, заблокировавшие
+    друг друга, не войдут в неё разом, разминувшись с проверкой. Замок
+    человека (`_lock_user`) — раньше замка комнаты, везде в этом порядке"""
     column, value = next(iter(where.items()))
-    return (
-        await session.execute(
-            select(Room)
-            .where(getattr(Room, column) == value)
-            .options(
-                selectinload(Room.place),
-                selectinload(Room.members).selectinload(RoomMember.user),
-            )
-            # Перечитать и то, что уже лежит в сессии: после записи список
-            # участников в памяти не знает о новой заявке
-            .execution_options(populate_existing=True)
+    query = (
+        select(Room)
+        .where(getattr(Room, column) == value)
+        .options(
+            selectinload(Room.place),
+            selectinload(Room.members).selectinload(RoomMember.user),
         )
-    ).scalar_one_or_none()
+        # Перечитать и то, что уже лежит в сессии: после записи список
+        # участников в памяти не знает о новой заявке
+        .execution_options(populate_existing=True)
+    )
+    if lock:
+        query = query.with_for_update(key_share=True)
+    return (await session.execute(query)).scalar_one_or_none()
 
 
 async def _room_for(session: AsyncSession, code: str) -> Room:
@@ -582,9 +595,10 @@ async def _open_rooms(
     session: AsyncSession, user: User | None, ahead: int, slug: str | None = None
 ) -> list[Room]:
     """Живые открытые комнаты на `ahead` дней вперёд — одного места или всех
-    опубликованных. Без организаторов под запретом и без комнат, где есть
-    тот, с кем у смотрящего блокировка в любую сторону: попроситься туда
-    всё равно нельзя"""
+    опубликованных. Без организаторов под запретом и без тех, с кем у
+    смотрящего блокировка в любую сторону. Только организатор, а не любой
+    вступивший (`_blocked`): иначе, сверив числа с гостевыми, заблокированный
+    узнал бы, куда и когда идёт тот, кто его заблокировал"""
     start = today()
     query = (
         select(Room)
@@ -610,7 +624,7 @@ async def _open_rooms(
         organizer = _organizer(room)
         if organizer is None or organizer.user.companions_banned_at is not None:
             continue
-        if _blocked(room, hidden):
+        if organizer.user_id in hidden:
             continue
         shown.append(room)
     return shown
@@ -676,15 +690,11 @@ async def room_view(
     hidden = await blocked_ids(session, user.id)
     if role in ("organizer", "joined"):
         return _out(room, user, lang, hidden)
-    # Чужому — только открытую и живую комнату и без тех, с кем блокировка.
-    # Просившемуся и бывшему — свою заявку он видеть должен, прячем только
-    # от блокировки с организатором
+    # Чужому — только открытую и живую комнату, и не того, с кем блокировка.
+    # Блок с вступившим не прячет: пропавшая комната выдала бы, кто в ней
     organizer = _organizer(room)
     visible = (room.is_open and room.status == "active") or role != "none"
-    blocked = _blocked(room, hidden) if role == "none" else bool(
-        organizer and organizer.user_id in hidden
-    )
-    if not visible or blocked:
+    if not visible or (organizer and organizer.user_id in hidden):
         raise HTTPException(status_code=404, detail="room_not_found")
     return _out(room, user, lang, hidden)
 
@@ -747,8 +757,8 @@ async def invite_reset(
     return await _reply(session, room, user, lang)
 
 
-async def _by_invite(session: AsyncSession, invite: str, user: User) -> Room:
-    room = await _load(session, invite=invite)
+async def _by_invite(session: AsyncSession, invite: str, user: User, lock: bool = False) -> Room:
+    room = await _load(session, lock=lock, invite=invite)
     if room is None or room.status != "active":
         raise HTTPException(status_code=404, detail="invite_not_found")
     # Со стороны ссылка не ведёт туда, где есть тот, с кем блокировка. Своему
@@ -780,9 +790,10 @@ async def invite_join(
 ) -> RoomOut:
     """Своих — без одобрения: ссылку им дал организатор или участник"""
     body = body or JoinIn()
-    # Замок — до чтения комнаты: второй такой же запрос увидит уже записанное
+    # Замки — до чтения комнаты, человек, потом комната: второй такой же
+    # запрос увидит уже записанное, а одобрение в ту же комнату — вступившего
     await _lock_user(session, user.id)
-    room = await _by_invite(session, invite, user)
+    room = await _by_invite(session, invite, user, lock=True)
     _require_active(room)
     mine = _mine(room, user)
     role = _role(mine)
@@ -790,13 +801,19 @@ async def invite_join(
         return await _reply(session, room, user, lang)
     if role == "removed":
         raise HTTPException(status_code=403, detail="removed")
+    now = datetime.now(timezone.utc)
+    back_after = timedelta(seconds=settings.tg_link_renew_after_sec)
+    if role == "left" and mine.decided_at and mine.decided_at > now - back_after:
+        # Вышел и сразу обратно — не чаще раза в tg_link_renew_after_sec:
+        # каждый круг — гашение старой ссылки и новая от единственного
+        # аккаунта Sayr Admin, а организатору — пуш «вступил»
+        raise HTTPException(status_code=429, detail="too_often")
     _require_not_banned(user)
     _require_name(user)
     _require_clean(body.note)
     if await _busy(session, user.id, room.day, room.days, skip_room=room.id):
         raise HTTPException(status_code=409, detail="busy_day")
 
-    now = datetime.now(timezone.utc)
     if mine is None:
         mine = RoomMember(room_id=room.id, user_id=user.id, role="member", source="link")
         session.add(mine)
@@ -827,7 +844,10 @@ async def room_request(
     # Замок — до чтения комнаты: второй такой же запрос увидит уже записанное
     await _lock_user(session, user.id)
     room = await _room_for(session, code)
-    if not room.is_open or _blocked(room, await blocked_ids(session, user.id)):
+    # Блок с вступившим заявку не останавливает — отказ выдал бы, кто в
+    # комнате. Вместе их не сведёт одобрение (`member_blocked`)
+    organizer = _organizer(room)
+    if not room.is_open or (organizer and organizer.user_id in await blocked_ids(session, user.id)):
         raise HTTPException(status_code=404, detail="room_not_found")
     _require_active(room)
     mine = _mine(room, user)
@@ -881,6 +901,11 @@ async def member_approve(
 ) -> RoomOut:
     room = await _room_for(session, code)
     _require_organizer(room, user)
+    # Замки — человек, потом комната, как при вступлении по ссылке, — и всё
+    # перечитать уже под ними: иначе двойное нажатие одобрило бы дважды, а
+    # вступивший в ту же минуту разминулся бы с проверкой блокировок
+    await _lock_user(session, _member(room, member_id).user_id)
+    room = await _load(session, lock=True, id=room.id)
     _require_active(room)
     member = _member(room, member_id)
     if member.status != "requested":
@@ -891,7 +916,6 @@ async def member_approve(
     # блокировка: вместе их не сводим
     if _blocked(room, await blocked_ids(session, member.user_id)):
         raise HTTPException(status_code=409, detail="member_blocked")
-    await _lock_user(session, member.user_id)
     if await _busy(session, member.user_id, room.day, room.days, skip_room=room.id):
         raise HTTPException(status_code=409, detail="member_busy")
     member.status = "joined"
@@ -993,21 +1017,24 @@ async def group_link(
         raise HTTPException(status_code=409, detail="link_not_used")
     # Замок — чтобы двойное нажатие не поставило два задания разом
     await _lock_user(session, user.id)
-    last = (
-        await session.execute(
-            select(TgJob)
-            .where(TgJob.kind == "invite_link", TgJob.member_id == mine.id)
-            .order_by(TgJob.id.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    if last is not None and last.status == "pending":
-        raise HTTPException(status_code=409, detail="link_pending")
     since = datetime.now(timezone.utc) - timedelta(seconds=settings.tg_link_renew_after_sec)
-    if last is not None and last.created_at > since:
+    jobs = (
+        await session.execute(
+            select(TgJob.status, TgJob.payload).where(
+                TgJob.kind == "invite_link",
+                TgJob.member_id == mine.id,
+                (TgJob.status == "pending") | (TgJob.created_at > since),
+            )
+        )
+    ).all()
+    if any(status == "pending" for status, _ in jobs):
+        raise HTTPException(status_code=409, detail="link_pending")
+    # В предел идут только «выдать новую»: первая ссылка, выданная при
+    # вступлении, не мешает заменить её, если её перехватили в ту же минуту
+    if any(payload.get("renew") for _, payload in jobs):
         raise HTTPException(status_code=429, detail="too_often")
     # Старую служба погасит, прежде чем выдать новую
-    payload = {"revoke": mine.tg_link} if mine.tg_link else {}
+    payload = {"renew": True} | ({"revoke": mine.tg_link} if mine.tg_link else {})
     mine.tg_link = None
     mine.tg_link_used = False
     session.add(TgJob(kind="invite_link", room_id=room.id, member_id=mine.id, payload=payload))
@@ -1123,7 +1150,9 @@ async def block(
     """Заблокировать. Если уже в одной комнате: организатор убирает его,
     а если организатор — он, сам человек из комнаты выходит. Двое простых
     участников остаются, но друг друга в комнате больше не видят (`_out`),
-    а в чужие комнаты друг к другу не попадают (`_blocked`)"""
+    а в чужие комнаты друг к другу не попадают (`_blocked`). Отменённые
+    комнаты — тоже: их группа остаётся тем, кто идёт всё равно
+    (service._welcome), и заблокированному в ней не место"""
     if body.user_id == user.id:
         raise HTTPException(status_code=422, detail="self_block")
     if await session.get(User, body.user_id) is None:
@@ -1136,7 +1165,10 @@ async def block(
         await session.execute(
             select(Room)
             .join(RoomMember, RoomMember.room_id == Room.id)
-            .where(Room.status == "active", RoomMember.user_id.in_([user.id, body.user_id]))
+            .where(
+                Room.status.in_(("active", "cancelled")),
+                RoomMember.user_id.in_([user.id, body.user_id]),
+            )
             .options(
                 selectinload(Room.place),
                 selectinload(Room.members).selectinload(RoomMember.user),
@@ -1221,6 +1253,10 @@ async def housekeeping(session: AsyncSession, day: date) -> None:
         room.archived_at = now
         if room.tg_state == "ready":
             session.add(TgJob(kind="leave", room_id=room.id, payload={"text": "farewell"}))
+        elif room.tg_state == "leaving" and room.tg_left_at is None:
+            # /leave так и не вывел Sayr Admin (сбои, ограничение аккаунта):
+            # выходим сейчас и стираем переписку, как обещали в группе
+            session.add(TgJob(kind="leave", room_id=room.id, payload={"forget": True}))
         elif room.tg_state == "failed" and room.tg_chat_id and room.tg_left_at is None:
             # Группу завели, а собрать не вышло: людей в ней нет, прощаться
             # не с кем — но и сидеть в ней Sayr Admin вечно незачем
@@ -1248,6 +1284,7 @@ async def ban_companions(session: AsyncSession, user: User) -> None:
     """«Запретить попутчиков» по жалобе: свои походы отменяются, из чужих
     комнат и групп человека убирают. Из групп своих отменённых — тоже:
     группа остаётся тем, кто идёт всё равно, а жалоба была как раз на него.
+    Отменённые до запрета — так же: их группа жива.
     Коммитит вызывающий."""
     user.companions_banned_at = datetime.now(timezone.utc)
     now = user.companions_banned_at
@@ -1255,7 +1292,7 @@ async def ban_companions(session: AsyncSession, user: User) -> None:
         await session.execute(
             select(Room)
             .join(RoomMember, RoomMember.room_id == Room.id)
-            .where(RoomMember.user_id == user.id, Room.status == "active")
+            .where(RoomMember.user_id == user.id, Room.status.in_(("active", "cancelled")))
             .options(
                 selectinload(Room.place),
                 selectinload(Room.members).selectinload(RoomMember.user),
@@ -1265,7 +1302,8 @@ async def ban_companions(session: AsyncSession, user: User) -> None:
     for room in rooms:
         mine = _mine(room, user)
         if _role(mine) == "organizer":
-            cancel(session, room)
+            if room.status == "active":
+                cancel(session, room)
             kick(session, room, mine)
         elif mine.status in LIVE:
             joined = mine.status == "joined"
@@ -1280,13 +1318,14 @@ async def ban_companions(session: AsyncSession, user: User) -> None:
 async def on_account_deleted(session: AsyncSession, user: User) -> None:
     """Перед удалением человека: его походы отменяются (всем пуш, в группу
     сообщение), из групп — и чужих, и своих — служба его убирает, личные
-    ссылки гасит. Строки участия уйдут каскадом вместе с человеком — поэтому
-    аккаунт Telegram и ссылку кладём в задание заранее"""
+    ссылки гасит. Отменённые комнаты — тоже: их группа жива. Строки участия
+    уйдут каскадом вместе с человеком — поэтому аккаунт Telegram и ссылку
+    кладём в задание заранее: после удаления ссылку не с кем было бы связать"""
     rows = (
         await session.execute(
             select(Room)
             .join(RoomMember, RoomMember.room_id == Room.id)
-            .where(RoomMember.user_id == user.id, Room.status == "active")
+            .where(RoomMember.user_id == user.id, Room.status.in_(("active", "cancelled")))
             .options(
                 selectinload(Room.place),
                 selectinload(Room.members).selectinload(RoomMember.user),
@@ -1295,7 +1334,7 @@ async def on_account_deleted(session: AsyncSession, user: User) -> None:
     ).scalars().unique()
     for room in rows:
         mine = _mine(room, user)
-        if _role(mine) == "organizer":
+        if _role(mine) == "organizer" and room.status == "active":
             cancel(session, room)
         if mine.status == "joined":
             kick(session, room, mine)

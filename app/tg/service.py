@@ -22,7 +22,7 @@ from ..config import PHOTOS_DIR, settings
 from ..models import Place, Room, RoomMember, TgJob, TgMessage, TgStatus, User
 from ..push import outbox
 from . import texts
-from .api import Chat, FloodWait, Gone, Restricted, TgApi
+from .api import Chat, FloodWait, Gone, NotParticipant, Restricted, TgApi
 
 log = logging.getLogger("sayr.tg")
 
@@ -228,7 +228,10 @@ async def _promote(api: TgApi, session: AsyncSession, job: TgJob, room: Room) ->
         return
     if not _welcome(room, member):
         return  # пока ждали, его убрали — админом не делаем
-    await api.promote(_chat(room), member.tg_user_id, member.tg_user_hash or 0)
+    try:
+        await api.promote(_chat(room), member.tg_user_id, member.tg_user_hash or 0)
+    except NotParticipant:
+        pass  # вошёл и сразу вышел — админом делать некого, а группа цела
 
 
 async def _kick(api: TgApi, session: AsyncSession, job: TgJob, room: Room) -> None:
@@ -248,18 +251,31 @@ async def _kick(api: TgApi, session: AsyncSession, job: TgJob, room: Room) -> No
     if member is not None:
         known.append((member.tg_user_id, member.tg_user_hash))
         links.add(member.tg_link)
+    kicked: set[int] = set()
+
+    async def out(accounts: list[tuple]) -> None:
+        best: dict[int, int] = {}
+        for user_id, user_hash in accounts:
+            if user_id and int(user_id) not in kicked and not best.get(int(user_id)):
+                best[int(user_id)] = int(user_hash or 0)
+        for user_id, user_hash in best.items():
+            try:
+                await api.kick(chat, user_id, user_hash)
+            except NotParticipant:
+                pass  # уже вышел сам
+            kicked.add(user_id)
+
+    # Сначала — уже известных: выгнать вошедшего важнее, чем погасить
+    # ссылку, и сбой гашения не должен оставить его в группе
+    await out(known)
+    revoked = list(job.payload.get("revoked", []))
     for link in sorted(links - {None}):
-        await api.revoke_link(chat, link)
-        known.extend(await api.link_importers(chat, link))
-    accounts: dict[int, int] = {}
-    for user_id, user_hash in known:
-        if user_id and not accounts.get(int(user_id)):
-            accounts[int(user_id)] = int(user_hash or 0)
-    for user_id, user_hash in accounts.items():
-        try:
-            await api.kick(chat, user_id, user_hash)
-        except Gone:
-            pass  # уже вышел сам
+        if link not in revoked:
+            await api.revoke_link(chat, link)
+            # Отметка в задании: пауза на списке вошедших не погасит второй раз
+            revoked.append(link)
+            await _step(session, job, revoked=revoked)
+        await out(await api.link_importers(chat, link))
     if member is not None:
         member.tg_link = None  # погашена
 
@@ -270,28 +286,45 @@ async def _post(api: TgApi, session: AsyncSession, job: TgJob, room: Room) -> No
         await api.send(_chat(room), text)
 
 
-async def _leave(api: TgApi, session: AsyncSession, job: TgJob, room: Room) -> None:
-    """Выйти: по сроку, по /leave организатора или из группы, которую так
-    и не собрали"""
+async def _quit(api: TgApi, session: AsyncSession, job: TgJob, room: Room) -> None:
     if room.tg_chat_id is None or room.tg_left_at is not None:
         return
     if room.tg_state not in ("ready", "leaving", "failed"):
         return
+    chat = _chat(room)
     text = texts.TEXTS.get(job.payload.get("text", ""))
     try:
+        if room.status != "archived":
+            # Ссылки тех, кому в группе уже не место, гасим, пока мы ещё в ней:
+            # после выхода служба их не погасит, а задание на выход для
+            # удалённого могло встать в очередь позже нашего. В архиве все
+            # ссылки и так истекли (LINK_TAIL)
+            for member in room.members:
+                if member.tg_link and not member.tg_link_used and not _welcome(room, member):
+                    await api.revoke_link(chat, member.tg_link)
+                    member.tg_link = None
+                    await session.commit()
         if text and not job.payload.get("said"):
-            await api.send(_chat(room), text)
+            await api.send(chat, text)
             await _step(session, job, said=True)
-        await api.leave(_chat(room))
-    except Gone:
+        await api.leave(chat)
+    except (Gone, NotParticipant):
         pass  # нас уже выгнали — считаем, что вышли
     # Недособранная так и остаётся «не вышло»: людей в ней не было, и «Sayr
     # вышел — ссылку даст организатор» было бы неправдой
     if room.tg_state != "failed":
         room.tg_state = "left"
     room.tg_left_at = _now()
+
+
+async def _leave(api: TgApi, session: AsyncSession, job: TgJob, room: Room) -> None:
+    """Выйти: по сроку, по /leave организатора или из группы, которую так
+    и не собрали"""
+    await _quit(api, session, job, room)
     if job.payload.get("forget"):
-        # По /leave: стираем, уже выйдя, — со всем, что успело прийти до выхода
+        # По /leave: стираем, уже выйдя, — со всем, что успело прийти до выхода.
+        # И когда вышли раньше, по сроку (прощание встало в очередь до /leave):
+        # стереть обещано в группе
         await _forget(session, room.id)
 
 
@@ -339,6 +372,10 @@ async def run_job(api: TgApi, session: AsyncSession, job: TgJob) -> None:
         # Собранная группа с людьми остаётся: не создаются только новые
         if room is not None and job.kind == "create_group" and room.tg_state != "ready":
             room.tg_state = "failed"
+        if job.kind == "leave" and job.payload.get("forget"):
+            # Выйти не дают, а стереть переписку обещали — стираем. Выйдет
+            # уборка, когда комната уйдёт в архив
+            await _forget(session, job.room_id)
         await heartbeat(session, "restricted", str(e))
         await session.commit()
         return
@@ -385,19 +422,24 @@ async def run_job(api: TgApi, session: AsyncSession, job: TgJob) -> None:
 
 async def run_due(api: TgApi, session: AsyncSession, limit: int = 20) -> int:
     """Всё созревшее — по порядку. Возвращает, сколько обработано."""
-    jobs = list(
+    ids = list(
         (
             await session.execute(
-                select(TgJob)
+                select(TgJob.id)
                 .where(TgJob.status == "pending", TgJob.run_after <= _now())
                 .order_by(TgJob.id)
                 .limit(limit)
             )
         ).scalars()
     )
-    for job in jobs:
-        await run_job(api, session, job)
-    return len(jobs)
+    for job_id in ids:
+        # Каждое — свежим из базы: откат после паузы Telegram в прошлом
+        # задании сбрасывает всё, что держала сессия, и заранее загруженные
+        # задания было бы уже не прочесть
+        job = await session.get(TgJob, job_id, populate_existing=True)
+        if job is not None and job.status == "pending":
+            await run_job(api, session, job)
+    return len(ids)
 
 
 # MARK: - События групп
