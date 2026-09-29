@@ -10,6 +10,7 @@
 кому-то из клуба.
 """
 
+import math
 import secrets
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -19,6 +20,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from .. import login_guard
 from ..config import settings
 from ..db import get_session
 from ..models import Place, SeasonVote
@@ -42,8 +44,17 @@ def _password() -> str:
     Так страница работает сразу после выката, а когда проверку захочется
     отдать кому-то из клуба — заводится `SAYR_REVIEW_PASSWORD`, и вместе
     с ним не отдаётся вся админка.
+
+    Запасной путь оставлен сознательно, но помнить о нём надо: пока своего
+    пароля нет, эта форма — вторая дверь к паролю админки. Поэтому промахи
+    здесь считаются в ту же дверь, что и на /admin (см. _door)
     """
     return settings.review_password or settings.admin_password
+
+
+def _door() -> str:
+    """Чей пароль перебирают: админский, пока своего у проверки нет"""
+    return login_guard.REVIEW if settings.review_password else login_guard.ADMIN
 
 
 def _allowed(request: Request) -> bool:
@@ -51,10 +62,12 @@ def _allowed(request: Request) -> bool:
     if not token:
         return False
     try:
-        _signer.loads(token, max_age=MAX_AGE)
+        mark = _signer.loads(token, max_age=MAX_AGE)
     except (BadSignature, SignatureExpired):
         return False
-    return True
+    # В cookie — отпечаток пароля, которым вошли: сменили пароль —
+    # вход кончился, как и в админке
+    return mark == login_guard.fingerprint(_password())
 
 
 def _guard(request: Request) -> HTMLResponse | None:
@@ -130,14 +143,19 @@ def _done(request: Request):
 
 @router.post("/seasons/review/login")
 async def review_login(request: Request, password: str = Form("")):
+    door = _door()
+    if wait := login_guard.locked_for(door, request):
+        return HTMLResponse(render_login(wait_min=math.ceil(wait / 60)), status_code=429)
     # Сравниваем БАЙТЫ: compare_digest на строках с кириллицей бросает
     # TypeError, и человек с русским паролем получал бы 500 вместо «не подошёл»
     if not secrets.compare_digest(password.encode(), _password().encode()):
+        login_guard.failed(door, request)
         return HTMLResponse(render_login(failed=True), status_code=401)
+    login_guard.passed(door, request)
     response = RedirectResponse("/seasons/review", status_code=303)
     response.set_cookie(
         COOKIE,
-        _signer.dumps("ok"),
+        _signer.dumps(login_guard.fingerprint(_password())),
         max_age=MAX_AGE,
         httponly=True,
         samesite="lax",

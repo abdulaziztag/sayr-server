@@ -1,6 +1,7 @@
 """Админка для кураторского наполнения каталога: /admin."""
 
 import logging
+import math
 import re
 import secrets
 from html import escape
@@ -25,7 +26,7 @@ try:  # расположение менялось между версиями п
 except ImportError:  # pragma: no cover
     from fastapi_storages.base import StorageFile
 
-from . import stats, stats_dashboard
+from . import login_guard, stats, stats_dashboard
 from .config import GPX_DIR, REPORTS_DIR, SERVER_DIR, settings
 from .db import SessionLocal, engine
 from .models import (
@@ -120,22 +121,58 @@ def _translation_progress(model, attribute, request=None) -> str:
     return " · ".join(marks) if marks else "—"
 
 
+def _session_mark() -> str:
+    """Что лежит в сессии вошедшего: отпечаток текущих имени и пароля.
+
+    Раньше там было просто `admin: true`, и сессия переживала смену пароля.
+    Теперь сверяем отпечаток на каждом запросе: сменили SAYR_ADMIN_PASSWORD —
+    все, кто был внутри, выходят (см. login_guard.fingerprint)
+    """
+    return login_guard.fingerprint(f"{settings.admin_username}\n{settings.admin_password}")
+
+
 class BasicAuthBackend(AuthenticationBackend):
-    async def login(self, request: Request) -> bool:
+    #: Шаблоны админки — чтобы паузу после промахов показать той же формой
+    #: входа, а не голым текстом. Ставит mount_admin: пока нет объекта
+    #: Admin, нет и шаблонов
+    templates = None
+
+    async def login(self, request: Request) -> bool | Response:
+        wait = login_guard.locked_for(login_guard.ADMIN, request)
+        if wait:
+            return await self._locked(request, wait)
         form = await request.form()
-        ok_user = secrets.compare_digest(str(form.get("username", "")), settings.admin_username)
-        ok_pass = secrets.compare_digest(str(form.get("password", "")), settings.admin_password)
+        # Сравниваем БАЙТЫ, как и на проверке сезонов: compare_digest на
+        # строках с кириллицей бросает TypeError — вход с русской раскладкой
+        # отвечал пятисоткой, а кириллический пароль не подошёл бы никогда
+        ok_user = secrets.compare_digest(
+            str(form.get("username", "")).encode(), settings.admin_username.encode()
+        )
+        ok_pass = secrets.compare_digest(
+            str(form.get("password", "")).encode(), settings.admin_password.encode()
+        )
         if ok_user and ok_pass:
-            request.session.update({"admin": True})
+            login_guard.passed(login_guard.ADMIN, request)
+            request.session.update({"admin": _session_mark()})
             return True
+        login_guard.failed(login_guard.ADMIN, request)
         return False
+
+    async def _locked(self, request: Request, wait: int) -> Response:
+        minutes = math.ceil(wait / 60)
+        return await self.templates.TemplateResponse(
+            request,
+            "sqladmin/login.html",
+            {"error": f"Слишком много неверных попыток. Попробуйте через {minutes} мин."},
+            status_code=429,
+        )
 
     async def logout(self, request: Request) -> bool:
         request.session.clear()
         return True
 
     async def authenticate(self, request: Request) -> bool:
-        return bool(request.session.get("admin"))
+        return request.session.get("admin") == _session_mark()
 
 
 class RegionAdmin(ModelView, model=Region):
@@ -1395,6 +1432,16 @@ def _masked_phone(phone: str | None) -> str:
 
 
 def mount_admin(app: FastAPI) -> Admin:
+    # session_kwargs уходят в SessionMiddleware: по умолчанию он ставит
+    # cookie без Secure и с same_site=lax — на публичном сервере это
+    # сессия админа открытым текстом. И живёт она там две недели —
+    # срок задаём свой (admin_session_max_age_sec)
+    auth = BasicAuthBackend(
+        secret_key=settings.secret_key,
+        https_only=settings.admin_cookie_secure,
+        same_site="strict",
+        max_age=settings.admin_session_max_age_sec,
+    )
     admin = Admin(
         app,
         engine,
@@ -1403,15 +1450,9 @@ def mount_admin(app: FastAPI) -> Admin:
         # относительно рабочего каталога, и своя страница места находилась бы
         # только при запуске из server/
         templates_dir=str(SERVER_DIR / "templates"),
-        # session_kwargs уходят в SessionMiddleware: по умолчанию он ставит
-        # cookie без Secure и с same_site=lax — на публичном сервере это
-        # сессия админа открытым текстом
-        authentication_backend=BasicAuthBackend(
-            secret_key=settings.secret_key,
-            https_only=settings.admin_cookie_secure,
-            same_site="strict",
-        ),
+        authentication_backend=auth,
     )
+    auth.templates = admin.templates
     admin.add_view(PlaceAdmin)
     admin.add_view(PlacePhotoAdmin)
     admin.add_view(PlaceTrackAdmin)

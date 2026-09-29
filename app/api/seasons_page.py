@@ -1155,12 +1155,15 @@ _REVIEW = """<!doctype html>
 _INITIALS = "ЯФМАМИИАСОНД"
 
 
-def render_login(failed: bool = False) -> str:
-    return _fill(
-        _LOGIN,
-        css=SHARED_CSS,
-        error='<p class="err">Пароль не подошёл</p>' if failed else "",
-    )
+def render_login(failed: bool = False, wait_min: int = 0) -> str:
+    # Пауза после промахов — словами и со сроком: иначе человек решит,
+    # что опять ошибся в пароле, и будет вводить его заново вслепую
+    if wait_min:
+        error = (f'<p class="err">Слишком много неверных попыток. '
+                 f'Попробуйте через {wait_min} мин.</p>')
+    else:
+        error = '<p class="err">Пароль не подошёл</p>' if failed else ""
+    return _fill(_LOGIN, css=SHARED_CSS, error=error)
 
 
 def _facts(votes: list) -> str:
