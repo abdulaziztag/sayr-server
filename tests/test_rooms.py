@@ -800,6 +800,115 @@ async def test_заблокировавшие_друг_друга_в_одной_
     assert names(inside) == {"Лола", "Тимур"} and inside["people"] == 3
 
 
+async def _two_members(client, **kw) -> tuple[dict, dict, dict, int, int, int]:
+    """Комната организатора и двое простых участников по ссылке:
+    (комната, организатор, Лола, Тимур, id Лолы, id Тимура)"""
+    org, _ = await person()
+    room = await open_room(client, org, is_open=False, **kw)
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    lola, lola_id = await person(name="Лола")
+    timur, timur_id = await person(name="Тимур")
+    for h in (lola, timur):
+        assert (await client.post(f"/api/v1/invites/{invite}/join", headers=h)).status_code == 200
+    return room, org, lola, timur, lola_id, timur_id
+
+
+async def test_блок_между_участниками_никого_не_выводит_а_называет_общую_комнату(client):
+    """Решение владельца 29.09: двое простых участников остаются оба — иначе
+    блоком выставили бы из комнаты кого угодно. Заблокировавшему приложение
+    сразу предлагает выйти — для этого общая комната приходит в ответе"""
+    room, org, lola, _, _, timur_id = await _two_members(client, place="test-lake")
+    resp = await client.post(
+        "/api/v1/blocks", json={"user_id": timur_id}, params={"lang": "uz"}, headers=lola
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "shared_rooms": [
+            {"code": room["code"], "place_name": "Test ko‘li", "day": DAY.isoformat()}
+        ]
+    }
+    view = (await client.get(f"/api/v1/rooms/{room['code']}", headers=org)).json()
+    assert view["people"] == 3
+
+
+async def test_общие_комнаты_и_в_отменённом_походе_по_порядку_дней(client):
+    """Отменённая — тоже: её группа остаётся тем, кто идёт всё равно"""
+    later, _, lola, timur, lola_id, _ = await _two_members(
+        client, day=(DAY + timedelta(days=2)).isoformat()
+    )
+    org, _ = await person(name="Сардор")
+    sooner = await open_room(client, org, is_open=False, place="test-lake")
+    invite = sooner["invite_url"].rsplit("/", 1)[1]
+    for h in (lola, timur):
+        assert (await client.post(f"/api/v1/invites/{invite}/join", headers=h)).status_code == 200
+    assert (await client.delete(f"/api/v1/rooms/{sooner['code']}", headers=org)).status_code == 204
+
+    resp = await client.post("/api/v1/blocks", json={"user_id": lola_id}, headers=timur)
+    assert resp.status_code == 200
+    assert resp.json()["shared_rooms"] == [
+        {"code": sooner["code"], "place_name": "Тестовое озеро", "day": DAY.isoformat()},
+        {
+            "code": later["code"],
+            "place_name": "Тестовый пик",
+            "day": (DAY + timedelta(days=2)).isoformat(),
+        },
+    ]
+
+
+@pytest.mark.parametrize("organizer_blocks", [True, False], ids=["организатор", "участник"])
+async def test_блок_с_организатором_общих_комнат_не_называет(client, organizer_blocks):
+    """С организатором всё решает сам блок, как и раньше: заблокировал он —
+    участника убирают, заблокировал участник — выходит сам. Предлагать
+    выйти некуда"""
+    org, org_id = await person()
+    room = await open_room(client, org, is_open=False)
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    friend, friend_id = await person(name="Друг")
+    await client.post(f"/api/v1/invites/{invite}/join", headers=friend)
+    who, whom = (org, friend_id) if organizer_blocks else (friend, org_id)
+
+    resp = await client.post("/api/v1/blocks", json={"user_id": whom}, headers=who)
+    assert resp.status_code == 200 and resp.json() == {"shared_rooms": []}
+    view = (await client.get(f"/api/v1/rooms/{room['code']}", headers=org)).json()
+    assert view["people"] == 1
+
+
+async def test_заявка_в_общую_комнату_не_считается(client):
+    """Кто только просится, в комнате ещё нет: одобрить его к тому, с кем
+    блокировка, организатор уже не сможет (`member_blocked`)"""
+    org, _ = await person()
+    room = await open_room(client, org)
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    lola, lola_id = await person(name="Лола")
+    await client.post(f"/api/v1/invites/{invite}/join", headers=lola)
+    timur, timur_id = await person(name="Тимур")
+    await client.post(f"/api/v1/rooms/{room['code']}/requests", json={}, headers=timur)
+
+    # В обе стороны: блокирует и вступившая, и просящийся
+    for who, whom in ((lola, timur_id), (timur, lola_id)):
+        resp = await client.post("/api/v1/blocks", json={"user_id": whom}, headers=who)
+        assert resp.status_code == 200 and resp.json() == {"shared_rooms": []}
+
+
+async def test_повторный_блок_отвечает_так_же(client):
+    room, _, lola, _, lola_id, timur_id = await _two_members(client)
+    answers = [
+        (await client.post("/api/v1/blocks", json={"user_id": timur_id}, headers=lola)).json()
+        for _ in range(2)
+    ]
+    assert answers[0] == answers[1] and [r["code"] for r in answers[0]["shared_rooms"]] == [
+        room["code"]
+    ]
+    async with SessionLocal() as session:
+        rows = (await session.execute(select(UserBlock))).scalars().all()
+    assert [(b.blocker_id, b.blocked_id) for b in rows] == [(lola_id, timur_id)]
+    # Ошибки прежние
+    self_block = await client.post("/api/v1/blocks", json={"user_id": lola_id}, headers=lola)
+    assert self_block.status_code == 422 and self_block.json()["detail"] == "self_block"
+    nobody = await client.post("/api/v1/blocks", json={"user_id": 10**9}, headers=lola)
+    assert nobody.status_code == 404 and nobody.json()["detail"] == "user_not_found"
+
+
 async def test_по_ссылке_не_вступить_к_заблокированному_участнику(client):
     org, _ = await person()
     room = await open_room(client, org, is_open=False)

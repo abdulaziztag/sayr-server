@@ -1141,18 +1141,34 @@ class BlockIn(BaseModel):
     user_id: int
 
 
-@router.post("/blocks", status_code=204, dependencies=[Depends(rooms_on)])
+class SharedRoom(BaseModel):
+    code: str
+    place_name: str
+    day: date
+
+
+class BlockOut(BaseModel):
+    #: Где после блока оба остались простыми участниками: сам блок никого
+    #: из них не выводит, и приложение сразу предлагает заблокировавшему выйти
+    shared_rooms: list[SharedRoom] = []
+
+
+@router.post("/blocks", response_model=BlockOut, dependencies=[Depends(rooms_on)])
 async def block(
     body: BlockIn,
+    lang: Lang = Query(DEFAULT_LANG),
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
-) -> None:
+) -> BlockOut:
     """Заблокировать. Если уже в одной комнате: организатор убирает его,
     а если организатор — он, сам человек из комнаты выходит. Двое простых
-    участников остаются, но друг друга в комнате больше не видят (`_out`),
-    а в чужие комнаты друг к другу не попадают (`_blocked`). Отменённые
-    комнаты — тоже: их группа остаётся тем, кто идёт всё равно
-    (service._welcome), и заблокированному в ней не место"""
+    участников остаются оба — иначе блоком можно было бы выставить из
+    комнаты кого угодно, — но друг друга в комнате больше не видят (`_out`),
+    а в чужие комнаты друг к другу не попадают (`_blocked`). Такие общие
+    комнаты уходят в ответ: приложение сразу предлагает заблокировавшему
+    выйти (решение владельца 29.09). Отменённые комнаты — тоже: их группа
+    остаётся тем, кто идёт всё равно (service._welcome), и заблокированному
+    в ней не место"""
     if body.user_id == user.id:
         raise HTTPException(status_code=422, detail="self_block")
     if await session.get(User, body.user_id) is None:
@@ -1175,6 +1191,7 @@ async def block(
             )
         )
     ).scalars().unique()
+    shared = []
     for room in rooms:
         me, them = _mine(room, user), next(
             (m for m in room.members if m.user_id == body.user_id), None
@@ -1191,7 +1208,21 @@ async def block(
             me.status, me.decided_at = "left", now
             if joined:
                 kick(session, room, me)
+        elif _role(me) == _role(them) == "joined":
+            # Только оба вступивших: заявку к тому, с кем блокировка,
+            # организатор уже не одобрит (`member_blocked`) — вместе их
+            # не сведёт, и выходить незачем
+            shared.append(room)
+    out = BlockOut(
+        shared_rooms=[
+            SharedRoom(
+                code=r.code, place_name=pick(r.place.name, r.place.name_uz, lang), day=r.day
+            )
+            for r in sorted(shared, key=lambda r: (r.day, r.id))
+        ]
+    )
     await session.commit()
+    return out
 
 
 @router.delete("/blocks/{user_id}", status_code=204, dependencies=[Depends(rooms_on)])
