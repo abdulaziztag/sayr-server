@@ -250,3 +250,8 @@ systemctl start sayr-backup && journalctl -u sayr-backup -n 30 --no-pager
 
 Восстановление — в пустую базу:
 `gzip -dc /var/backups/sayr/daily/db-ГГГГ-ММ-ДД.sql.gz | sudo -u postgres psql sayr`.
+
+Перед миграциями `update.sh` снимает свой дамп,
+`/var/backups/sayr/pre-deploy-ГГГГММДД-ЧЧММСС.sql.gz`, и держит 10 последних.
+Не вышел дамп — деплой останавливается до миграций, код возвращается на
+прежний коммит.
