@@ -530,6 +530,8 @@ class ApiEvent(Base):
     __tablename__ = "api_events"
     __table_args__ = (
         Index("ix_api_events_kind_ts", "kind", "ts"),
+        # Суточный потолок событий с телефона считает события устройства
+        Index("ix_api_events_device_ts", "device", "ts"),
         # Частичный: у событий, выведенных сервером из запросов, номера нет,
         # а NULL в уникальном индексе Postgres и так не сравнивает
         Index(
@@ -1058,11 +1060,28 @@ class LoginRequest(Base):
     """
 
     __tablename__ = "login_requests"
+    __table_args__ = (
+        # Лимиты входа считают заявки номера, адреса и устройства за час
+        # и за сутки: с временем в индексе счёт читает только своё окно,
+        # а не все заявки ключа за месяц до уборки
+        Index("ix_login_requests_phone_created_at", "phone", "created_at"),
+        Index("ix_login_requests_ip_created_at", "ip", "created_at"),
+        Index("ix_login_requests_device_id_created_at", "device_id", "created_at"),
+        # Суточный потолок платных кодов. Частичный: неотправленные заявки
+        # (номера без телеграма) потолку считать незачем, а скрипт со
+        # случайными номерами наплодит их больше всех остальных. Условие —
+        # слово в слово как _PAID в api/auth.py
+        Index(
+            "ix_login_requests_codes_created_at",
+            "created_at",
+            postgresql_where=text("status <> 'unsent' AND channel <> 'test'"),
+        ),
+    )
 
     #: Свой uuid, а не номер заявки шлюза: наружу отдаём его, чтобы
     #: не светить внутренности канала
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    phone: Mapped[str] = mapped_column(String(20), index=True)
+    phone: Mapped[str] = mapped_column(String(20))
     #: telegram или sms — второй канал появится, когда будет юрлицо
     channel: Mapped[str] = mapped_column(String(16))
     gateway_request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -1071,9 +1090,11 @@ class LoginRequest(Base):
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    #: sent → verified | expired | failed
+    #: sending → sent | unsent; sent → verified | expired | failed.
+    #: unsent — шлюз код не отправил: заявка нужна только лимитам
     status: Mapped[str] = mapped_column(String(16), default="sent", server_default="sent")
     device_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: У IPv6 — сеть /64, а не сам адрес: лимит держится за неё
     ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
 
 
@@ -1095,8 +1116,16 @@ class UserFavorite(Base):
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     place_id: Mapped[int] = mapped_column(ForeignKey("places.id", ondelete="CASCADE"))
+    #: Время правки по часам телефона: решает только, чья правка свежее
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    #: Когда строку записал сервер, по его часам. По нему сверка отдаёт
+    #: новое после `since`: правка, сделанная без связи или на телефоне
+    #: с отстающими часами, по времени телефона оказывалась бы «в прошлом»
+    #: и до второго телефона не доезжала
+    server_updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -1129,8 +1158,12 @@ class UserTripDay(Base):
     answered_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    #: Как у избранного: updated_at — часы телефона, server_updated_at — сервера
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    server_updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -1148,7 +1181,11 @@ class UserSetting(Base):
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     departure_city: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    #: Как у избранного: updated_at — часы телефона, server_updated_at — сервера
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    server_updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 

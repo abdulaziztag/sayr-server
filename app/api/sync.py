@@ -5,6 +5,12 @@
 расхождении побеждает запись со свежим временем правки — этого достаточно:
 человек правит своё с одного телефона за раз, а не соревнуется сам с собой.
 
+Часов двое. Время правки (`updated_at`) — по часам телефона: оно решает
+только, чья правка свежее. Что отдать после `since`, решает время записи
+на сервере (`server_updated_at`): правку, сделанную без связи или на
+телефоне с отстающими часами, по времени телефона второй телефон считал
+бы старой и не получал никогда.
+
 Первый вход шлёт всё локальное без `since` — так гостевое избранное
 и выходы попадают в аккаунт, ничего не спрашивая у человека.
 
@@ -13,11 +19,11 @@
 """
 
 from datetime import date, datetime, timezone
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
-from sqlalchemy import select
+from pydantic import AfterValidator, BaseModel
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.tokens import current_user
@@ -29,10 +35,23 @@ router = APIRouter(prefix="/api/v1", tags=["sync"])
 Outcome = Literal["planned", "went", "skipped", "unmarked"]
 Pace = Literal["faster", "expected", "slower"]
 
+#: Ключ замка pg_advisory_xact_lock для сверок одного человека. Число любое,
+#: лишь бы не совпало с другими замками
+_SYNC_LOCK = 0x53594E43  # «SYNC»
+
+
+def _utc(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+#: Время без зоны считаем UTC: сравнение с временем из базы иначе
+#: падало на наивном и осведомлённом времени и роняло сверку в 500
+Stamp = Annotated[datetime, AfterValidator(_utc)]
+
 
 class FavoriteIn(BaseModel):
     slug: str
-    updated_at: datetime
+    updated_at: Stamp
     deleted: bool = False
 
 
@@ -43,19 +62,19 @@ class TripDayIn(BaseModel):
     pace: Pace | None = None
     distance_km: float | None = None
     elevation_gain_m: int | None = None
-    answered_at: datetime | None = None
-    updated_at: datetime
+    answered_at: Stamp | None = None
+    updated_at: Stamp
     deleted: bool = False
 
 
 class SettingsIn(BaseModel):
     departure_city: str | None = None
-    updated_at: datetime
+    updated_at: Stamp
 
 
 class SyncIn(BaseModel):
     #: Пусто — отдать всё: первый вход и переустановка
-    since: datetime | None = None
+    since: Stamp | None = None
     favorites: list[FavoriteIn] = []
     trip_days: list[TripDayIn] = []
     settings: SettingsIn | None = None
@@ -90,6 +109,15 @@ async def sync(
         {f.slug for f in body.favorites} | {t.slug for t in body.trip_days},
     )
 
+    # Сверки одного человека идут по очереди, замок держится до коммита.
+    # Две первые сверки с двух телефонов не заводят одно избранное дважды
+    # (уникальность роняла вторую в 500), а метка `now` честная: всё, что
+    # записано с меткой не позже неё, к этому моменту закоммичено и попадёт
+    # в ответ, а следующая запись получит метку позже и уедет следующей сверкой
+    await session.execute(select(func.pg_advisory_xact_lock(_SYNC_LOCK, user.id)))
+    now = (await session.execute(select(func.clock_timestamp()))).scalar_one()
+    now = now.astimezone(timezone.utc)
+
     # --- то, что пришло с телефона -----------------------------------
     favorites = {
         row.place_id: row
@@ -105,15 +133,19 @@ async def sync(
         # хранить ссылку в никуда незачем
         if place_id is None:
             continue
+        # Часы телефона, убежавшие вперёд, выигрывали бы у всех правок
+        # до той даты: время правки из будущего срезаем до времени сервера
+        at = min(item.updated_at, now)
         row = favorites.get(place_id)
         if row is None:
             row = UserFavorite(user_id=user.id, place_id=place_id)
             session.add(row)
             favorites[place_id] = row
-        elif row.updated_at >= item.updated_at:
+        elif row.updated_at >= at:
             continue
-        row.updated_at = item.updated_at
-        row.deleted_at = item.updated_at if item.deleted else None
+        row.updated_at = at
+        row.server_updated_at = now
+        row.deleted_at = at if item.deleted else None
 
     days = {
         (row.place_id, row.day): row
@@ -127,34 +159,37 @@ async def sync(
         place_id = ids.get(item.slug)
         if place_id is None:
             continue
+        at = min(item.updated_at, now)
         row = days.get((place_id, item.day))
         if row is None:
             row = UserTripDay(user_id=user.id, place_id=place_id, day=item.day)
             session.add(row)
             days[(place_id, item.day)] = row
-        elif row.updated_at >= item.updated_at:
+        elif row.updated_at >= at:
             continue
         row.outcome = item.outcome
         row.pace = item.pace
         row.distance_km = item.distance_km
         row.elevation_gain_m = item.elevation_gain_m
         row.answered_at = item.answered_at
-        row.updated_at = item.updated_at
-        row.deleted_at = item.updated_at if item.deleted else None
+        row.updated_at = at
+        row.server_updated_at = now
+        row.deleted_at = at if item.deleted else None
 
     settings_row = await session.get(UserSetting, user.id)
     if body.settings is not None:
+        at = min(body.settings.updated_at, now)
         if settings_row is None:
             settings_row = UserSetting(user_id=user.id)
             session.add(settings_row)
-        if settings_row.updated_at is None or settings_row.updated_at < body.settings.updated_at:
+        if settings_row.updated_at is None or settings_row.updated_at < at:
             settings_row.departure_city = body.settings.departure_city
-            settings_row.updated_at = body.settings.updated_at
+            settings_row.updated_at = at
+            settings_row.server_updated_at = now
 
     await session.commit()
 
     # --- то, что уезжает на телефон ----------------------------------
-    now = datetime.now(timezone.utc)
     since = body.since
     back_favorites = [
         FavoriteIn(
@@ -168,7 +203,7 @@ async def sync(
                 .join(Place, Place.id == UserFavorite.place_id)
                 .where(
                     UserFavorite.user_id == user.id,
-                    *( [UserFavorite.updated_at > since] if since else [] ),
+                    *( [UserFavorite.server_updated_at > since] if since else [] ),
                 )
             )
         ).all()
@@ -191,13 +226,15 @@ async def sync(
                 .join(Place, Place.id == UserTripDay.place_id)
                 .where(
                     UserTripDay.user_id == user.id,
-                    *( [UserTripDay.updated_at > since] if since else [] ),
+                    *( [UserTripDay.server_updated_at > since] if since else [] ),
                 )
             )
         ).all()
     ]
     back_settings = None
-    if settings_row is not None and (since is None or settings_row.updated_at > since):
+    if settings_row is not None and (
+        since is None or settings_row.server_updated_at > since
+    ):
         back_settings = SettingsIn(
             departure_city=settings_row.departure_city,
             updated_at=settings_row.updated_at,
