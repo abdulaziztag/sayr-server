@@ -1,4 +1,4 @@
-"""Админка: вход по паролю, счётчик промахов, срок сессии, выгрузки.
+"""Админка: вход по паролю, счётчик промахов, срок сессии, выгрузки, плитка снимков.
 
 Счётчик промахов (app/login_guard.py) общий для /admin и /seasons/review,
 поэтому обе двери проверяются здесь, рядом. Удаление человека из админки —
@@ -8,17 +8,22 @@
 import base64
 import json
 from contextlib import asynccontextmanager
+from html.parser import HTMLParser
 from types import SimpleNamespace
 
 import pytest
 from asgi_lifespan import LifespanManager
+from fastapi_storages import StorageFile
 from httpx import ASGITransport, AsyncClient
 from itsdangerous import TimestampSigner
+from sqlalchemy import delete, select
 from starlette.requests import Request
 
 from app import login_guard
 from app.config import Settings, settings
+from app.db import SessionLocal
 from app.main import app
+from app.models import Difficulty, Place, PlaceCategory, PlacePhoto, Region, photo_storage
 
 
 @pytest.fixture(autouse=True)
@@ -192,3 +197,51 @@ async def test_заявки_тестировщиков_выгружаются(ad
     """Намеренное исключение: адреса и так видны списком, а Play Console
     принимает тестировщиков файлом CSV"""
     assert (await admin_client.get("/admin/tester-signup/export/csv")).status_code == 200
+
+
+# --- Плитка снимков ---------------------------------------------------------
+
+
+class _Forms(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.forms: list[dict] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "form":
+            self.forms.append(dict(attrs))
+
+
+async def test_апостроф_в_названии_не_ломает_вопрос_перед_удалением(admin_client):
+    """Название подставлялось внутрь confirm('…'): браузер снимает
+    HTML-экранирование с атрибута до запуска скрипта, и апостроф ломал
+    обработчик — снимок удалялся без вопроса, а подобранное название
+    выполнилось бы в админке как код"""
+    name = "Ko'l'); alert(1); ('"
+    async with SessionLocal() as session:
+        region = (await session.execute(select(Region).limit(1))).scalar_one()
+        place = Place(
+            slug="test-apostrophe", name=name, region_id=region.id,
+            category=PlaceCategory.lake, difficulty=Difficulty.easy,
+            lat=41.0, lng=70.0, short_desc="",
+        )
+        session.add(place)
+        await session.flush()
+        session.add(PlacePhoto(place_id=place.id, sort_order=0,
+                               file=StorageFile(name="apostrophe.jpg", storage=photo_storage)))
+        await session.commit()
+        place_id = place.id
+    try:
+        page = await admin_client.get(f"/admin/place/details/{place_id}")
+        assert page.status_code == 200
+        parser = _Forms()
+        parser.feed(page.text)
+        deleting = [f for f in parser.forms if f.get("action", "").endswith("/photo-delete")]
+        assert len(deleting) == 1
+        form = deleting[0]
+        assert form["onsubmit"] == "return confirm(this.dataset.confirm)"
+        assert form["data-confirm"] == f"Убрать этот снимок у места «{name}»?"
+    finally:
+        async with SessionLocal() as session:
+            await session.execute(delete(Place).where(Place.id == place_id))
+            await session.commit()

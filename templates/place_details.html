@@ -103,10 +103,15 @@
             Правка
           </a>
           {# Удаление — только POST: ссылку GET браузер или ускоритель
-             может дёрнуть сам, и снимок пропадёт без участия человека #}
+             может дёрнуть сам, и снимок пропадёт без участия человека.
+             Вопрос лежит в data-confirm, а не внутри confirm('…'): браузер
+             снимает HTML-экранирование с атрибута до запуска скрипта, и
+             апостроф в названии («Ko'l») ломал обработчик — снимок удалялся
+             без вопроса, а подобранное название выполнилось бы как код #}
           <form method="post"
                 action="{{ url_for('admin:view-place-delete_photo') }}"
-                onsubmit="return confirm('Убрать этот снимок у места «{{ model.name }}»?')">
+                data-confirm="Убрать этот снимок у места «{{ model.name }}»?"
+                onsubmit="return confirm(this.dataset.confirm)">
             <input type="hidden" name="photo_id" value="{{ photo.id }}">
             <input type="hidden" name="place_id" value="{{ model.id }}">
             <button type="submit" class="btn btn-sm btn-outline-danger"

@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     # SAYR_SEASONS_OPEN=1 в .env и перезапуск службы
     seasons_open: bool = False
 
+    # /docs, /redoc и /openapi.json. На бою выключены: схема раскрывает всё
+    # API, включая ручки за флагами (комнаты, игра сезонов), а приложениям
+    # она не нужна — они собраны против кода, не против схемы. Локально
+    # включается SAYR_API_DOCS=1
+    api_docs: bool = False
+
     # Пусто — CORS выключен. Нативным клиентам он не нужен, список понадобится,
     # только если появится веб-морда: SAYR_CORS_ORIGINS=["https://sayr.uz"]
     cors_origins: list[str] = []
