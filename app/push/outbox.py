@@ -102,6 +102,14 @@ async def send_outbox(session: AsyncSession, transports: dict) -> int:
     Устройство человека — то, где он вошёл (живая сессия), с живым
     push-токеном этого же устройства. Нет таких — пуш просто снимается:
     в приложении человек и так увидит всё в комнате.
+
+    Токен при этом должен быть прислан после входа. Гость не может
+    привязать токен к устройству, где кто-то вошёл (api/push.py), но
+    до входа устройство свободно: токен, присланный под чужим номером
+    заранее, дождался бы, пока хозяин номера войдёт, и получал бы его
+    пуши. Прислан после входа — значит, прислан под этой сессией.
+    Своё приложение присылает токен заново само: iOS — при каждом
+    возврате на экран, Android — при каждом запуске.
     """
     now = datetime.now(timezone.utc)
     rows = list(
@@ -123,6 +131,7 @@ async def send_outbox(session: AsyncSession, transports: dict) -> int:
                 .where(
                     UserSession.user_id == row.user_id,
                     UserSession.revoked_at.is_(None),
+                    PushToken.last_seen >= UserSession.created_at,
                     PushToken.disabled_at.is_(None),
                 )
             )
