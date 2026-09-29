@@ -1,7 +1,8 @@
-"""Админка: вход по паролю, счётчик промахов, срок сессии.
+"""Админка: вход по паролю, счётчик промахов, срок сессии, выгрузки.
 
 Счётчик промахов (app/login_guard.py) общий для /admin и /seasons/review,
-поэтому обе двери проверяются здесь, рядом.
+поэтому обе двери проверяются здесь, рядом. Удаление человека из админки —
+в test_rooms.py: там всё, чтобы завести ему комнаты.
 """
 
 import base64
@@ -172,3 +173,22 @@ async def test_старая_сессия_без_отпечатка_не_пуск
     async with from_ip("198.51.100.30") as c:
         c.cookies.set("session", forged)
         assert (await c.get("/admin/place/list")).status_code == 302
+
+
+# --- Выгрузки ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "identity", ["user", "push-token", "place-report", "room-report", "tg-message"]
+)
+async def test_выгрузки_с_личными_данными_закрыты(admin_client, identity):
+    """Выгрузка идёт мимо маски номера: /admin/user/export/csv отдавала
+    телефоны всех людей целиком"""
+    assert (await admin_client.get(f"/admin/{identity}/export/csv")).status_code == 403
+    assert (await admin_client.get(f"/admin/{identity}/export/json")).status_code == 403
+
+
+async def test_заявки_тестировщиков_выгружаются(admin_client):
+    """Намеренное исключение: адреса и так видны списком, а Play Console
+    принимает тестировщиков файлом CSV"""
+    assert (await admin_client.get("/admin/tester-signup/export/csv")).status_code == 200

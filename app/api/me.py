@@ -12,12 +12,13 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi_storages import StorageFile
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.schemas import UserOut
 from ..auth.tokens import current_user
 from ..db import get_session
-from ..models import Gender, User, avatar_storage
+from ..models import Gender, LoginRequest, User, avatar_storage
 from ..moderation import is_clean
 from ..services.images import drop_avatar, store_avatar
 from .rooms import on_account_deleted
@@ -125,6 +126,29 @@ async def clear_avatar(
     return UserOut.of(user)
 
 
+async def forget_account(session: AsyncSession, user: User) -> str | None:
+    """Всё удаление аккаунта, кроме коммита и файла фото.
+
+    Одно на два пути: кнопка в приложении (delete_me) и письменная просьба,
+    которую владелец исполняет в админке (admin.UserAdmin). Пока админка
+    просто стирала строку, у человека оставалось фото по открытой ссылке,
+    сообщения в группах и комнаты, живые без организатора.
+
+    Отдаёт имя файла фото: убирать его вызывающий должен после коммита —
+    иначе откат транзакции оставил бы анкету со ссылкой в никуда.
+    """
+    avatar = Path(user.avatar.name).name if user.avatar else None
+    # Походы человека отменяются, из чужих групп Telegram его уберут —
+    # до удаления: строки участия уйдут каскадом вместе с ним
+    await on_account_deleted(session, user)
+    # Заявки на код держатся за номер, а не за человека, и каскадом
+    # не уходят. Номер — единственное, что мы о нём знали; после удаления
+    # его не должно оставаться нигде
+    await session.execute(delete(LoginRequest).where(LoginRequest.phone == user.phone))
+    await session.delete(user)
+    return avatar
+
+
 @router.delete("", status_code=204)
 async def delete_me(
     user: User = Depends(current_user),
@@ -137,11 +161,7 @@ async def delete_me(
     события статистики не трогаем — номера телефона в них нет и связать
     их с человеком нечем.
     """
-    avatar = Path(user.avatar.name).name if user.avatar else None
-    # Походы человека отменяются, из чужих групп Telegram его уберут —
-    # до удаления: строки участия уйдут каскадом вместе с ним
-    await on_account_deleted(session, user)
-    await session.delete(user)
+    avatar = await forget_account(session, user)
     await session.commit()
     if avatar:
         drop_avatar(avatar)

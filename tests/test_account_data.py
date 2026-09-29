@@ -5,6 +5,7 @@
 """
 
 import io
+import uuid
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
@@ -15,6 +16,7 @@ from app.auth.tokens import new_token
 from app.config import AVATARS_DIR
 from app.db import SessionLocal
 from app.models import (
+    LoginRequest,
     Place,
     TripIntent,
     User,
@@ -213,6 +215,31 @@ async def test_удаление_аккаунта_уносит_всё_своё(cl
     assert not (AVATARS_DIR / avatar).exists()
     # Токен после удаления не работает
     assert (await client.get("/api/v1/me", headers=_auth(token))).status_code == 401
+
+
+async def test_удаление_аккаунта_стирает_заявки_на_код_по_номеру(client):
+    """Заявки держатся за номер, а не за человека, и каскадом не уходят —
+    а номер после удаления не должен оставаться нигде"""
+    token, _ = await _login("+998901110022")
+    phones = ("+998901110022", "+998901110033")
+    async with SessionLocal() as session:
+        for phone in phones:
+            session.add(LoginRequest(id=str(uuid.uuid4()), phone=phone, channel="telegram",
+                                     expires_at=NOW))
+        await session.commit()
+    try:
+        assert (await client.delete("/api/v1/me", headers=_auth(token))).status_code == 204
+        async with SessionLocal() as session:
+            left = (
+                await session.execute(
+                    select(LoginRequest.phone).where(LoginRequest.phone.in_(phones))
+                )
+            ).scalars().all()
+        assert left == ["+998901110033"], "чужую заявку не трогаем, свою — стираем"
+    finally:
+        async with SessionLocal() as session:
+            await session.execute(delete(LoginRequest).where(LoginRequest.phone.in_(phones)))
+            await session.commit()
 
 
 # --- Синхронизация --------------------------------------------------------

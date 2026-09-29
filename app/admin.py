@@ -58,7 +58,7 @@ from .reports import STATUS_RU, telegram_url, topic_names
 from .seasons import LIMITS
 from .services import attachments
 from .services.gpx import recorded_from_target, reverse_track, thin_if_heavy, track_stats
-from .services.images import make_thumbnail, retire_photo, store_upload
+from .services.images import drop_avatar, make_thumbnail, retire_photo, store_upload
 from .services.nearby import rebuild_for_track
 
 
@@ -656,7 +656,9 @@ class TesterSignupAdmin(ModelView, model=TesterSignup):
     }
     form_columns = [TesterSignup.invited]
     can_create = False
-    # Удалять можно: спам-адреса чистятся отсюда же
+    # Удалять можно: спам-адреса чистятся отсюда же.
+    # Выгрузка остаётся намеренно: адреса и так видны в списке целиком,
+    # а список тестировщиков Play Console заливается как раз файлом CSV
 
 
 
@@ -881,7 +883,11 @@ class PlaceReportAdmin(ModelView, model=PlaceReport):
     # wtforms-поля, и «rows» там роняет форму
     form_widget_args = {"admin_note": {"rows": 4}}
     can_create = False
-    # Удалять можно: спам чистится отсюда же
+    # Удалять можно: спам чистится отсюда же.
+    # Выгрузки нет: в заявках чужие контакты и чужие слова, а на /privacy
+    # обещано, что разобранная заявка удаляется целиком — копия в CSV
+    # на чьём-то ноутбуке это обещание не выполнит
+    can_export = False
 
     def list_query(self, request: Request) -> Select:
         return self._picked(select(self.model), request)
@@ -1198,6 +1204,9 @@ class PushTokenAdmin(ModelView, model=PushToken):
     }
     can_create = False
     can_edit = False
+    # Строка установки — это устройство конкретного человека: номер
+    # устройства и город выезда. Смотреть — да, уносить списком — незачем
+    can_export = False
 
 
 class UserAdmin(ModelView, model=User):
@@ -1240,6 +1249,29 @@ class UserAdmin(ModelView, model=User):
     column_formatters_detail = {User.phone: lambda row, _: _masked_phone(row.phone)}
     can_create = False
     can_edit = False
+    # Выгрузка идёт мимо форматтеров: /admin/user/export/csv отдавала
+    # номера целиком, всех разом — ровно то, от чего прячет маска
+    can_export = False
+
+    async def delete_model(self, request: Request, pk) -> None:
+        """Удаление по письменной просьбе — тем же путём, что из приложения.
+
+        Не хуки on_model_delete и after_model_delete вокруг удаления
+        sqladmin, а своё целиком: уборка и само удаление должны пройти одной
+        транзакцией, как в delete_me. Иначе сбой посередине оставил бы
+        человека в базе с уже отменёнными походами.
+        """
+        from .api.me import forget_account
+
+        async with SessionLocal() as session:
+            user = await session.get(User, int(pk))
+            if user is None:
+                return
+            avatar = await forget_account(session, user)
+            await session.commit()
+        if avatar:
+            drop_avatar(avatar)
+        log.info("аккаунт %s удалён из админки", pk)
 
 
 class RoomAdmin(ModelView, model=Room):
@@ -1308,6 +1340,8 @@ class RoomReportAdmin(ModelView, model=RoomReport):
     }
     can_create = False
     can_edit = False
+    # Кто на кого жаловался и что написал — выгружать это списком незачем
+    can_export = False
 
     async def _resolve(self, request: Request, ban: bool) -> Response:
         from datetime import datetime, timezone
@@ -1421,6 +1455,9 @@ class TgMessageAdmin(ModelView, model=TgMessage):
     }
     can_create = False
     can_edit = False
+    # Чужая переписка: срок жизни и стирание по /leave не догонят копию,
+    # унесённую выгрузкой
+    can_export = False
 
 
 def _masked_phone(phone: str | None) -> str:
