@@ -1,9 +1,14 @@
-"""Первый вход Sayr Admin: `python -m app.tg.login` на сервере, по ssh.
+"""Первый вход Sayr Admin: `uv run --with qrcode python -m app.tg.login`
+на сервере, по ssh.
 
-Спросит номер сим-карты Sayr Admin, код и пароль двухэтапной проверки.
-Куда Telegram отправил код, пишет словами: в приложение, SMS, почту — или
-туда, куда он не дойдёт (Firebase умеют только официальные приложения).
-Пустой ввод вместо кода — выслать другим способом.
+Два способа. QR-код: скрипт рисует его в терминале, телефон с открытым
+Sayr Admin сканирует его в «Настройки → Устройства → Подключить устройство»;
+код никуда не отправляется — надёжнее всего, новым аккаунтам Telegram
+коды для входа через API доставляет не всегда. Кодом по номеру: скрипт
+пишет словами, куда Telegram его отправил (в приложение, SMS, почту — или
+туда, куда он не дойдёт: Firebase умеют только официальные приложения);
+пустой ввод вместо кода — выслать другим способом. Потом, если стоит,
+пароль двухэтапной проверки.
 
 Ключи и строку сессии дописывает в `.env`, сессию — закомментированной:
 убрать `#` и `systemctl restart sayr-tg` — отдельный осознанный шаг.
@@ -140,6 +145,85 @@ async def _sign_in(client, phone: str, sent, code: str) -> None:
         await client.sign_in(phone, code, phone_code_hash=sent.phone_code_hash)
 
 
+async def _password(client) -> None:
+    from telethon import errors
+
+    while True:
+        try:
+            await client.sign_in(password=getpass("Пароль двухэтапной проверки: "))
+            return
+        except errors.PasswordHashInvalidError:
+            print("Пароль не тот.")
+
+
+def _draw(url: str) -> None:
+    try:
+        import qrcode
+    except ImportError:
+        print(f"\nНет пакета qrcode — запустите через uv run --with qrcode. Ссылка для QR: {url}")
+        return
+    qr = qrcode.QRCode(border=2)
+    qr.add_data(url)
+    # Терминал тёмный: светлыми рисуем светлые клетки, тёмные — фон
+    qr.print_ascii(invert=True)
+
+
+async def _qr_login(client) -> None:
+    """Токен в QR живёт ~30 с — по истечении рисуем новый, пока не отсканируют"""
+    import datetime
+
+    from telethon import errors
+
+    login = await client.qr_login()
+    while True:
+        print("\nТелефон с Sayr Admin: Настройки → Устройства → Подключить устройство — "
+              "и навести камеру на код.")
+        _draw(login.url)
+        left = (login.expires - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
+        try:
+            await login.wait(timeout=max(left, 5))
+            return
+        except asyncio.TimeoutError:
+            await login.recreate()
+        except errors.SessionPasswordNeededError:
+            await _password(client)
+            return
+
+
+async def _code_login(client, phone: str) -> None:
+    from telethon import errors
+
+    try:
+        sent = await _send(client, phone)
+    except errors.PhoneNumberInvalidError:
+        raise SystemExit("Telegram не знает такого номера — проверьте, что он с +998.")
+    except errors.PhoneNumberBannedError:
+        raise SystemExit("Номер заблокирован в Telegram.")
+    except errors.FloodWaitError as e:
+        raise SystemExit(f"Слишком много попыток — Telegram просит подождать {e.seconds} с.")
+    print(_where(sent))
+    while True:
+        code = input("Код (пусто — выслать иначе): ").strip()
+        if not code:
+            sent = await _resend(client, phone, sent)
+            print(_where(sent))
+            continue
+        try:
+            await _sign_in(client, phone, sent, code)
+            return
+        except errors.SessionPasswordNeededError:
+            await _password(client)
+            return
+        except (errors.PhoneCodeInvalidError, errors.CodeInvalidError):
+            print("Код не тот — ещё раз.")
+        except errors.PhoneCodeExpiredError:
+            print("Код истёк — высылаю новый.")
+            sent = await _send(client, phone)
+            print(_where(sent))
+        except errors.RPCError as e:
+            print(f"Telegram ответил: {e}")
+
+
 def _remember(api_id: int, api_hash: str, session: str) -> None:
     """Дописывает в .env то, чего там ещё нет; уже записанное не трогает"""
     text = ENV.read_text() if ENV.exists() else ""
@@ -164,49 +248,20 @@ def _remember(api_id: int, api_hash: str, session: str) -> None:
 
 
 async def main() -> None:
-    from telethon import TelegramClient, errors
+    from telethon import TelegramClient
     from telethon.sessions import StringSession
 
     api_id = settings.tg_api_id or int(input("api_id с my.telegram.org: "))
     api_hash = settings.tg_api_hash or input("api_hash с my.telegram.org: ").strip()
-    phone = re.sub(r"[^\d+]", "", input("Номер Sayr Admin (+998…): "))
+    way = input("Вход: 1 — QR-кодом с телефона, 2 — кодом по номеру [1]: ").strip() or "1"
+    phone = "" if way == "1" else re.sub(r"[^\d+]", "", input("Номер Sayr Admin (+998…): "))
     client = TelegramClient(StringSession(), api_id, api_hash)
     await client.connect()
     try:
-        try:
-            sent = await _send(client, phone)
-        except errors.PhoneNumberInvalidError:
-            raise SystemExit("Telegram не знает такого номера — проверьте, что он с +998.")
-        except errors.PhoneNumberBannedError:
-            raise SystemExit("Номер заблокирован в Telegram.")
-        except errors.FloodWaitError as e:
-            raise SystemExit(f"Слишком много попыток — Telegram просит подождать {e.seconds} с.")
-        print(_where(sent))
-        while True:
-            code = input("Код (пусто — выслать иначе): ").strip()
-            if not code:
-                sent = await _resend(client, phone, sent)
-                print(_where(sent))
-                continue
-            try:
-                await _sign_in(client, phone, sent, code)
-                break
-            except errors.SessionPasswordNeededError:
-                while True:
-                    try:
-                        await client.sign_in(password=getpass("Пароль двухэтапной проверки: "))
-                        break
-                    except errors.PasswordHashInvalidError:
-                        print("Пароль не тот.")
-                break
-            except (errors.PhoneCodeInvalidError, errors.CodeInvalidError):
-                print("Код не тот — ещё раз.")
-            except errors.PhoneCodeExpiredError:
-                print("Код истёк — высылаю новый.")
-                sent = await _send(client, phone)
-                print(_where(sent))
-            except errors.RPCError as e:
-                print(f"Telegram ответил: {e}")
+        if way == "1":
+            await _qr_login(client)
+        else:
+            await _code_login(client, phone)
         me = await client.get_me()
         print(f"\nВошли как {me.first_name} (id {me.id}).")
         _remember(api_id, api_hash, client.session.save())
