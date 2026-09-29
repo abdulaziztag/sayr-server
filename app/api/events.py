@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import settings
 from ..db import get_session
 from ..models import ApiEvent
-from ..stats import parse_app_header, touch_device
+from ..stats import clean_device, parse_app_header, touch_device
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +37,9 @@ router = APIRouter(prefix="/api/v1", tags=["events"])
 
 BATCH_MAX = 100
 #: Событий на устройство в сутки. Защита от зациклившегося клиента,
-#: а не от человека: живой человек столько не нажмёт
+#: а не от человека: живой человек столько не нажмёт. От злого умысла
+#: это не защита — номер устройства выбирает клиент, и новый номер
+#: получает новый потолок. Поток с одного адреса режет limit_req в nginx
 DAILY_CAP = 500
 
 _slug = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
@@ -152,7 +154,10 @@ def clamp_at(raw: str, now: datetime, retention_days: int) -> datetime | None:
 
     События едут из гор с опозданием, и день им нужен настоящий, но часы
     на телефоне врут: будущее ложится на сейчас, глубокое прошлое —
-    на границу окна, чтобы ротация всё равно его свернула.
+    на границу окна, чтобы ротация всё равно его свернула. Граница — на
+    сутки внутрь срока: самый старый день окна чистка уже подъедает,
+    и ротация его не пересчитывает (stats.rotate), так что событие,
+    положенное туда, пропало бы вместе с ним.
     """
     try:
         at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
@@ -160,7 +165,7 @@ def clamp_at(raw: str, now: datetime, retention_days: int) -> datetime | None:
         return None
     if at.tzinfo is None:
         at = at.replace(tzinfo=timezone.utc)
-    floor = now - timedelta(days=retention_days)
+    floor = now - timedelta(days=retention_days - 1)
     return min(max(at, floor), now)
 
 
@@ -170,7 +175,9 @@ async def post_events(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> Response:
-    device = (request.headers.get("x-device-id") or "").strip()[:64]
+    # Номер не по форме — не наш клиент: без него событие ни к чему
+    # не привязать, а с ним каждый выдуманный номер был бы новым устройством
+    device = clean_device(request.headers.get("x-device-id"))
     info = parse_app_header(request.headers.get("x-sayr-app"))
     if not device or (info is not None and info.debug and not settings.stats_count_debug):
         return Response(status_code=204)

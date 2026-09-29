@@ -51,6 +51,20 @@ def clean_mark(raw: str | None) -> str | None:
     return "".join(c for c in raw[:_MARK_MAX] if c.isalnum() or c in "-_") or None
 
 
+# Номер устройства — UUID, который приложение заводит при первом запуске:
+# так на обеих платформах с первой версии. Остальное — не наш клиент,
+# и такой номер не заводит строку в devices и не попадает в уникальные:
+# иначе каждый выдуманный заголовок ложился бы на дашборд «новым
+# устройством». От перебора настоящих UUID это не защита — её держит
+# limit_req в nginx
+_DEVICE_ID = re.compile(r"^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$")
+
+
+def clean_device(raw: str | None) -> str | None:
+    value = (raw or "").strip()
+    return value if _DEVICE_ID.match(value) else None
+
+
 @dataclass(frozen=True)
 class AppInfo:
     """Заголовок X-Sayr-App: `android/1.7.0 ru 14` — платформа, версия,
@@ -164,7 +178,9 @@ class StatsMiddleware:
         app_header = None
         for name, value in scope.get("headers", []):
             if name == DEVICE_HEADER:
-                device = value.decode("latin-1", "ignore").strip()[:64] or None
+                # Чужой формат — как заголовка нет: просмотр в счёт,
+                # в уникальные нет
+                device = clean_device(value.decode("latin-1", "ignore"))
             elif name == APP_HEADER:
                 app_header = value.decode("latin-1", "ignore")
         info = parse_app_header(app_header)
@@ -234,6 +250,10 @@ async def _record(
 
 # MARK: - Ротация
 
+#: Первая половина ключа advisory-блокировки пересчёта дня; вторая — сам
+#: день. Число любое, лишь бы его не брал никто другой в этой базе
+_ROLLUP_LOCK = 20260815
+
 
 async def rotate(session: AsyncSession, today: date | None = None) -> None:
     """Досчитать агрегаты за закрытые дни и стереть сырьё старше срока.
@@ -243,35 +263,64 @@ async def rotate(session: AsyncSession, today: date | None = None) -> None:
     daily_stats, откатывалась вместе с ней и чистка сырья — то есть падал
     ровно тот шаг, ради которого всё и затевалось. На бою это случилось
     19 августа: UniqueViolation по daily_stats_pkey.
+
+    Закрытый день сворачивается не один раз. События с телефона едут
+    из гор с опозданием до срока хранения (api/events.py, clamp_at),
+    а дашборд берёт закрытые дни только из свёрток: свёрнутый однажды
+    день терял всё, что доехало после, — навсегда, когда сырьё стиралось.
+    Поэтому день пересчитывается, пока сырьё за него целиком в окне
+    и его число событий разошлось со свёрткой. Сверка стоит почти столько
+    же, сколько прежний поиск несвёрнутых дней, — тот же проход по сырью,
+    только с подсчётом, — а пересчитываются лишь разошедшиеся дни, а не
+    все тридцать каждый час.
     """
     today = today or date.today()
+    day_of = cast(ApiEvent.ts, Date)
+    # Самый старый день окна чистка уже подъедает, а более ранние стёрла:
+    # пересчёт свернул бы остаток и затёр полные числа меньшими
+    fresh = today - timedelta(days=settings.stats_retention_days)
 
     done = set(
         (await session.execute(select(DailyStat.day).where(DailyStat.day < today)))
         .scalars()
         .all()
     )
-    days = (
+    raw = dict(
         (
             await session.execute(
-                select(distinct(cast(ApiEvent.ts, Date))).where(
-                    cast(ApiEvent.ts, Date) < today
-                )
+                select(day_of, func.count()).where(day_of < today).group_by(day_of)
+            )
+        ).all()
+    )
+    rolled = dict(
+        (
+            await session.execute(
+                select(DailyCount.day, func.sum(DailyCount.events))
+                .where(DailyCount.day > fresh, DailyCount.day < today)
+                .group_by(DailyCount.day)
+            )
+        ).all()
+    )
+    for day in sorted(raw):
+        if day in done and (day <= fresh or rolled.get(day) == raw[day]):
+            continue
+        # Один день — один воркер: юнит поднимает uvicorn с двумя, и оба
+        # крутят ротацию в один и тот же час. Второй ждёт, пока первый
+        # закоммитит, и пишет поверх те же числа, а не сцепляется с ним
+        # на строках свёрток. Дни идут по порядку — взаимной блокировки нет
+        await session.execute(select(func.pg_advisory_xact_lock(_ROLLUP_LOCK, day.toordinal())))
+        # Сначала daily_counts, потом daily_stats: сверка идёт по первой,
+        # и событие, доехавшее между ними, должно дать расхождение
+        # и пересчёт в следующий час, а не спрятаться в совпавшей сумме
+        await rollup_day(session, day)
+        totals = await _totals(session, day)
+        stmt = insert(DailyStat).values(**totals)
+        await session.execute(
+            stmt.on_conflict_do_update(
+                index_elements=[DailyStat.day],
+                set_={k: stmt.excluded[k] for k in totals if k != "day"},
             )
         )
-        .scalars()
-        .all()
-    )
-    for day in sorted(set(days) - done):
-        # on_conflict_do_nothing: юнит поднимает uvicorn с двумя воркерами,
-        # и каждый крутит свою ротацию. Проигравший молча проходит мимо
-        # вместо того, чтобы уронить транзакцию
-        await session.execute(
-            insert(DailyStat)
-            .values(**await _totals(session, day))
-            .on_conflict_do_nothing(index_elements=[DailyStat.day])
-        )
-        await rollup_day(session, day)
     await session.commit()
 
     await rotate_weeks(session, today)
