@@ -9,6 +9,9 @@ async def test_удаление_аккаунта_по_русски(client):
     # Без приложения — письмом, с подтверждением номера
     assert "mailto:" in r.text and "кодом" in r.text
     assert 'href="/uz/delete-account"' in r.text
+    # Заявки на вход удаление обезличивает, но не стирает: по ним считаются
+    # лимиты. Страница для Google Play должна говорить об этом прямо
+    assert "Заявки на вход — тоже без номера" in r.text
 
 
 async def test_удаление_аккаунта_по_узбекски(client):
@@ -18,3 +21,4 @@ async def test_удаление_аккаунта_по_узбекски(client):
     assert "«Profil» → «Akkauntni o‘chirish»" in r.text
     assert "mailto:" in r.text
     assert 'href="/delete-account"' in r.text
+    assert "Kirish so‘rovlari ham raqamsiz qoladi" in r.text

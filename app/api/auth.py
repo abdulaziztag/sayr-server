@@ -14,13 +14,16 @@
 import ipaddress
 import logging
 import re
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from psycopg.errors import LockNotAvailable
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import Select, delete, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -61,6 +64,23 @@ LIMITS = {
 #: Ключ замка pg_advisory_xact_lock, под которым проверяются лимиты
 #: и пишется заявка. Число любое, лишь бы не совпало с другими замками
 _LIMITS_LOCK = 0x4C4F4749  # «LOGI»
+#: Сколько ждать этот замок. Под ним пара счётов по индексам и одна запись:
+#: если очередь не сходит за секунды, база занята чем-то другим, а каждый
+#: ожидающий держит соединение из пула — дольше ждать значит положить API
+_LOCK_WAIT = "2s"
+
+#: Платный код: ушёл человеку, а не проверяющему. Условие — слово в слово
+#: как у частичного индекса ix_login_requests_codes_created_at и строкой,
+#: а не параметрами: общий план закешированного запроса не знает значений
+#: параметров, не может взять этот индекс и пересчитывал бы все заявки
+#: за сутки, включая неотправленные, — а их скрипт плодит больше всего
+_PAID = text("status <> 'unsent' AND channel <> 'test'")
+#: Обращение к шлюзу — любая заявка, кроме заявок проверяющего
+_GATEWAY = text("channel <> 'test'")
+
+#: Когда журнал последний раз слышал о потолке. Отбитые потолком запросы
+#: ничего не пишут и могут идти сплошным потоком — строки в час хватит
+_cap_warned_at = float("-inf")
 
 _PHONE = re.compile(r"^\+\d{8,15}$")
 _CODE = re.compile(r"^\d{4,8}$")
@@ -81,26 +101,39 @@ def _net(host: str) -> str:
     return str(addr)
 
 
-async def _count(session: AsyncSession, window: int, *where) -> int:
+def _counted(window: int, *where) -> Select:
     since = func.now() - timedelta(seconds=window)
     return (
-        await session.execute(
-            select(func.count())
-            .select_from(LoginRequest)
-            .where(LoginRequest.created_at > since, *where)
-        )
-    ).scalar_one()
+        select(func.count())
+        .select_from(LoginRequest)
+        .where(LoginRequest.created_at > since, *where)
+    )
+
+
+async def _count(session: AsyncSession, window: int, *where) -> int:
+    return (await session.execute(_counted(window, *where))).scalar_one()
+
+
+def _warn_cap(what: str, cap: int) -> None:
+    global _cap_warned_at
+    if time.monotonic() - _cap_warned_at >= 3600:
+        _cap_warned_at = time.monotonic()
+        log.warning("вход: исчерпан суточный потолок %s (%s)", what, cap)
 
 
 async def _check_limits(
     session: AsyncSession, phone: str, device: str | None, ip: str, test_phone: bool
 ) -> None:
-    """429, если исчерпан лимит; 503, если исчерпан суточный потолок кодов.
+    """429, если исчерпан лимит; 503, если исчерпан суточный потолок.
 
     Отбитый запрос ничего не пишет: скрипт, упёршийся в лимит адреса или
     устройства, больше не сжигает чужому номеру его квоту. Адрес и устройство
     считают все попытки, дошедшие до шлюза, номер — только ушедшие коды:
     сбой шлюза не вина человека.
+
+    Каждый счёт — отрезок индекса по своему ключу за своё окно, а заявок
+    за сутки не больше потолка обращений к шлюзу: цена проверки не растёт,
+    сколько бы скрипт ни прислал.
     """
     sent = LoginRequest.status != "unsent"
     for bucket, key, where in (
@@ -113,11 +146,15 @@ async def _check_limits(
         if key and await _count(session, window, where) >= limit:
             raise HTTPException(status_code=429, detail="too_often")
 
-    # Потолок бережёт счёт шлюза, код проверяющего бесплатный
-    cap = settings.login_codes_per_day
-    if cap and not test_phone:
-        if await _count(session, 86_400, LoginRequest.channel != "test", sent) >= cap:
-            log.warning("вход: исчерпан суточный потолок кодов (%s)", cap)
+    # Потолки бережут счёт шлюза, код проверяющего бесплатный
+    if test_phone:
+        return
+    for cap, where, what in (
+        (settings.login_gateway_calls_per_day, _GATEWAY, "обращений к шлюзу"),
+        (settings.login_codes_per_day, _PAID, "кодов"),
+    ):
+        if cap and await _count(session, 86_400, where) >= cap:
+            _warn_cap(what, cap)
             raise HTTPException(status_code=503, detail="daily_cap")
 
 
@@ -217,8 +254,15 @@ async def request_code(
     await _check_limits(session, phone, device, ip, test_phone)
     # Потом ещё раз под замком — и сразу пишем заявку: иначе пачка
     # параллельных запросов прошла бы вся, пока ни одной заявки ещё нет.
-    # Замок транзакционный, коммит ниже его отпускает — к шлюзу идём без него
-    await session.execute(select(func.pg_advisory_xact_lock(_LIMITS_LOCK, 0)))
+    # Замок транзакционный, коммит ниже его отпускает — к шлюзу идём без него.
+    # Не дождались — 503: приложение скажет «попробуйте позже», а не «через час»
+    await session.execute(select(func.set_config("lock_timeout", _LOCK_WAIT, True)))
+    try:
+        await session.execute(select(func.pg_advisory_xact_lock(_LIMITS_LOCK, 0)))
+    except OperationalError as exc:
+        if not isinstance(exc.orig, LockNotAvailable):
+            raise
+        raise HTTPException(status_code=503, detail="busy") from None
     await _check_limits(session, phone, device, ip, test_phone)
 
     now = datetime.now(timezone.utc)
@@ -285,12 +329,22 @@ async def verify_code(
         raise HTTPException(status_code=422, detail="code_invalid_format")
 
     # Строка под замком до конца проверки: иначе параллельные догадки
-    # читали бы одно и то же число попыток и проверялись сверх лимита
-    row = (
-        await session.execute(
-            select(LoginRequest).where(LoginRequest.id == body.request_id).with_for_update()
-        )
-    ).scalar_one_or_none()
+    # читали бы одно и то же число попыток и проверялись сверх лимита.
+    # Занятую не ждём: замок держится, пока шлюз проверяет код (до 10 с),
+    # и догадки к одной заявке стояли бы в очереди, каждая с соединением
+    # из пула. Приложение второй раз, не дождавшись ответа, код не шлёт
+    try:
+        row = (
+            await session.execute(
+                select(LoginRequest)
+                .where(LoginRequest.id == body.request_id)
+                .with_for_update(nowait=True)
+            )
+        ).scalar_one_or_none()
+    except OperationalError as exc:
+        if not isinstance(exc.orig, LockNotAvailable):
+            raise
+        raise HTTPException(status_code=429, detail="too_often") from None
     if row is None:
         raise HTTPException(status_code=404, detail="request_not_found")
     if channel is None and row.channel != "test":

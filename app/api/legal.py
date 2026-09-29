@@ -296,7 +296,9 @@ _DELETE = f"""
 
 <h2>Что остаётся</h2>
 <p>Обезличенная статистика: в ней нет ни номера, ни имени, и она стирается
-сама не позже чем через 30 дней. Подробнее — в
+сама не позже чем через 30 дней. Заявки на вход — тоже без номера: только
+время, случайный номер устройства и IP-адрес, по ним считаются лимиты
+на отправку кодов; они стираются в тот же срок. Подробнее — в
 <a href="/privacy">политике конфиденциальности</a>.</p>
 """
 
@@ -324,7 +326,9 @@ narsalarni 30 kundan kechiktirmay o‘chiramiz va xat bilan javob beramiz.</p>
 
 <h2>Nima qoladi</h2>
 <p>Anonim statistika: unda raqam ham, ism ham yo‘q, u 30 kundan kechiktirmay
-o‘zi o‘chadi. Batafsil — <a href="/privacy">maxfiylik siyosatida</a>
+o‘zi o‘chadi. Kirish so‘rovlari ham raqamsiz qoladi: faqat vaqt, qurilmaning
+tasodifiy raqami va IP-manzil — ular bo‘yicha kod yuborish cheklovlari
+hisoblanadi; ular ham shu muddatda o‘chadi. Batafsil — <a href="/privacy">maxfiylik siyosatida</a>
 (rus tilida).</p>
 """
 

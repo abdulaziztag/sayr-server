@@ -1061,15 +1061,27 @@ class LoginRequest(Base):
 
     __tablename__ = "login_requests"
     __table_args__ = (
-        # Лимиты входа считают заявки адреса и устройства за последний час
+        # Лимиты входа считают заявки номера, адреса и устройства за час
+        # и за сутки: с временем в индексе счёт читает только своё окно,
+        # а не все заявки ключа за месяц до уборки
+        Index("ix_login_requests_phone_created_at", "phone", "created_at"),
         Index("ix_login_requests_ip_created_at", "ip", "created_at"),
         Index("ix_login_requests_device_id_created_at", "device_id", "created_at"),
+        # Суточный потолок платных кодов. Частичный: неотправленные заявки
+        # (номера без телеграма) потолку считать незачем, а скрипт со
+        # случайными номерами наплодит их больше всех остальных. Условие —
+        # слово в слово как _PAID в api/auth.py
+        Index(
+            "ix_login_requests_codes_created_at",
+            "created_at",
+            postgresql_where=text("status <> 'unsent' AND channel <> 'test'"),
+        ),
     )
 
     #: Свой uuid, а не номер заявки шлюза: наружу отдаём его, чтобы
     #: не светить внутренности канала
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    phone: Mapped[str] = mapped_column(String(20), index=True)
+    phone: Mapped[str] = mapped_column(String(20))
     #: telegram или sms — второй канал появится, когда будет юрлицо
     channel: Mapped[str] = mapped_column(String(16))
     gateway_request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
