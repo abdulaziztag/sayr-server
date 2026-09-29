@@ -40,13 +40,19 @@ INT_MAX = 2**31 - 1
 def _distance_km_expr(lat: float, lng: float):
     """Хаверсин на встроенных функциях Postgres — расширения не нужны.
 
-    На каталоге в сотни мест точность и скорость эквивалентны PostGIS."""
+    На каталоге в сотни мест точность и скорость эквивалентны PostGIS.
+    Косинус зажат с обеих сторон: у точки напротив места на шаре округление
+    даёт −1.0000000000000002, и acos падал ошибкой — 500 на честные
+    координаты."""
     return 6371 * func.acos(
-        func.least(
-            1.0,
-            func.cos(func.radians(lat)) * func.cos(func.radians(Place.lat))
-            * func.cos(func.radians(Place.lng) - func.radians(lng))
-            + func.sin(func.radians(lat)) * func.sin(func.radians(Place.lat)),
+        func.greatest(
+            -1.0,
+            func.least(
+                1.0,
+                func.cos(func.radians(lat)) * func.cos(func.radians(Place.lat))
+                * func.cos(func.radians(Place.lng) - func.radians(lng))
+                + func.sin(func.radians(lat)) * func.sin(func.radians(Place.lat)),
+            ),
         )
     )
 

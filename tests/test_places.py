@@ -112,6 +112,24 @@ async def test_слаг_не_по_форме_это_не_найдено(client):
     assert resp.status_code == 404
 
 
+async def test_админка_не_сохраняет_слаг_не_по_форме():
+    """Раз ручки отсекают слаг не по форме ещё до базы, завести такой
+    нельзя: место стояло бы в каталоге, но не открывалось бы ни
+    в приложении, ни по ссылке /p/."""
+    import pytest
+
+    from app.admin import PlaceAdmin
+    from app.models import Place
+
+    view = PlaceAdmin()
+    for bad in ("Chimgan", "big_lake", "-lake", "чимган", "a" * 121, ""):
+        with pytest.raises(ValueError):
+            await view.on_model_change({"slug": bad}, Place(), True, None)
+    data = {"slug": " chimgan-2 "}
+    await view.on_model_change(data, Place(), True, None)
+    assert data["slug"] == "chimgan-2"
+
+
 async def test_nul_в_тексте_запроса_это_422(client):
     resp = await client.get("/api/v1/places", params={"q": "во\x00да"})
     assert resp.status_code == 422
@@ -143,4 +161,11 @@ async def test_near_только_земные_координаты(client):
         assert resp.status_code == 422, near
     resp = await client.get("/api/v1/places", params={"near": "-90,180"})
     assert resp.status_code == 200
+    # Точка напротив водопада на шаре: косинус округляется чуть ниже −1,
+    # и acos без зажима снизу ронял запрос
+    resp = await client.get(
+        "/api/v1/places", params={"near": "-41.62,-109.9", "radius_km": 1000}
+    )
+    assert resp.status_code == 200
+    assert resp.json() == []
 
