@@ -103,15 +103,16 @@ docker compose -f compose.prod.yml exec app python -m seed.seed
 
 ### Reverse proxy и TLS
 
-Два готовых конфига, оба проксируют на `127.0.0.1:8000`:
+`deploy/nginx-sayr.conf` проксирует на `127.0.0.1:8000` и режет частоту
+запросов к входу и формам (ответ 429) и к телеметрии (ответ 503: 4xx
+приложения считают окончательным отказом и стёрли бы данные). Кладётся в
+`/etc/nginx/sites-available/sayr`, симлинк в `sites-enabled`, потом
+`nginx -t && systemctl reload nginx` и `certbot --nginx -d <домен>`.
+Именно `reload`, а не `restart`: на общем сервере restart уронил бы
+соседние сайты.
 
-- `deploy/nginx-sayr.conf` — если на сервере уже стоит nginx. Кладётся в
-  `/etc/nginx/sites-available/sayr`, симлинк в `sites-enabled`, потом
-  `nginx -t && systemctl reload nginx` и `certbot --nginx -d <домен>`.
-  Именно `reload`, а не `restart`: на общем сервере restart уронил бы
-  соседние сайты.
-- `deploy/Caddyfile` — если веб-сервера ещё нет. Caddy сам получает
-  и продлевает сертификат.
+Конфига для Caddy больше нет: на бою nginx, а заготовка отдавала бы
+`/media` с диска целиком — вместе с `reports/` и `deleted-photos/`.
 
 Домена нет? Бесплатный вариант — [duckdns.org](https://www.duckdns.org):
 заводится имя, указывается IP сервера, Let's Encrypt выдаёт на него
@@ -132,7 +133,7 @@ docker compose -f compose.prod.yml exec app python -m seed.seed
   Лежат на том же томе, но наружу не отдаются: под `/media` смонтированы
   `photos`, `thumbs` и `gpx` поимённо, а не весь каталог. Владельцу они
   открываются из админки (`/admin/report-file/{id}`), по сессии.
-- **Бэкап** — `deploy/backup.sh` в cron: дамп БД плюс архив `media`.
+- **Бэкап** — `deploy/backup.sh` по таймеру `sayr-backup.timer`, см. ниже.
 - **Здоровье** — `GET /healthz` ходит в БД, годится для мониторинга.
 - **Сид идемпотентен** — повторный запуск обновит поля мест и не продублирует
   фото. Реальные фотографии есть у 15 мест в `seed/data/photos/`, остальным
@@ -227,3 +228,49 @@ systemctl daemon-reload && systemctl enable --now sayr-push.timer
 journalctl -u sayr-push.service -n 20     # что ушло на последнем тике
 ```
 
+## Бэкапы
+
+Каждую ночь в 03:30 по Ташкенту `sayr-backup.timer` запускает
+`deploy/backup.sh`: дамп базы в `/var/backups/sayr/daily` (14 последних),
+первый дамп недели и архив `media` без миниатюр — в
+`/var/backups/sayr/weekly` (8 последних недель). Пустой или оборванный
+дамп, упавший `pg_dump`, не вышедший архив, зависание дольше трёх часов —
+служба failed, это видно в `systemctl --failed`.
+
+Место: 14 + 8 дампов базы, 10 дампов перед деплоями и 8 архивов `media`
+почти в полный размер (фото не сжимаются) — то есть примерно восемь
+`media`. Если после архива на диске осталось бы меньше
+`SAYR_BACKUP_MIN_FREE_MB` (1024), архив недели не делается и служба
+failed: диск общий с базой и чужими сайтами.
+
+Всё это лежит на том же диске, что и база. Копия вне сервера включается
+строкой в `.env`: `SAYR_BACKUP_REMOTE=user@host:/путь` (rsync по ssh
+с ключом root, без пароля) или `SAYR_BACKUP_REMOTE=rclone:<remote>:<путь>`.
+На той стороне в `daily/` и `weekly/` та же ротация, что здесь, но
+старое там стирается, только когда здесь полный набор (14 ночей
+и 8 недель). После переустановки сервера или стёртого по ошибке
+каталога копия только докладывается и чужую историю не трогает.
+Для rsync один раз зайти туда руками от root (`ssh user@host`) и принять
+отпечаток: ночью спросить будет некого, и копия упадёт.
+
+В дампах телефоны людей, в архиве `media` — приложенные к обращениям
+файлы. Чужому хранилищу их лучше отдавать зашифрованными: для rclone —
+remote типа `crypt` поверх облака, для rsync — диск или хранилище,
+которое шифрует само.
+
+Сервер пересобран — сначала вернуть `/var/backups/sayr` с той стороны,
+потом включать таймер.
+
+```bash
+cp deploy/sayr-backup.{service,timer} /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now sayr-backup.timer
+systemctl start sayr-backup && journalctl -u sayr-backup -n 30 --no-pager
+```
+
+Восстановление — в пустую базу:
+`gzip -dc /var/backups/sayr/daily/db-ГГГГ-ММ-ДД.sql.gz | sudo -u postgres psql sayr`.
+
+Перед миграциями `update.sh` снимает свой дамп,
+`/var/backups/sayr/pre-deploy-ГГГГММДД-ЧЧММСС.sql.gz`, и держит 10 последних.
+Не вышел дамп — деплой останавливается до миграций, код возвращается на
+прежний коммит.

@@ -1,0 +1,29 @@
+# /etc/systemd/system/sayr-backup.service
+#
+# Ночной бэкап: дамп базы, раз в неделю ещё и архив media, ротация и, если
+# задан SAYR_BACKUP_REMOTE, копия за пределы сервера (подробности —
+# в deploy/backup.sh). Запускается таймером sayr-backup.timer. Скрипт берётся
+# прямо из рабочей копии: деплой подменяет файл целиком, и идущий прогон
+# дочитывает старый.
+#
+# Упал — служба failed: systemctl --failed, journalctl -u sayr-backup.
+[Unit]
+Description=Sayr: ночной бэкап базы и media
+After=postgresql.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/Projects/sayr-server
+# Через bash, а не напрямую: права на исполнение в рабочей копии держит git,
+# и потерянный +x молча выключил бы бэкапы
+ExecStart=/bin/bash /root/Projects/sayr-server/deploy/backup.sh
+# У oneshot по умолчанию срока нет. Зависший pg_dump (ждёт блокировку
+# застрявшей миграции) или копия на умершую связь держали бы службу
+# activating вечно: таймер пропускал бы ночь за ночью, а в systemctl
+# --failed не было бы ничего. С потолком зависание — это failed
+TimeoutStartSec=3h
+# Сервер общий, ночью на нём живут и чужие сайты: дамп и gzip — в последнюю
+# очередь. NoNewPrivileges не ставим — pg_dump идёт через sudo от postgres
+Nice=10
+IOSchedulingClass=idle

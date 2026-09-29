@@ -5,9 +5,10 @@
 #     ssh root@vps /usr/local/sbin/sayr-update
 #
 # Порядок: git fetch/reset → uv sync → дамп базы → alembic upgrade → restart →
-# /healthz. Если healthz не ответил — откат кода на предыдущий коммит и повторная
-# проверка; не помогло — выход с ненулевым кодом и хвостом журнала, чтобы это
-# было видно прямо в логе Actions.
+# /healthz. Упало что-то до рестарта — каталог и .venv возвращаются на прежний
+# коммит, служба так и работает на нём. Если healthz не ответил — откат кода
+# на предыдущий коммит и повторная проверка; не помогло — выход с ненулевым
+# кодом и хвостом журнала, чтобы это было видно прямо в логе Actions.
 #
 # ГДЕ ЛЕЖИТ РАБОЧАЯ КОПИЯ
 # /usr/local/sbin/sayr-update, root:root, 755. Файл в репозитории — исходник.
@@ -15,7 +16,7 @@
 # перезаписывает git-пуллом. Скрипт предупредит, если копии разошлись.
 #
 # Коды выхода: 0 — ок, 2 — сервер настроен не так, 75 — деплой уже идёт,
-# 1 — не поднялось.
+# 130 — прервали, 1 — не поднялось.
 
 set -Eeuo pipefail
 
@@ -31,11 +32,17 @@ HEALTH_DELAY=${SAYR_HEALTH_DELAY:-2}
 
 DB_NAME=${SAYR_DB_NAME:-sayr}
 DUMP_DIR=${SAYR_DUMP_DIR:-/var/backups/sayr}
+# Без дампа миграции не катятся. Осознанно без него — SAYR_PREDEPLOY_DUMP=0
 PREDEPLOY_DUMP=${SAYR_PREDEPLOY_DUMP:-1}
+# Сколько последних дампов перед деплоем держать
+PREDEPLOY_KEEP=${SAYR_PREDEPLOY_KEEP:-10}
 # Кэш колёс после установки не нужен
 CLEAN_UV_CACHE=${SAYR_CLEAN_UV_CACHE:-1}
 
 LOCK=${SAYR_LOCK:-/var/lock/sayr-deploy.lock}
+# Куда пишут git и uv, когда возвращают каталог: терминала, из которого
+# запускали, к этому моменту может уже не быть
+RESTORE_LOG=${SAYR_RESTORE_LOG:-/var/log/sayr-update.log}
 
 # Приватный репозиторий: fetch идёт по ssh с отдельным deploy-ключом.
 # Ключ вне APP_DIR — внутри его снёс бы git clean
@@ -54,6 +61,43 @@ on_err() {
 }
 trap on_err ERR
 
+# Коммит, на который вернуть каталог, если выходим до рестарта. Пока он
+# задан, служба крутится на старом коде, а в каталоге уже новый: брось его
+# так после упавшего sync или миграции — и первый же рестарт (ручной,
+# Restart=on-failure, перезагрузка сервера) поднял бы новый код на старой
+# схеме. Возврат висит на EXIT, поэтому срабатывает и на die, и на ERR.
+# git и uv без смены каталога: RESTORE_TO задаётся уже после cd "$APP_DIR"
+RESTORE_TO=
+restore_code() {
+    [[ -n $RESTORE_TO ]] || return 0
+    local to=$RESTORE_TO out=$RESTORE_LOG
+    RESTORE_TO=
+    # Сюда попадают и после обрыва ssh, когда stdout и stderr уже мертвы:
+    # любая запись в них — ошибка (EPIPE, EIO пропавшего терминала). Под
+    # set -e первая же такая ошибка — хоть в warn — оборвала бы возврат
+    # до git reset. Поэтому дальше без set -e и ERR, вывод git и uv —
+    # в файл, а сообщения — как получится. Второй Ctrl-C или повторный
+    # сигнал от Actions возврат тоже не обрывают: полкаталога хуже любого
+    set +e
+    trap - ERR
+    trap '' INT TERM HUP
+    warn "возвращаю каталог и .venv на $to — служба не перезапускалась и работает на нём"
+    : 2>/dev/null >>"$out" || out=/dev/null
+    {
+        printf '== %s: возврат на %s\n' "$(date '+%F %T')" "$to"
+        git reset -q --hard "$to" && "$UV" sync --frozen --no-dev
+    } >>"$out" 2>&1 \
+        || warn "вернуть $to не вышло (вывод — в $out) — каталог в промежуточном состоянии, до рестарта чинить руками"
+}
+trap restore_code EXIT
+# Оборванный ssh или Ctrl-C — тоже выход через EXIT, а не смерть посреди
+# sync. С терминалом обрыв — это HUP. Без терминала (так зовёт Actions)
+# сигнала нет, зато первая же запись в закрытый канал дала бы SIGPIPE,
+# и bash умер бы на месте, не вернув каталог. С игнором запись просто
+# падает с EPIPE — обычная ошибка команды, её ловят set -e и ERR
+trap 'exit 130' INT TERM HUP
+trap '' PIPE
+
 # --- проверки ---------------------------------------------------------------
 
 [[ $EUID -eq 0 ]] || die "запускать от root" 2
@@ -69,6 +113,8 @@ flock -n 9 || die "деплой уже идёт, этот прогон проп�
 [[ -x $APP_DIR/.venv/bin/alembic ]] || die "нет $APP_DIR/.venv — сделай первый uv sync вручную" 2
 [[ -f $KEY ]] || die "нет deploy-ключа $KEY — репозиторий приватный" 2
 [[ -f $KNOWN_HOSTS ]] || die "нет $KNOWN_HOSTS — не с чем сверить отпечаток github.com" 2
+# Ноль стёр бы и дамп, снятый только что
+[[ $PREDEPLOY_KEEP =~ ^[1-9][0-9]*$ ]] || die "SAYR_PREDEPLOY_KEEP=$PREDEPLOY_KEEP — нужно целое от 1" 2
 
 export GIT_SSH_COMMAND="ssh -i $KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS -o BatchMode=yes"
 
@@ -89,6 +135,7 @@ git fetch --prune "$REMOTE" "$BRANCH"
 
 # reset, а не pull: результат не зависит от локальных правок и переживает
 # force-push. Untracked-файлы (.env, media/) reset не трогает
+RESTORE_TO=$PREV
 git reset --hard "$REMOTE/$BRANCH"
 NEW=$(git rev-parse HEAD)
 log "новый коммит   $NEW"
@@ -105,22 +152,40 @@ log "uv sync --frozen --no-dev"
 
 # --- база -------------------------------------------------------------------
 
-if [[ $PREDEPLOY_DUMP == 1 ]] && command -v pg_dump >/dev/null 2>&1; then
-    # Один файл, перезаписывается каждый деплой: место фиксированное, но есть
-    # точка возврата, если миграция испортит данные. Регулярные бэкапы —
-    # отдельно, deploy/backup.sh в cron
+if [[ $PREDEPLOY_DUMP == 0 ]]; then
+    warn "SAYR_PREDEPLOY_DUMP=0 — миграции без дампа перед ними"
+else
+    # Точка возврата, если миграция испортит данные. Файл на каждый деплой:
+    # один перезаписываемый терял бы её уже на следующей выкатке — ровно
+    # тогда, когда порчу замечают. Регулярные бэкапы — отдельно,
+    # deploy/backup.sh по таймеру sayr-backup.timer
     install -d -m 750 "$DUMP_DIR"
-    log "дамп перед миграциями → $DUMP_DIR/pre-deploy.sql.gz"
-    if sudo -n -u postgres pg_dump "$DB_NAME" | gzip >"$DUMP_DIR/pre-deploy.sql.gz.tmp"; then
-        mv "$DUMP_DIR/pre-deploy.sql.gz.tmp" "$DUMP_DIR/pre-deploy.sql.gz"
-    else
-        rm -f "$DUMP_DIR/pre-deploy.sql.gz.tmp"
-        warn "дамп не сделан; продолжаю без него"
+    dump="$DUMP_DIR/pre-deploy-$(date +%Y%m%d-%H%M%S).sql.gz"
+    log "дамп перед миграциями → $dump"
+    # Без дампа не мигрируем: warn и дальше значил бы миграцию без пути назад,
+    # а увидел бы его только тот, кто дочитал лог Actions. Строкой «dump
+    # complete» pg_dump заканчивает только полный дамп (см. deploy/backup.sh)
+    if ! sudo -n -u postgres pg_dump "$DB_NAME" | gzip >"$dump.tmp" \
+        || [[ $(gzip -dc "$dump.tmp" | tail -n 10) != *"PostgreSQL database dump complete"* ]]; then
+        rm -f "$dump.tmp"
+        die "дамп перед миграциями не сделан — без него не мигрирую. Осознанно без дампа: SAYR_PREDEPLOY_DUMP=0" 1
     fi
+    mv "$dump.tmp" "$dump"
+
+    # Имена с датой, glob отдаёт их по алфавиту — значит, по времени
+    shopt -s nullglob
+    dumps=("$DUMP_DIR"/pre-deploy-*.sql.gz)
+    shopt -u nullglob
+    for ((i = 0; i < ${#dumps[@]} - PREDEPLOY_KEEP; i++)); do
+        rm -f -- "${dumps[i]}"
+    done
 fi
 
 log "alembic upgrade head"
 "$APP_DIR/.venv/bin/alembic" upgrade head
+# Схема уже новая, дальше рестарт — за откат с этого места отвечает
+# проверка healthz ниже
+RESTORE_TO=
 
 # --- перезапуск и проверка --------------------------------------------------
 

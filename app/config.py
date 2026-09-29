@@ -140,6 +140,14 @@ class Settings(BaseSettings):
     #: не открывает приложение сама, и в магазин ушли бы те, у кого оно есть
     ios_store_redirect: bool = False
 
+    #: Куда deploy/backup.sh копирует ночные бэкапы за пределы сервера:
+    #: user@host:/путь для rsync по ssh или rclone:<remote>:<путь>. Пусто —
+    #: копии нет, и бэкапы лежат на одном диске с базой. Само приложение
+    #: поле не читает; оно здесь, потому что строка живёт в том же .env,
+    #: а незнакомый ключ SAYR_ в нём pydantic-settings не пропускает — служба
+    #: не встала бы
+    backup_remote: str = ""
+
     model_config = {"env_file": SERVER_DIR / ".env", "env_prefix": "SAYR_"}
 
 
