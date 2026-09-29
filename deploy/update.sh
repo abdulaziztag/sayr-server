@@ -40,6 +40,9 @@ PREDEPLOY_KEEP=${SAYR_PREDEPLOY_KEEP:-10}
 CLEAN_UV_CACHE=${SAYR_CLEAN_UV_CACHE:-1}
 
 LOCK=${SAYR_LOCK:-/var/lock/sayr-deploy.lock}
+# Куда пишут git и uv, когда возвращают каталог: терминала, из которого
+# запускали, к этому моменту может уже не быть
+RESTORE_LOG=${SAYR_RESTORE_LOG:-/var/log/sayr-update.log}
 
 # Приватный репозиторий: fetch идёт по ssh с отдельным deploy-ключом.
 # Ключ вне APP_DIR — внутри его снёс бы git clean
@@ -67,15 +70,31 @@ trap on_err ERR
 RESTORE_TO=
 restore_code() {
     [[ -n $RESTORE_TO ]] || return 0
-    local to=$RESTORE_TO
+    local to=$RESTORE_TO out=$RESTORE_LOG
     RESTORE_TO=
+    # Сюда попадают и после обрыва ssh, когда stdout и stderr уже мертвы:
+    # любая запись в них — ошибка (EPIPE, EIO пропавшего терминала). Под
+    # set -e первая же такая ошибка — хоть в warn — оборвала бы возврат
+    # до git reset. Поэтому дальше без set -e и ERR, вывод git и uv —
+    # в файл, а сообщения — как получится
+    set +e
+    trap - ERR
     warn "возвращаю каталог и .venv на $to — служба не перезапускалась и работает на нём"
-    git reset --hard "$to" && "$UV" sync --frozen --no-dev \
-        || warn "вернуть $to не вышло — каталог в промежуточном состоянии, до рестарта чинить руками"
+    : 2>/dev/null >>"$out" || out=/dev/null
+    {
+        printf '== %s: возврат на %s\n' "$(date '+%F %T')" "$to"
+        git reset -q --hard "$to" && "$UV" sync --frozen --no-dev
+    } >>"$out" 2>&1 \
+        || warn "вернуть $to не вышло (вывод — в $out) — каталог в промежуточном состоянии, до рестарта чинить руками"
 }
 trap restore_code EXIT
-# Оборванный ssh или Ctrl-C — тоже выход через EXIT, а не смерть посреди sync
+# Оборванный ssh или Ctrl-C — тоже выход через EXIT, а не смерть посреди
+# sync. С терминалом обрыв — это HUP. Без терминала (так зовёт Actions)
+# сигнала нет, зато первая же запись в закрытый канал дала бы SIGPIPE,
+# и bash умер бы на месте, не вернув каталог. С игнором запись просто
+# падает с EPIPE — обычная ошибка команды, её ловят set -e и ERR
 trap 'exit 130' INT TERM HUP
+trap '' PIPE
 
 # --- проверки ---------------------------------------------------------------
 

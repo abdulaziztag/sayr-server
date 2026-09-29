@@ -13,10 +13,14 @@ uv, alembic, pg_dump, systemctl и curl — заглушки: пишут, как
 не подделать, а тест от root не гоняют.
 """
 
+import fcntl
 import os
+import pty
+import select
 import shutil
 import signal
 import subprocess
+import termios
 import time
 from pathlib import Path
 
@@ -147,6 +151,7 @@ def server(tmp_path, bin_dir):
         "SAYR_KEY": str(tmp_path / "deploy_key"),
         "SAYR_KNOWN_HOSTS": str(tmp_path / "known_hosts"),
         "SAYR_DUMP_DIR": str(tmp_path / "dumps"),
+        "SAYR_RESTORE_LOG": str(tmp_path / "restore.log"),
         "SAYR_HEALTH_TRIES": "2",
         "SAYR_HEALTH_DELAY": "0",
     })
@@ -245,19 +250,72 @@ def test_молчащий_healthz_по_прежнему_откатывает_к�
     assert server.calls("systemctl restart sayr") == ["systemctl restart sayr"] * 2
 
 
-def test_оборванный_деплой_тоже_возвращает_каталог(server):
-    # Actions отменили прогон или ssh отвалился посреди uv sync. Сам sync
-    # при этом проходит: вернуть каталог обязан сигнал, а не упавшая команда
-    args, env = server.command(STUB_UV_SLOW_ON=server.c2)
-    proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+def _wait_for_sync(server, drain: int | None = None) -> None:
+    """Ждёт, пока скрипт застрянет в медленном uv sync на новом коммите.
+
+    drain — pty, из которого по пути вычитывается вывод: буфер терминала
+    невелик, и переполненный он остановил бы скрипт раньше sync."""
     deadline = time.monotonic() + 30
     while not server.calls("uv sync") and time.monotonic() < deadline:
-        time.sleep(0.05)
+        if drain is not None and select.select([drain], [], [], 0.05)[0]:
+            os.read(drain, 4096)
+        else:
+            time.sleep(0.05)
     assert server.calls("uv sync"), "до uv sync не дошло"
+
+
+def _assert_back_on_c1(server, returncode: int) -> None:
+    assert returncode != 0
+    assert server.head() == server.c1, "каталог остался на новом коде"
+    assert server.calls("uv sync")[-1].endswith(f"@ {server.c1}"), ".venv не пересобран под старый код"
+    assert "systemctl restart sayr" not in server.calls("systemctl")
+
+
+def test_оборванный_деплой_тоже_возвращает_каталог(server):
+    # Actions отменили прогон посреди uv sync. Сам sync при этом проходит:
+    # вернуть каталог обязан сигнал, а не упавшая команда
+    args, env = server.command(STUB_UV_SLOW_ON=server.c2)
+    proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    _wait_for_sync(server)
     proc.send_signal(signal.SIGTERM)
     proc.communicate(timeout=60)
+    _assert_back_on_c1(server, proc.returncode)
 
-    assert proc.returncode != 0
-    assert server.head() == server.c1
-    assert server.calls("uv sync")[-1].endswith(f"@ {server.c1}")
-    assert "systemctl restart sayr" not in server.calls("systemctl")
+
+def test_оборванный_ssh_без_терминала_возвращает_каталог(server):
+    # Так зовёт Actions: ssh root@vps sayr-update, без pty. Связь упала —
+    # SIGHUP не приходит, зато любая следующая запись в stdout или stderr
+    # бьёт в закрытый канал: SIGPIPE, а при нём — EPIPE. Возврат каталога
+    # обязан пережить и то и другое, ему самому писать уже некуда.
+    # Popen возвращает ребёнку SIGPIPE по умолчанию, как и sshd
+    args, env = server.command(STUB_UV_SLOW_ON=server.c2)
+    proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    _wait_for_sync(server)
+    proc.stdout.close()
+    proc.stderr.close()
+    proc.wait(timeout=60)
+    _assert_back_on_c1(server, proc.returncode)
+
+
+def test_оборванный_ssh_с_терминалом_возвращает_каталог(server):
+    # Руками выкатывают из терминала: ssh с pty. Обрыв — SIGHUP, а запись
+    # в пропавший терминал дальше отвечает EIO
+    master, slave = pty.openpty()
+    args, env = server.command(STUB_UV_SLOW_ON=server.c2)
+
+    def own_terminal():
+        # Свой сеанс (start_new_session) и pty — управляющий терминал
+        # сеанса, как у шелла, который поднял sshd
+        fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
+    proc = subprocess.Popen(
+        args, env=env, stdin=slave, stdout=slave, stderr=slave,
+        start_new_session=True, preexec_fn=own_terminal,
+    )
+    os.close(slave)
+    try:
+        _wait_for_sync(server, drain=master)
+    finally:
+        os.close(master)
+    proc.wait(timeout=60)
+    _assert_back_on_c1(server, proc.returncode)
