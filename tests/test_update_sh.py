@@ -41,11 +41,21 @@ for last; do :; done
 cmd=${last%% *}
 exec git "${cmd#git-}" "$STUB_BARE"
 """,
+    # С STUB_UV_HOLD sync ставит метку sync-<коммит> и ждёт файла go:
+    # тест сам решает, когда sync закончится, без гонки со временем.
+    # Ctrl-C ожидание обрывает, как оборвал бы настоящий uv. Через trap —
+    # наверняка: без него sh, чей sleep сигнал разминул, счёл бы Ctrl-C
+    # обработанным и ждал дальше. Если INT на входе игнорировался (возврат
+    # в update.sh), trap его не включит — так велит POSIX
     "uv": """#!/bin/sh
 head=$(git rev-parse HEAD)
 echo "uv $* @ $head" >>"$STUB_LOG"
 [ "$1" = sync ] || exit 0
-case ${STUB_UV_SLOW_ON:-} in "$head"|all) sleep 2 ;; esac
+if [ -n "${STUB_UV_HOLD:-}" ]; then
+  trap 'exit 130' INT
+  : >"$STUB_UV_HOLD/sync-$head"
+  until [ -e "$STUB_UV_HOLD/go" ]; do sleep 0.05; done
+fi
 if [ "$head" = "${STUB_UV_FAIL_ON:-}" ]; then
   echo "error: не собралось" >&2
   exit 1
@@ -145,6 +155,8 @@ def server(tmp_path, bin_dir):
 
     (tmp_path / "deploy_key").write_text("")
     (tmp_path / "known_hosts").write_text("")
+    hold = tmp_path / "hold"
+    hold.mkdir()
     env.update({
         "SAYR_APP_DIR": str(app),
         "SAYR_UV": str(bin_dir / "uv"),
@@ -166,6 +178,16 @@ def server(tmp_path, bin_dir):
         def command(self, **extra: str):
             return ["bash", str(script)], {**env, **extra}
 
+        def held_command(self):
+            """Команда, чей uv sync ждёт release()."""
+            return self.command(STUB_UV_HOLD=str(hold))
+
+        def sync_started(self, commit: str) -> bool:
+            return (hold / f"sync-{commit}").exists()
+
+        def release(self) -> None:
+            (hold / "go").touch()
+
         def run(self, **extra: str) -> subprocess.CompletedProcess:
             args, full = self.command(**extra)
             return subprocess.run(args, env=full, capture_output=True, text=True, timeout=60)
@@ -176,7 +198,10 @@ def server(tmp_path, bin_dir):
         def calls(self, prefix: str) -> list[str]:
             return [c for c in log.read_text().splitlines() if c.startswith(prefix)]
 
-    return Server()
+    srv = Server()
+    yield srv
+    # Упавший на полпути тест не оставит висеть скрипт в ожидании
+    srv.release()
 
 
 def test_удачный_деплой_переключает_код_и_перезапускает(server):
@@ -251,35 +276,39 @@ def test_молчащий_healthz_по_прежнему_откатывает_к�
     assert server.calls("systemctl restart sayr") == ["systemctl restart sayr"] * 2
 
 
-def _wait_for_sync(server, drain: int | None = None) -> None:
-    """Ждёт, пока скрипт застрянет в медленном uv sync на новом коммите.
+def _wait_for_sync(
+    server, commit: str, fail: str = "до uv sync не дошло", drain: int | None = None
+) -> None:
+    """Ждёт, пока скрипт под held_command() встанет в uv sync на commit.
 
     drain — pty, из которого по пути вычитывается вывод: буфер терминала
     невелик, и переполненный он остановил бы скрипт раньше sync."""
-    deadline = time.monotonic() + 30
-    while not server.calls("uv sync") and time.monotonic() < deadline:
+    deadline = time.monotonic() + 60
+    while not server.sync_started(commit):
+        assert time.monotonic() < deadline, fail
         if drain is not None and select.select([drain], [], [], 0.05)[0]:
             os.read(drain, 4096)
         else:
             time.sleep(0.05)
-    assert server.calls("uv sync"), "до uv sync не дошло"
 
 
 def _assert_back_on_c1(server, returncode: int) -> None:
     assert returncode != 0
     assert server.head() == server.c1, "каталог остался на новом коде"
     assert server.calls("uv sync")[-1].endswith(f"@ {server.c1}"), ".venv не пересобран под старый код"
-    assert server.calls("synced")[-1] == f"synced @ {server.c1}", "uv sync возврата не дошёл до конца"
+    assert server.calls("synced")[-1:] == [f"synced @ {server.c1}"], "uv sync возврата не дошёл до конца"
     assert "systemctl restart sayr" not in server.calls("systemctl")
 
 
 def test_оборванный_деплой_тоже_возвращает_каталог(server):
-    # Actions отменили прогон посреди uv sync. Сам sync при этом проходит:
-    # вернуть каталог обязан сигнал, а не упавшая команда
-    args, env = server.command(STUB_UV_SLOW_ON=server.c2)
+    # Actions отменили прогон посреди uv sync. Сам sync при этом проходит
+    # (release после сигнала): вернуть каталог обязан сигнал, а не упавшая
+    # команда
+    args, env = server.held_command()
     proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    _wait_for_sync(server)
+    _wait_for_sync(server, server.c2)
     proc.send_signal(signal.SIGTERM)
+    server.release()
     proc.communicate(timeout=60)
     _assert_back_on_c1(server, proc.returncode)
 
@@ -287,18 +316,18 @@ def test_оборванный_деплой_тоже_возвращает_кат�
 def test_второй_ctrl_c_не_обрывает_возврат(server):
     # Нетерпеливый второй Ctrl-C приходит, пока каталог возвращается.
     # Ctrl-C бьёт по всей группе процессов терминала — и по uv тоже:
-    # без защиты .venv остался бы собранным наполовину
-    args, env = server.command(STUB_UV_SLOW_ON="all")
+    # без защиты .venv остался бы собранным наполовину. Оба sync ждут
+    # release(), поэтому первый Ctrl-C попадает в sync нового кода,
+    # а второй — в sync возврата, как бы ни тормозила машина
+    args, env = server.held_command()
     proc = subprocess.Popen(
         args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True
     )
-    _wait_for_sync(server)
+    _wait_for_sync(server, server.c2)
     os.killpg(proc.pid, signal.SIGINT)
-    deadline = time.monotonic() + 30
-    while len(server.calls("uv sync")) < 2 and time.monotonic() < deadline:
-        time.sleep(0.05)
-    assert server.calls("uv sync")[-1].endswith(f"@ {server.c1}"), "возврат не начался"
+    _wait_for_sync(server, server.c1, "возврат не начался")
     os.killpg(proc.pid, signal.SIGINT)
+    server.release()
     proc.communicate(timeout=60)
 
     _assert_back_on_c1(server, proc.returncode)
@@ -311,11 +340,12 @@ def test_оборванный_ssh_без_терминала_возвращает
     # бьёт в закрытый канал: SIGPIPE, а при нём — EPIPE. Возврат каталога
     # обязан пережить и то и другое, ему самому писать уже некуда.
     # Popen возвращает ребёнку SIGPIPE по умолчанию, как и sshd
-    args, env = server.command(STUB_UV_SLOW_ON=server.c2)
+    args, env = server.held_command()
     proc = subprocess.Popen(args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    _wait_for_sync(server)
+    _wait_for_sync(server, server.c2)
     proc.stdout.close()
     proc.stderr.close()
+    server.release()
     proc.wait(timeout=60)
     _assert_back_on_c1(server, proc.returncode)
 
@@ -324,7 +354,7 @@ def test_оборванный_ssh_с_терминалом_возвращает_�
     # Руками выкатывают из терминала: ssh с pty. Обрыв — SIGHUP, а запись
     # в пропавший терминал дальше отвечает EIO
     master, slave = pty.openpty()
-    args, env = server.command(STUB_UV_SLOW_ON=server.c2)
+    args, env = server.held_command()
 
     def own_terminal():
         # Свой сеанс (start_new_session) и pty — управляющий терминал
@@ -337,8 +367,9 @@ def test_оборванный_ssh_с_терминалом_возвращает_�
     )
     os.close(slave)
     try:
-        _wait_for_sync(server, drain=master)
+        _wait_for_sync(server, server.c2, drain=master)
     finally:
         os.close(master)
+    server.release()
     proc.wait(timeout=60)
     _assert_back_on_c1(server, proc.returncode)
