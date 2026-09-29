@@ -12,12 +12,13 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi_storages import StorageFile
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import case, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.schemas import UserOut
 from ..auth.tokens import current_user
 from ..db import get_session
-from ..models import Gender, User, avatar_storage
+from ..models import Gender, LoginRequest, User, avatar_storage
 from ..moderation import is_clean
 from ..services.images import drop_avatar, store_avatar
 from .rooms import on_account_deleted
@@ -79,6 +80,10 @@ async def update_me(
 
     fields = body.model_dump(exclude_unset=True)
     for name, value in fields.items():
+        # Стёртое имя — пустая строка, как у незаполненной анкеты: колонки
+        # имени NOT NULL, и null в них ронял ручку в 500
+        if value is None and name in ("first_name", "last_name"):
+            value = ""
         setattr(user, name, value)
     if fields and user.profile_filled_at is None:
         user.profile_filled_at = datetime.now(timezone.utc)
@@ -141,6 +146,23 @@ async def delete_me(
     # Походы человека отменяются, из чужих групп Telegram его уберут —
     # до удаления: строки участия уйдут каскадом вместе с ним
     await on_account_deleted(session, user)
+    # Заявки на вход с человеком внешним ключом не связаны, и номер в них
+    # дожил бы до месячной уборки — а /privacy обещает стереть его сразу.
+    # Стираем номер и заявку у шлюза, а сами строки оставляем: по ним
+    # считаются лимиты адреса, устройства и суточный потолок кодов, и цикл
+    # «вошёл — удалился» иначе обнулял бы их и выбирал счёт шлюза
+    await session.execute(
+        update(LoginRequest)
+        .where(LoginRequest.phone == user.phone)
+        .values(
+            phone="",
+            gateway_request_id=None,
+            status=case(
+                (LoginRequest.status.in_(("sending", "sent")), "expired"),
+                else_=LoginRequest.status,
+            ),
+        )
+    )
     await session.delete(user)
     await session.commit()
     if avatar:

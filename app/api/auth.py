@@ -11,15 +11,16 @@
 Спека: docs/superpowers/specs/2026-09-23-account-login-design.md
 """
 
+import ipaddress
 import logging
 import re
-import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -46,34 +47,78 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 #: Запросов кода в час и в сутки на номер, в час на устройство и на адрес.
 #: Каждая отправка платная, поэтому лимиты жёстче, чем у остальных форм.
-#: Счётчики живут в памяти процесса, как у формы обращений и игры сезонов:
-#: перезапуск их обнуляет, и это осознанно — они держат скрипт, а не человека
+#: Считаются по заявкам в базе, а не в памяти процесса: воркеров два,
+#: и счётчики в памяти каждого удваивали платный лимит, обнулялись выкатом
+#: и перебирались целиком на каждый запрос — скрипт со случайными номерами
+#: раздувал их так, что лимит сам клал API
 LIMITS = {
     "phone": (3, 3600),
     "phone_day": (10, 86_400),
     "device": (5, 3600),
     "ip": (20, 3600),
 }
-_SEEN: dict[str, list[float]] = {}
+
+#: Ключ замка pg_advisory_xact_lock, под которым проверяются лимиты
+#: и пишется заявка. Число любое, лишь бы не совпало с другими замками
+_LIMITS_LOCK = 0x4C4F4749  # «LOGI»
 
 _PHONE = re.compile(r"^\+\d{8,15}$")
 _CODE = re.compile(r"^\d{4,8}$")
 
 
-def _too_often(bucket: str, key: str) -> bool:
-    if not key:
-        return False
-    limit, window = LIMITS[bucket]
-    now = time.monotonic()
-    for stale in [k for k, v in _SEEN.items() if all(now - t > 86_400 for t in v)]:
-        del _SEEN[stale]
-    slot = f"{bucket}:{key}"
-    fresh = [t for t in _SEEN.get(slot, []) if now - t < window]
-    _SEEN[slot] = fresh
-    if len(fresh) >= limit:
-        return True
-    fresh.append(now)
-    return False
+def _net(host: str) -> str:
+    """Адрес для лимита. IPv6 — сетью /64: столько провайдер выдаёт одному
+    абоненту, адреса внутри неё меняются бесплатно, и лимит на адрес
+    обходился бы перебором последних цифр"""
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        return host[:45]
+    if isinstance(addr, ipaddress.IPv6Address):
+        if addr.ipv4_mapped:
+            return str(addr.ipv4_mapped)
+        return str(ipaddress.IPv6Network((addr, 64), strict=False))
+    return str(addr)
+
+
+async def _count(session: AsyncSession, window: int, *where) -> int:
+    since = func.now() - timedelta(seconds=window)
+    return (
+        await session.execute(
+            select(func.count())
+            .select_from(LoginRequest)
+            .where(LoginRequest.created_at > since, *where)
+        )
+    ).scalar_one()
+
+
+async def _check_limits(
+    session: AsyncSession, phone: str, device: str | None, ip: str, test_phone: bool
+) -> None:
+    """429, если исчерпан лимит; 503, если исчерпан суточный потолок кодов.
+
+    Отбитый запрос ничего не пишет: скрипт, упёршийся в лимит адреса или
+    устройства, больше не сжигает чужому номеру его квоту. Адрес и устройство
+    считают все попытки, дошедшие до шлюза, номер — только ушедшие коды:
+    сбой шлюза не вина человека.
+    """
+    sent = LoginRequest.status != "unsent"
+    for bucket, key, where in (
+        ("ip", ip, LoginRequest.ip == ip),
+        ("device", device, LoginRequest.device_id == device),
+        ("phone", phone, (LoginRequest.phone == phone) & sent),
+        ("phone_day", phone, (LoginRequest.phone == phone) & sent),
+    ):
+        limit, window = LIMITS[bucket]
+        if key and await _count(session, window, where) >= limit:
+            raise HTTPException(status_code=429, detail="too_often")
+
+    # Потолок бережёт счёт шлюза, код проверяющего бесплатный
+    cap = settings.login_codes_per_day
+    if cap and not test_phone:
+        if await _count(session, 86_400, LoginRequest.channel != "test", sent) >= cap:
+            log.warning("вход: исчерпан суточный потолок кодов (%s)", cap)
+            raise HTTPException(status_code=503, detail="daily_cap")
 
 
 def _is_test_phone(phone: str) -> bool:
@@ -166,29 +211,31 @@ async def request_code(
         raise HTTPException(status_code=503, detail="channel_off")
 
     device, platform = _device(request)
-    ip = request.client.host if request.client else ""
-    if (
-        _too_often("phone", phone)
-        or _too_often("phone_day", phone)
-        or _too_often("device", device or "")
-        or _too_often("ip", ip)
-    ):
-        raise HTTPException(status_code=429, detail="too_often")
+    ip = _net(request.client.host) if request.client else ""
+    # Сначала без замка: скрипт, упёршийся в лимит, отбивается парой
+    # счётов по индексу и не встаёт в общую очередь
+    await _check_limits(session, phone, device, ip, test_phone)
+    # Потом ещё раз под замком — и сразу пишем заявку: иначе пачка
+    # параллельных запросов прошла бы вся, пока ни одной заявки ещё нет.
+    # Замок транзакционный, коммит ниже его отпускает — к шлюзу идём без него
+    await session.execute(select(func.pg_advisory_xact_lock(_LIMITS_LOCK, 0)))
+    await _check_limits(session, phone, device, ip, test_phone)
 
     now = datetime.now(timezone.utc)
-    if test_phone:
+    row = LoginRequest(
+        id=str(uuid.uuid4()),
+        phone=phone,
         # Проверяющему App Store и Play код в телеграм не приходит: заявка
         # заводится без канала, а код сравнивается с настройкой при проверке
-        row = LoginRequest(
-            id=str(uuid.uuid4()),
-            phone=phone,
-            channel="test",
-            expires_at=now + timedelta(seconds=settings.login_code_ttl_sec),
-            device_id=device,
-            ip=ip[:45] or None,
-        )
-        session.add(row)
-        await session.commit()
+        channel="test" if test_phone else channel.name,
+        status="sent" if test_phone else "sending",
+        expires_at=now + timedelta(seconds=settings.login_code_ttl_sec),
+        device_id=device,
+        ip=ip or None,
+    )
+    session.add(row)
+    await session.commit()
+    if test_phone:
         return RequestOut(
             request_id=row.id,
             channel="telegram",
@@ -203,6 +250,11 @@ async def request_code(
         code_length=settings.login_code_length,
         callback_url=settings.tg_gateway_callback_url or None,
     )
+    if sent.status != SEND_OK:
+        # Заявка остаётся для лимитов адреса и устройства, а номеру
+        # в квоту не идёт: код до него не доехал
+        row.status = "unsent"
+        await session.commit()
     if sent.status == SEND_NO_TELEGRAM:
         # Единственный отказ со своим экраном: человеку надо объяснить,
         # что дело не в нём и не в номере, а в том, что канал пока один
@@ -211,16 +263,8 @@ async def request_code(
         log.warning("вход: канал %s не отправил код (%s)", channel.name, sent.error)
         raise HTTPException(status_code=502, detail="channel_failed")
 
-    row = LoginRequest(
-        id=str(uuid.uuid4()),
-        phone=phone,
-        channel=channel.name,
-        gateway_request_id=sent.request_id,
-        expires_at=now + timedelta(seconds=settings.login_code_ttl_sec),
-        device_id=device,
-        ip=ip[:45] or None,
-    )
-    session.add(row)
+    row.status = "sent"
+    row.gateway_request_id = sent.request_id
     await session.commit()
     return RequestOut(
         request_id=row.id,
@@ -240,7 +284,13 @@ async def verify_code(
     if not _CODE.match(body.code):
         raise HTTPException(status_code=422, detail="code_invalid_format")
 
-    row = await session.get(LoginRequest, body.request_id)
+    # Строка под замком до конца проверки: иначе параллельные догадки
+    # читали бы одно и то же число попыток и проверялись сверх лимита
+    row = (
+        await session.execute(
+            select(LoginRequest).where(LoginRequest.id == body.request_id).with_for_update()
+        )
+    ).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="request_not_found")
     if channel is None and row.channel != "test":
@@ -250,6 +300,8 @@ async def verify_code(
         row.status != "sent"
         or row.expires_at <= now
         or row.attempts >= settings.login_max_attempts
+        # Номер стёрт удалением аккаунта, пока код был в пути
+        or not row.phone
     ):
         if row.status == "sent":
             row.status = "expired"
@@ -273,9 +325,17 @@ async def verify_code(
             await session.execute(select(User).where(User.phone == row.phone))
         ).scalar_one_or_none()
         if user is None:
-            user = User(phone=row.phone)
-            session.add(user)
-            await session.flush()
+            # Две заявки на новый номер, подтверждённые разом (двойное нажатие,
+            # два телефона): вторая дождётся первой и найдёт её человека,
+            # а не упадёт на уникальности номера
+            await session.execute(
+                insert(User)
+                .values(phone=row.phone)
+                .on_conflict_do_nothing(index_elements=[User.phone])
+            )
+            user = (
+                await session.execute(select(User).where(User.phone == row.phone))
+            ).scalar_one()
         user.last_login_at = now
         await _adopt_intents(session, user, row.device_id)
         token, digest = new_token()

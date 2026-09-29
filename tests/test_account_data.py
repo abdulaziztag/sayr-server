@@ -4,17 +4,20 @@
 человек и сессия заводятся напрямую в базе.
 """
 
+import asyncio
 import io
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from PIL import Image
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
+from app.api import sync as sync_api
 from app.auth.tokens import new_token
 from app.config import AVATARS_DIR
 from app.db import SessionLocal
 from app.models import (
+    LoginRequest,
     Place,
     TripIntent,
     User,
@@ -52,6 +55,7 @@ async def clean():
         await session.execute(delete(UserTripDay))
         await session.execute(delete(UserSetting))
         await session.execute(delete(User))
+        await session.execute(delete(LoginRequest))
         await session.commit()
 
 
@@ -117,6 +121,17 @@ async def test_снятые_поля_анкеты_стираются(client):
     assert body["gender"] is None
     assert body["birth_year"] is None
     assert body["telegram_username"] is None
+
+
+async def test_стёртое_имя_становится_пустым_а_не_роняет_ручку(client):
+    token, _ = await _login()
+    await client.patch(
+        "/api/v1/me", json={"first_name": "Азиз", "last_name": "Каримов"}, headers=_auth(token)
+    )
+    resp = await client.patch("/api/v1/me", json={"last_name": None}, headers=_auth(token))
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["last_name"] == ""
+    assert resp.json()["first_name"] == "Азиз"
 
 
 async def test_год_рождения_с_опечаткой_не_принимается(client):
@@ -213,6 +228,49 @@ async def test_удаление_аккаунта_уносит_всё_своё(cl
     assert not (AVATARS_DIR / avatar).exists()
     # Токен после удаления не работает
     assert (await client.get("/api/v1/me", headers=_auth(token))).status_code == 401
+
+
+async def test_удаление_аккаунта_стирает_номер_из_заявок_на_вход(client):
+    """Заявки на код с человеком внешним ключом не связаны: номер из них
+    удаление стирает явно. Сами заявки остаются — по ним считаются лимиты
+    адреса и устройства, и «вошёл — удалился» их не обнуляет"""
+    token, _ = await _login()
+    expires = NOW + timedelta(minutes=5)
+    rows = (
+        ("+998901234567", "verified"),
+        ("+998901234567", "sent"),
+        ("+998907654321", "sent"),
+    )
+    async with SessionLocal() as session:
+        for n, (phone, status) in enumerate(rows):
+            session.add(
+                LoginRequest(
+                    id=f"00000000-0000-0000-0000-00000000000{n}",
+                    phone=phone,
+                    channel="telegram",
+                    gateway_request_id=f"gw-{n}",
+                    status=status,
+                    expires_at=expires,
+                    device_id="device-0001",
+                    ip="203.0.113.7",
+                )
+            )
+        await session.commit()
+
+    assert (await client.delete("/api/v1/me", headers=_auth(token))).status_code == 204
+
+    async with SessionLocal() as session:
+        left = (
+            await session.execute(select(LoginRequest).order_by(LoginRequest.id))
+        ).scalars().all()
+    assert [(r.phone, r.gateway_request_id, r.status) for r in left] == [
+        ("", None, "verified"),
+        # Живая заявка без номера никого не впустит
+        ("", None, "expired"),
+        # Чужой номер не задет
+        ("+998907654321", "gw-2", "sent"),
+    ]
+    assert {r.ip for r in left} == {"203.0.113.7"}
 
 
 # --- Синхронизация --------------------------------------------------------
@@ -348,6 +406,122 @@ async def test_место_снятое_с_публикации_пропуска�
 
 async def test_синхронизация_требует_входа(client):
     assert (await client.post("/api/v1/sync", json={})).status_code == 401
+
+
+async def _second_phone(user_id: int) -> dict:
+    """Второй телефон того же человека: свой токен"""
+    token, digest = new_token()
+    async with SessionLocal() as session:
+        session.add(UserSession(user_id=user_id, token_hash=digest, device_id="device-0002"))
+        await session.commit()
+    return {"Authorization": f"Bearer {token}", "X-Device-Id": "device-0002"}
+
+
+async def test_правка_без_связи_доезжает_до_второго_телефона(client):
+    """В горах правят без связи, а уезжает правка позже. По часам телефона
+    она старше метки второго телефона — новое отбирается по времени записи
+    на сервере, иначе такая правка до второго телефона не доезжала никогда"""
+    token, user_id = await _login()
+    _, two = await _slugs()
+    mark = (await client.post("/api/v1/sync", json={}, headers=_auth(token))).json()["now"]
+
+    offline = datetime.fromisoformat(mark) - timedelta(hours=3)
+    other = await _second_phone(user_id)
+    sent = await client.post(
+        "/api/v1/sync",
+        json={"favorites": [{"slug": two, "updated_at": offline.isoformat()}]},
+        headers=other,
+    )
+    assert sent.status_code == 200, sent.text
+
+    resp = await client.post("/api/v1/sync", json={"since": mark}, headers=_auth(token))
+    assert [f["slug"] for f in resp.json()["favorites"]] == [two]
+
+
+async def test_часы_из_будущего_не_выигрывают_навсегда(client):
+    """Телефон с часами на год вперёд выигрывал бы у всех правок этого года:
+    время из будущего срезается до времени сервера"""
+    token, user_id = await _login()
+    one, _ = await _slugs()
+    future = datetime.now(timezone.utc) + timedelta(days=365)
+    first = await client.post(
+        "/api/v1/sync",
+        json={"favorites": [{"slug": one, "updated_at": future.isoformat()}]},
+        headers=_auth(token),
+    )
+    stored = datetime.fromisoformat(first.json()["favorites"][0]["updated_at"])
+    assert stored <= datetime.fromisoformat(first.json()["now"])
+
+    other = await _second_phone(user_id)
+    resp = await client.post(
+        "/api/v1/sync",
+        json={
+            "favorites": [
+                {
+                    "slug": one,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "deleted": True,
+                }
+            ]
+        },
+        headers=other,
+    )
+    assert resp.json()["favorites"][0]["deleted"] is True
+
+
+async def test_время_без_зоны_не_роняет_сверку(client):
+    """Строка времени без зоны считается UTC: сравнение с временем из базы
+    иначе падало на наивном и осведомлённом времени"""
+    token, _ = await _login()
+    one, _ = await _slugs()
+    await client.post(
+        "/api/v1/sync",
+        json={"favorites": [{"slug": one, "updated_at": NOW.isoformat()}]},
+        headers=_auth(token),
+    )
+    naive = (NOW + timedelta(minutes=1)).replace(tzinfo=None).isoformat()
+    since = (NOW - timedelta(minutes=1)).replace(tzinfo=None).isoformat()
+    resp = await client.post(
+        "/api/v1/sync",
+        json={"since": since, "favorites": [{"slug": one, "updated_at": naive, "deleted": True}]},
+        headers=_auth(token),
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["favorites"][0]["deleted"] is True
+
+
+async def test_первая_сверка_с_двух_телефонов_разом(client, monkeypatch):
+    """Оба телефона отдают одно и то же гостевое избранное одновременно:
+    второй не должен падать на уникальности избранного и настроек"""
+    token, user_id = await _login()
+    one, two = await _slugs()
+    other = await _second_phone(user_id)
+
+    # Оба запроса доходят до записи вместе, а не по очереди
+    barrier = asyncio.Barrier(2)
+    slug_to_id = sync_api._slug_to_id
+
+    async def together(session, slugs):
+        ids = await slug_to_id(session, slugs)
+        await barrier.wait()
+        return ids
+
+    monkeypatch.setattr(sync_api, "_slug_to_id", together)
+    body = {
+        "favorites": [{"slug": one, "updated_at": NOW.isoformat()}],
+        "trip_days": [{"slug": two, "day": "2026-09-12", "updated_at": NOW.isoformat()}],
+        "settings": {"departure_city": "tashkent", "updated_at": NOW.isoformat()},
+    }
+    a, b = await asyncio.gather(
+        client.post("/api/v1/sync", json=body, headers=_auth(token)),
+        client.post("/api/v1/sync", json=body, headers=other),
+    )
+    assert a.status_code == 200, a.text
+    assert b.status_code == 200, b.text
+    async with SessionLocal() as session:
+        for model in (UserFavorite, UserTripDay, UserSetting):
+            count = (await session.execute(select(func.count()).select_from(model))).scalar_one()
+            assert count == 1, model.__name__
 
 
 # --- Планы по человеку ----------------------------------------------------
