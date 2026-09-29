@@ -155,9 +155,11 @@ def clamp_at(raw: str, now: datetime, retention_days: int) -> datetime | None:
     События едут из гор с опозданием, и день им нужен настоящий, но часы
     на телефоне врут: будущее ложится на сейчас, глубокое прошлое —
     на границу окна, чтобы ротация всё равно его свернула. Граница — на
-    сутки внутрь срока: самый старый день окна чистка уже подъедает,
-    и ротация его не пересчитывает (stats.rotate), так что событие,
-    положенное туда, пропало бы вместе с ним.
+    двое суток внутрь срока. Самый старый день окна чистка уже подъедает,
+    и ротация его не пересчитывает (stats.rotate), а день, что станет им
+    в полночь, пересчитывается лишь до последнего прохода текущих суток:
+    событие, доехавшее после него, пропало бы. На двое суток внутрь день
+    события ещё целые сутки в пересчёте, что бы ни показывали часы.
     """
     try:
         at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
@@ -165,7 +167,7 @@ def clamp_at(raw: str, now: datetime, retention_days: int) -> datetime | None:
         return None
     if at.tzinfo is None:
         at = at.replace(tzinfo=timezone.utc)
-    floor = now - timedelta(days=retention_days - 1)
+    floor = now - timedelta(days=retention_days - 2)
     return min(max(at, floor), now)
 
 

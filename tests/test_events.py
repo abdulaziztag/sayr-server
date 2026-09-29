@@ -123,9 +123,12 @@ def test_clamp_at_keeps_day_within_window():
     now = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
     future = clamp_at("2026-09-25T00:00:00Z", now, 30)
     assert future == now
-    # На сутки внутрь срока: самый старый день окна ротация уже не пересчитывает
+    # На двое суток внутрь срока: самый старый день окна ротация уже
+    # не пересчитывает, а следующий за ним — только до конца суток
     ancient = clamp_at("2020-01-01T00:00:00Z", now, 30)
-    assert ancient == now - timedelta(days=29)
+    assert ancient == now - timedelta(days=28)
+    edge = clamp_at("2026-08-22T06:00:00Z", now, 30)
+    assert edge == now - timedelta(days=28)
     yesterday = clamp_at("2026-09-19T07:00:00Z", now, 30)
     assert yesterday == datetime(2026, 9, 19, 7, 0, tzinfo=timezone.utc)
     naive = clamp_at("2026-09-19T07:00:00", now, 30)

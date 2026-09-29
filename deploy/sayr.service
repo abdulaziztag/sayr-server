@@ -20,9 +20,11 @@ Environment=PYTHONDONTWRITEBYTECODE=1
 # .env читает само приложение (pydantic-settings), systemd его не разбирает
 #
 # Два воркера — не деталь: каждый крутит свой цикл ротации статистики,
-# и они лезут в одни и те же строки daily_stats. Вставка агрегата поэтому
-# on_conflict_do_nothing, а чистка сырья вынесена в отдельную транзакцию
-# (см. app/stats.py). Меняя число воркеров, помните об этом.
+# и они лезут в одни и те же строки daily_stats. Поэтому пересчёт дня
+# идёт под pg_advisory_xact_lock, а агрегат пишется upsert-ом: второй
+# воркер ждёт первого, сверяет день заново и уже не пересчитывает его.
+# Чистка сырья вынесена в отдельную транзакцию (см. app/stats.py rotate).
+# Меняя число воркеров, помните об этом.
 ExecStart=/root/Projects/sayr-server/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
 Restart=on-failure
 RestartSec=3
