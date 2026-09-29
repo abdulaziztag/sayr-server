@@ -198,6 +198,14 @@ async def test_проверка_закрыта_паролем(client):
     assert wrong.status_code == 401
 
 
+async def test_смена_пароля_закрывает_проверку(review_client, monkeypatch):
+    """В cookie — отпечаток пароля, которым вошли. Раньше там лежало
+    просто «ok», и вход переживал смену пароля на сутки"""
+    assert 'name="password"' not in (await review_client.get("/seasons/review")).text
+    monkeypatch.setattr(settings, "admin_password", "новый-пароль")
+    assert 'name="password"' in (await review_client.get("/seasons/review")).text
+
+
 async def test_одобрение_пишет_месяцы_и_сезоны(client, review_client):
     try:
         for voter in ("a", "b", "c"):

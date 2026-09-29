@@ -1,6 +1,7 @@
 """Админка для кураторского наполнения каталога: /admin."""
 
 import logging
+import math
 import re
 import secrets
 from html import escape
@@ -25,7 +26,7 @@ try:  # расположение менялось между версиями п
 except ImportError:  # pragma: no cover
     from fastapi_storages.base import StorageFile
 
-from . import stats, stats_dashboard
+from . import login_guard, stats, stats_dashboard
 from .config import GPX_DIR, REPORTS_DIR, SERVER_DIR, settings
 from .db import SessionLocal, engine
 from .models import (
@@ -51,13 +52,14 @@ from .models import (
     TgStatus,
     TesterSignup,
     User,
+    masked_phone,
     photo_storage,
 )
 from .reports import STATUS_RU, telegram_url, topic_names
 from .seasons import LIMITS
 from .services import attachments
 from .services.gpx import recorded_from_target, reverse_track, thin_if_heavy, track_stats
-from .services.images import make_thumbnail, retire_photo, store_upload
+from .services.images import drop_avatar, make_thumbnail, retire_photo, store_upload
 from .services.nearby import rebuild_for_track
 
 
@@ -120,22 +122,62 @@ def _translation_progress(model, attribute, request=None) -> str:
     return " · ".join(marks) if marks else "—"
 
 
+def _session_mark() -> str:
+    """Что лежит в сессии вошедшего: отпечаток текущих имени и пароля.
+
+    Раньше там было просто `admin: true`, и сессия переживала смену пароля.
+    Теперь сверяем отпечаток на каждом запросе: сменили SAYR_ADMIN_PASSWORD —
+    все, кто был внутри, выходят (см. login_guard.fingerprint)
+    """
+    return login_guard.fingerprint(f"{settings.admin_username}\n{settings.admin_password}")
+
+
 class BasicAuthBackend(AuthenticationBackend):
-    async def login(self, request: Request) -> bool:
+    #: Шаблоны админки — чтобы паузу после промахов показать той же формой
+    #: входа, а не голым текстом. Ставит mount_admin: пока нет объекта
+    #: Admin, нет и шаблонов
+    templates = None
+
+    async def login(self, request: Request) -> bool | Response:
+        # Форму читаем ДО проверки паузы: от проверки до записи промаха не
+        # должно быть ни одного await. Иначе цикл отдаёт ход на чтении тела,
+        # и залп параллельных запросов весь проходит проверку раньше, чем
+        # хоть один запишет промах, — сотня паролей вместо шести
         form = await request.form()
-        ok_user = secrets.compare_digest(str(form.get("username", "")), settings.admin_username)
-        ok_pass = secrets.compare_digest(str(form.get("password", "")), settings.admin_password)
+        wait = login_guard.locked_for(login_guard.ADMIN, request)
+        if wait:
+            return await self._locked(request, wait)
+        # Сравниваем БАЙТЫ, как и на проверке сезонов: compare_digest на
+        # строках с кириллицей бросает TypeError — вход с русской раскладкой
+        # отвечал пятисоткой, а кириллический пароль не подошёл бы никогда
+        ok_user = secrets.compare_digest(
+            str(form.get("username", "")).encode(), settings.admin_username.encode()
+        )
+        ok_pass = secrets.compare_digest(
+            str(form.get("password", "")).encode(), settings.admin_password.encode()
+        )
         if ok_user and ok_pass:
-            request.session.update({"admin": True})
+            login_guard.passed(login_guard.ADMIN, request)
+            request.session.update({"admin": _session_mark()})
             return True
+        login_guard.failed(login_guard.ADMIN, request)
         return False
+
+    async def _locked(self, request: Request, wait: int) -> Response:
+        minutes = math.ceil(wait / 60)
+        return await self.templates.TemplateResponse(
+            request,
+            "sqladmin/login.html",
+            {"error": f"Слишком много неверных попыток. Попробуйте через {minutes} мин."},
+            status_code=429,
+        )
 
     async def logout(self, request: Request) -> bool:
         request.session.clear()
         return True
 
     async def authenticate(self, request: Request) -> bool:
-        return bool(request.session.get("admin"))
+        return request.session.get("admin") == _session_mark()
 
 
 class RegionAdmin(ModelView, model=Region):
@@ -619,7 +661,9 @@ class TesterSignupAdmin(ModelView, model=TesterSignup):
     }
     form_columns = [TesterSignup.invited]
     can_create = False
-    # Удалять можно: спам-адреса чистятся отсюда же
+    # Удалять можно: спам-адреса чистятся отсюда же.
+    # Выгрузка остаётся намеренно: адреса и так видны в списке целиком,
+    # а список тестировщиков Play Console заливается как раз файлом CSV
 
 
 
@@ -844,7 +888,11 @@ class PlaceReportAdmin(ModelView, model=PlaceReport):
     # wtforms-поля, и «rows» там роняет форму
     form_widget_args = {"admin_note": {"rows": 4}}
     can_create = False
-    # Удалять можно: спам чистится отсюда же
+    # Удалять можно: спам чистится отсюда же.
+    # Выгрузки нет: в заявках чужие контакты и чужие слова, а на /privacy
+    # обещано, что разобранная заявка удаляется целиком — копия в CSV
+    # на чьём-то ноутбуке это обещание не выполнит
+    can_export = False
 
     def list_query(self, request: Request) -> Select:
         return self._picked(select(self.model), request)
@@ -1161,6 +1209,9 @@ class PushTokenAdmin(ModelView, model=PushToken):
     }
     can_create = False
     can_edit = False
+    # Строка установки — это устройство конкретного человека: номер
+    # устройства и город выезда. Смотреть — да, уносить списком — незачем
+    can_export = False
 
 
 class UserAdmin(ModelView, model=User):
@@ -1199,10 +1250,33 @@ class UserAdmin(ModelView, model=User):
         User.profile_filled_at: "Заполнил анкету",
         User.companions_banned_at: "Попутчики запрещены",
     }
-    column_formatters = {User.phone: lambda row, _: _masked_phone(row.phone)}
-    column_formatters_detail = {User.phone: lambda row, _: _masked_phone(row.phone)}
+    column_formatters = {User.phone: lambda row, _: masked_phone(row.phone)}
+    column_formatters_detail = {User.phone: lambda row, _: masked_phone(row.phone)}
     can_create = False
     can_edit = False
+    # Выгрузка идёт мимо форматтеров: /admin/user/export/csv отдавала
+    # номера целиком, всех разом — ровно то, от чего прячет маска
+    can_export = False
+
+    async def delete_model(self, request: Request, pk) -> None:
+        """Удаление по письменной просьбе — тем же путём, что из приложения.
+
+        Не хуки on_model_delete и after_model_delete вокруг удаления
+        sqladmin, а своё целиком: уборка и само удаление должны пройти одной
+        транзакцией, как в delete_me. Иначе сбой посередине оставил бы
+        человека в базе с уже отменёнными походами.
+        """
+        from .api.me import forget_account
+
+        async with SessionLocal() as session:
+            user = await session.get(User, int(pk))
+            if user is None:
+                return
+            avatar = await forget_account(session, user)
+            await session.commit()
+        if avatar:
+            drop_avatar(avatar)
+        log.info("аккаунт %s удалён из админки", pk)
 
 
 class RoomAdmin(ModelView, model=Room):
@@ -1271,6 +1345,8 @@ class RoomReportAdmin(ModelView, model=RoomReport):
     }
     can_create = False
     can_edit = False
+    # Кто на кого жаловался и что написал — выгружать это списком незачем
+    can_export = False
 
     async def _resolve(self, request: Request, ban: bool) -> Response:
         from datetime import datetime, timezone
@@ -1384,17 +1460,22 @@ class TgMessageAdmin(ModelView, model=TgMessage):
     }
     can_create = False
     can_edit = False
-
-
-def _masked_phone(phone: str | None) -> str:
-    """+998 90 ***-**-67 — узнать своего человека хватает, а читать
-    список телефонов в админке незачем."""
-    if not phone or len(phone) < 6:
-        return phone or ""
-    return f"{phone[:7]} ***-**-{phone[-2:]}"
+    # Чужая переписка: срок жизни и стирание по /leave не догонят копию,
+    # унесённую выгрузкой
+    can_export = False
 
 
 def mount_admin(app: FastAPI) -> Admin:
+    # session_kwargs уходят в SessionMiddleware: по умолчанию он ставит
+    # cookie без Secure и с same_site=lax — на публичном сервере это
+    # сессия админа открытым текстом. И живёт она там две недели —
+    # срок задаём свой (admin_session_max_age_sec)
+    auth = BasicAuthBackend(
+        secret_key=settings.secret_key,
+        https_only=settings.admin_cookie_secure,
+        same_site="strict",
+        max_age=settings.admin_session_max_age_sec,
+    )
     admin = Admin(
         app,
         engine,
@@ -1403,15 +1484,9 @@ def mount_admin(app: FastAPI) -> Admin:
         # относительно рабочего каталога, и своя страница места находилась бы
         # только при запуске из server/
         templates_dir=str(SERVER_DIR / "templates"),
-        # session_kwargs уходят в SessionMiddleware: по умолчанию он ставит
-        # cookie без Secure и с same_site=lax — на публичном сервере это
-        # сессия админа открытым текстом
-        authentication_backend=BasicAuthBackend(
-            secret_key=settings.secret_key,
-            https_only=settings.admin_cookie_secure,
-            same_site="strict",
-        ),
+        authentication_backend=auth,
     )
+    auth.templates = admin.templates
     admin.add_view(PlaceAdmin)
     admin.add_view(PlacePhotoAdmin)
     admin.add_view(PlaceTrackAdmin)

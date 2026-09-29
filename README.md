@@ -154,8 +154,11 @@ uv run uvicorn app.main:app --reload
 
 Без docker база поднимается через Homebrew: `bash scripts/local_db.sh`.
 
-- API-доки: http://localhost:8000/docs
-- Админка: http://localhost:8000/admin
+- API-доки: http://localhost:8000/docs — только с `SAYR_API_DOCS=1` в `.env`;
+  на бою они выключены, схема раскрывала бы и ручки за флагами
+- Админка: http://localhost:8000/admin. Вход живёт 12 часов и кончается
+  со сменой пароля. После пяти промахов подряд вход с адреса запирается
+  на минуту, дальше вдвое дольше, до 15 минут; перезапуск службы снимает паузу
 
 ```bash
 uv run pytest

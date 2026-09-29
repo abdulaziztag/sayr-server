@@ -968,6 +968,14 @@ class Gender(str, enum.Enum):
     unspecified = "unspecified"
 
 
+def masked_phone(phone: str | None) -> str:
+    """+998 90 ***-**-67 — узнать своего человека хватает, а читать
+    список телефонов в админке незачем."""
+    if not phone or len(phone) < 6:
+        return phone or ""
+    return f"{phone[:7]} ***-**-{phone[-2:]}"
+
+
 class User(Base):
     """Человек. Заводится первым успешным входом по номеру телефона.
 
@@ -1015,7 +1023,10 @@ class User(Base):
     )
 
     def __str__(self) -> str:
-        return self.first_name or self.phone
+        # Строкой человек виден в админке всюду, где на него ссылаются:
+        # жалобы, комнаты. Имя он может стереть сам, и тогда жалоба
+        # показывала номер целиком — мимо маски из списка людей
+        return self.first_name or masked_phone(self.phone)
 
 
 class UserSession(Base):

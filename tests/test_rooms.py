@@ -6,6 +6,7 @@
 """
 
 import asyncio
+import uuid
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
@@ -14,10 +15,11 @@ from sqlalchemy import delete, select
 
 from app.api import rooms as rooms_api
 from app.auth.tokens import new_token
-from app.config import settings
+from app.config import AVATARS_DIR, settings
 from app.db import SessionLocal
 from app.models import (
     Gender,
+    LoginRequest,
     Place,
     PushOutbox,
     PushToken,
@@ -25,10 +27,12 @@ from app.models import (
     RoomMember,
     RoomReport,
     TgJob,
+    TgMessage,
     User,
     UserBlock,
     UserSession,
     avatar_storage,
+    masked_phone,
 )
 from app.push import SendResult
 from app.push.outbox import render, send_outbox
@@ -952,6 +956,64 @@ async def test_удаление_организатора_отменяет_пох
         assert r.status == "cancelled" and r.organizer_id is None
 
 
+async def test_удаление_из_админки_убирает_то_же_что_из_приложения(client, admin_client):
+    """Письменную просьбу об удалении владелец исполняет в админке. Раньше
+    она просто стирала строку: фото оставалось по открытой ссылке, переписка
+    в группах — в базе, походы жили без организатора, из групп не выводили"""
+    gone, gone_id = await person(name="Zafar")
+    mine = await open_room(client, gone)
+    friend, friend_id = await person(name="Друг")
+    await client.post(
+        f"/api/v1/invites/{mine['invite_url'].rsplit('/', 1)[1]}/join", headers=friend
+    )
+    # Чужой поход, куда он вступил и где служба уже знает его аккаунт
+    theirs = await open_room(
+        client, friend, day=(DAY + timedelta(days=2)).isoformat(), is_open=False
+    )
+    await set_room(theirs["code"], tg_state="ready", tg_chat_id=-100321)
+    await client.post(
+        f"/api/v1/invites/{theirs['invite_url'].rsplit('/', 1)[1]}/join", headers=gone
+    )
+    now = datetime.now(timezone.utc)
+    async with SessionLocal() as session:
+        member = (
+            await session.execute(
+                select(RoomMember)
+                .join(Room, Room.id == RoomMember.room_id)
+                .where(Room.code == theirs["code"], RoomMember.user_id == gone_id)
+            )
+        ).scalar_one()
+        member.tg_user_id = 777
+        phone = (await session.get(User, gone_id)).phone
+        session.add(TgMessage(room_id=member.room_id, tg_message_id=1, tg_user_id=777,
+                              user_id=gone_id, sent_at=now, text="моё"))
+        session.add(LoginRequest(id=str(uuid.uuid4()), phone=phone, channel="telegram",
+                                 expires_at=now))
+        await session.commit()
+    (AVATARS_DIR / "Zafar.jpg").write_bytes(b"jpeg")
+
+    try:
+        resp = await admin_client.request("DELETE", f"/admin/user/delete?pks={gone_id}")
+        # sqladmin прячет исключение из удаления в ?error= адреса возврата
+        assert resp.status_code == 200 and "error" not in resp.text, resp.text
+
+        async with SessionLocal() as session:
+            assert await session.get(User, gone_id) is None
+            r = (await session.execute(select(Room).where(Room.code == mine["code"]))).scalar_one()
+            assert r.status == "cancelled"
+            assert (await session.execute(select(TgMessage))).first() is None
+            left = await session.execute(select(LoginRequest).where(LoginRequest.phone == phone))
+            assert left.first() is None, "номер остался в заявках на код"
+        assert "room_cancelled" in await pushes(friend_id)
+        assert [k.payload["tg_user_id"] for k in await jobs("kick")] == [777]
+        assert not (AVATARS_DIR / "Zafar.jpg").exists(), "фото пережило аккаунт"
+    finally:
+        async with SessionLocal() as session:
+            await session.execute(delete(LoginRequest).where(LoginRequest.phone == phone))
+            await session.commit()
+        (AVATARS_DIR / "Zafar.jpg").unlink(missing_ok=True)
+
+
 async def test_уборка_архивирует_и_выводит_из_группы(client):
     org, _ = await person()
     room = await open_room(client, org)
@@ -1097,3 +1159,29 @@ async def test_комнаты_и_жалобы_открываются_в_адми
     assert (await admin_client.get("/admin/room/list")).status_code == 200
     reports = await admin_client.get("/admin/room-report/list")
     assert reports.status_code == 200 and "spam" in reports.text
+
+
+async def test_жалоба_в_админке_не_показывает_номер_целиком(client, admin_client):
+    """В жалобе человек виден строкой — именем, а без имени номером. Имя
+    он стирает в анкете сам, и номер выходил целиком, хотя в списке людей
+    и в карточке человека он под маской"""
+    org, org_id = await person()
+    room = await open_room(client, org)
+    madina, _ = await person(name="Мадина")
+    await client.post(
+        "/api/v1/reports",
+        json={"user_id": org_id, "room": room["code"], "reason": "spam"},
+        headers=madina,
+    )
+    async with SessionLocal() as session:
+        target = await session.get(User, org_id)
+        target.first_name = ""
+        phone = target.phone
+        report_id = (await session.execute(select(RoomReport.id))).scalar_one()
+        await session.commit()
+
+    for url in ("/admin/room-report/list", f"/admin/room-report/details/{report_id}"):
+        page = await admin_client.get(url)
+        assert page.status_code == 200
+        assert phone not in page.text, url
+        assert masked_phone(phone) in page.text, url
