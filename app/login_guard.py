@@ -22,12 +22,12 @@
 
 import hashlib
 import hmac
-import ipaddress
 import math
 import time
 
 from starlette.requests import Request
 
+from .client_ip import limit_key
 from .config import settings
 
 ADMIN = "admin"
@@ -55,26 +55,15 @@ _FAILS: dict[str, tuple[int, float, float]] = {}
 
 
 def client_key(request: Request) -> str:
-    """Адрес, по которому считаем промахи.
+    """Адрес, по которому считаем промахи: тот же ключ, что у остальных
+    счётчиков (IPv6 — сетью /64, см. client_ip).
 
-    IPv6 — сетью /64, а не адресом: провайдер выдаёт абоненту целую /64,
-    и адресов в ней хватит, чтобы на каждую попытку брать новый.
-    Адрес клиента uvicorn берёт из X-Forwarded-For — nginx стоит на том
-    же сервере, а 127.0.0.1 uvicorn доверяет по умолчанию. Прокси с другого
-    адреса надо назвать uvicorn в --forwarded-allow-ips (так сделано
-    в compose.prod.yml): иначе для счётчика все клиенты — один адрес
-    прокси, и шесть чужих промахов запирают вход всем, владельцу тоже.
+    Прокси с другого адреса, не с 127.0.0.1, надо назвать uvicorn
+    в --forwarded-allow-ips (так сделано в compose.prod.yml): иначе для
+    счётчика все клиенты — один адрес прокси, и шесть чужих промахов
+    запирают вход всем, владельцу тоже.
     """
-    host = request.client.host if request.client else ""
-    try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        return host
-    if ip.version == 6:
-        if ip.ipv4_mapped:
-            return str(ip.ipv4_mapped)
-        return str(ipaddress.ip_network(f"{ip}/64", strict=False))
-    return str(ip)
+    return limit_key(request)
 
 
 def _slot(door: str, request: Request) -> str:

@@ -16,7 +16,10 @@ from fastapi import Request
 
 
 def limit_key(request: Request) -> str:
-    host = request.client.host if request.client else ""
+    return host_key(request.client.host if request.client else "")
+
+
+def host_key(host: str) -> str:
     try:
         ip = ipaddress.ip_address(host)
     except ValueError:

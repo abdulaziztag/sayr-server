@@ -11,7 +11,6 @@
 Спека: docs/superpowers/specs/2026-09-23-account-login-design.md
 """
 
-import ipaddress
 import logging
 import re
 import time
@@ -39,6 +38,7 @@ from ..auth.gateway import (
 from ..auth.schemas import UserOut
 from ..auth.telegram import TelegramGateway
 from ..auth.tokens import current_session, new_token
+from ..client_ip import host_key
 from ..config import settings
 from ..db import get_session
 from ..models import LoginRequest, TripIntent, User, UserSession
@@ -88,18 +88,9 @@ _CODE = re.compile(r"^\d{4,8}$")
 
 
 def _net(host: str) -> str:
-    """Адрес для лимита. IPv6 — сетью /64: столько провайдер выдаёт одному
-    абоненту, адреса внутри неё меняются бесплатно, и лимит на адрес
-    обходился бы перебором последних цифр"""
-    try:
-        addr = ipaddress.ip_address(host)
-    except ValueError:
-        return host[:45]
-    if isinstance(addr, ipaddress.IPv6Address):
-        if addr.ipv4_mapped:
-            return str(addr.ipv4_mapped)
-        return str(ipaddress.IPv6Network((addr, 64), strict=False))
-    return str(addr)
+    """Адрес для лимита — общим ключом (IPv6 — сетью /64, см. client_ip),
+    обрезанный под ширину столбца заявки"""
+    return host_key(host)[:45]
 
 
 def _counted(window: int, *where) -> Select:

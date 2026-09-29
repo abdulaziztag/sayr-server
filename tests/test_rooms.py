@@ -1005,7 +1005,9 @@ async def test_удаление_из_админки_убирает_то_же_ч�
             left = await session.execute(select(LoginRequest).where(LoginRequest.phone == phone))
             assert left.first() is None, "номер остался в заявках на код"
         assert "room_cancelled" in await pushes(friend_id)
-        assert [k.payload["tg_user_id"] for k in await jobs("kick")] == [777]
+        # Из группы с известным аккаунтом — выгнать; задание без аккаунта
+        # гасит личную ссылку в комнате, где его ещё не знали
+        assert 777 in [k.payload["tg_user_id"] for k in await jobs("kick")]
         assert not (AVATARS_DIR / "Zafar.jpg").exists(), "фото пережило аккаунт"
     finally:
         async with SessionLocal() as session:
