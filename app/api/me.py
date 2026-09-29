@@ -94,6 +94,10 @@ async def set_avatar(
     session: AsyncSession = Depends(get_session),
 ) -> UserOut:
     data = await file.read()
+    # В очереди картинок (off_loop) можно простоять долго — соединение
+    # с базой на это время отдаём пулу. Строка человека после commit жива:
+    # expire_on_commit=False
+    await session.commit()
     try:
         name = await off_loop(store_avatar, data, user.id)
     except ValueError:

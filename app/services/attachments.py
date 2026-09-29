@@ -147,7 +147,7 @@ def _check_image(data: bytes, decoded: str, original_name: str) -> None:
     на превью в полтора гигабайта памяти — с формы, открытой всем без входа.
     """
     try:
-        with open_upload(data, (decoded,)):
+        with open_upload(data, THUMB_SIDE, (decoded,)):
             pass
     except TooManyPixels:
         raise Rejected("too_large", original_name) from None
@@ -168,7 +168,7 @@ def _make_thumb(data: bytes, name: str, decoded: str) -> None:
     на диске, и пятисотая вместо «спасибо» оставила бы его сиротой.
     """
     try:
-        with open_upload(data, (decoded,)) as im:
+        with open_upload(data, THUMB_SIDE, (decoded,)) as im:
             shrink(im, THUMB_SIDE).save(REPORTS_DIR / thumb_name(name), "JPEG", quality=80)
     except Exception:  # noqa: BLE001 — превью необязательно, заявка важнее
         return

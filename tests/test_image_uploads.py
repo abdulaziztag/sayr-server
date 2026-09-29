@@ -20,9 +20,10 @@ from sqlalchemy import delete
 from app.api import me
 from app.auth.tokens import new_token
 from app.config import AVATARS_DIR, settings
-from app.db import SessionLocal
+from app.db import SessionLocal, engine
 from app.models import User, UserSession
-from app.services.images import TooManyPixels, open_upload, shrink
+from app.services.images import (AVATAR_SIDE, TooManyPixels, open_upload, shrink,
+                                 store_upload)
 
 
 PHONE = "+998907654321"
@@ -70,6 +71,18 @@ def _png_header(width: int, height: int) -> bytes:
     head = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
     return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", head)
             + chunk(b"IDAT", zlib.compress(b"\x00" * 64)) + chunk(b"IEND", b""))
+
+
+def _webp_header(width: int, height: int) -> bytes:
+    """WebP без пикселей: один заголовок VP8L, сорок байт на любой размер.
+
+    За заголовком нули, раскрыть такой кадр нельзя, но размер Image.open
+    из него читает — и отказ обязан прийти уже по нему.
+    """
+    bits = (width - 1) | (height - 1) << 14
+    body = b"\x2f" + struct.pack("<I", bits) + b"\x00" * 15
+    chunk = b"VP8L" + struct.pack("<I", len(body)) + body
+    return b"RIFF" + struct.pack("<I", 4 + len(chunk)) + b"WEBP" + chunk
 
 
 def _image(fmt: str, size: tuple[int, int] = (900, 600), **params) -> bytes:
@@ -174,7 +187,7 @@ def test_палитра_уменьшается_со_сглаживанием():
     buf = io.BytesIO()
     im.convert("P").save(buf, "PNG")
 
-    with open_upload(buf.getvalue()) as opened:
+    with open_upload(buf.getvalue(), 100) as opened:
         assert opened.mode == "P"
         small = shrink(opened, 100)
     assert small.mode == "RGB" and small.size == (100, 100)
@@ -186,6 +199,91 @@ def test_палитра_уменьшается_со_сглаживанием():
 def test_предел_проверяется_по_заголовку(monkeypatch):
     monkeypatch.setattr(settings, "image_max_pixels", 1000)
     with pytest.raises(TooManyPixels):
-        open_upload(_png_header(100, 100))
-    with open_upload(_png_header(10, 10)) as im:
+        open_upload(_png_header(100, 100), 512)
+    with open_upload(_png_header(10, 10), 512) as im:
         assert im.size == (10, 10)
+
+
+async def test_лёгкий_webp_под_пределом_отбивается(client, avatars):
+    """36 мегапикселей — под пределом для RGB, но WebP раскрывается вчетверо
+    дороже: такой кадр в полтора килобайта съедал шестьсот мегабайт."""
+    token = await _login()
+    resp = await _upload(client, token, _webp_header(6000, 6000), "photo.webp")
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "image_too_large"
+    assert set(AVATARS_DIR.iterdir()) == avatars
+
+
+def test_дорогим_на_пиксель_кадрам_достаётся_меньше_пикселей(monkeypatch):
+    """Прозрачность раскрывается вдвое дороже RGB, WebP — вчетверо."""
+    side = 60
+
+    def encoded(mode: str, fmt: str) -> bytes:
+        buf = io.BytesIO()
+        Image.new(mode, (side, side)).save(buf, fmt)
+        return buf.getvalue()
+
+    rgb, rgba, webp = encoded("RGB", "PNG"), encoded("RGBA", "PNG"), encoded("RGB", "WEBP")
+
+    monkeypatch.setattr(settings, "image_max_pixels", side * side * 2 - 1)
+    open_upload(rgb, AVATAR_SIDE).close()
+    with pytest.raises(TooManyPixels):
+        open_upload(rgba, AVATAR_SIDE)
+
+    monkeypatch.setattr(settings, "image_max_pixels", side * side * 2)
+    open_upload(rgba, AVATAR_SIDE).close()
+    with pytest.raises(TooManyPixels):
+        open_upload(webp, AVATAR_SIDE)
+
+    monkeypatch.setattr(settings, "image_max_pixels", side * side * 4)
+    open_upload(webp, AVATAR_SIDE).close()
+
+
+async def test_jpeg_меряется_таким_каким_распакуется(client, monkeypatch):
+    """JPEG раскрывается сразу уменьшенным, и мерить его надо таким.
+
+    Кадр 3000×3000 под фото анкеты распаковывается вдвое меньшим по
+    стороне — 2,25 мегапикселя — и при пределе в три проходит, а PNG
+    того же размера нет. Так проходит и снимок 50-мегапиксельной камеры
+    телефона. CMYK уменьшается так же: раньше его переводили в RGB
+    целиком, мимо draft, и платили за это полной копией кадра.
+    """
+    monkeypatch.setattr(settings, "image_max_pixels", 3_000_000)
+    for mode in ("RGB", "CMYK"):
+        buf = io.BytesIO()
+        Image.new(mode, (3000, 3000)).save(buf, "JPEG")
+        with open_upload(buf.getvalue(), AVATAR_SIDE) as im:
+            assert (im.mode, im.size) == (mode, (1500, 1500))
+            assert shrink(im, AVATAR_SIDE).size == (AVATAR_SIDE, AVATAR_SIDE)
+
+    token = await _login()
+    resp = await _upload(client, token, _image("JPEG", (3000, 3000)), "photo.jpg")
+    assert resp.status_code == 200
+    resp = await _upload(client, token, _image("PNG", (3000, 3000)), "photo.png")
+    assert resp.status_code == 422
+
+
+def test_предел_pillow_опущен_и_мимо_open_upload():
+    """Снимки каталога из админки раскрываются без open_upload. Свой предел
+    Pillow держит на 179 мегапикселях; опущенный до нашего, он отказывает
+    уже выше восьмидесяти — не раскрыв ни байта."""
+    with pytest.raises(Image.DecompressionBombError):
+        store_upload(_png_header(9500, 9500), "test-bomb")
+
+
+async def test_очередь_фото_не_держит_соединение_с_базой(client, monkeypatch):
+    """Фото раскрываются по одному на воркер, и очереди можно ждать долго.
+    Каждый, кто ждал её с соединением в руках, выбывал из пула в пятнадцать
+    соединений, и лента с админкой отваливались по таймауту пула."""
+    held = []
+    store = me.store_avatar
+
+    def spy(data, user_id):
+        held.append(engine.pool.checkedout())
+        return store(data, user_id)
+
+    monkeypatch.setattr(me, "store_avatar", spy)
+    token = await _login()
+    resp = await _upload(client, token, _image("JPEG"), "photo.jpg")
+    assert resp.status_code == 200
+    assert held == [0], "соединение с базой занято, пока фото ждёт очереди"
