@@ -103,15 +103,14 @@ docker compose -f compose.prod.yml exec app python -m seed.seed
 
 ### Reverse proxy и TLS
 
-Два готовых конфига, оба проксируют на `127.0.0.1:8000`:
+`deploy/nginx-sayr.conf` проксирует на `127.0.0.1:8000`. Кладётся в
+`/etc/nginx/sites-available/sayr`, симлинк в `sites-enabled`, потом
+`nginx -t && systemctl reload nginx` и `certbot --nginx -d <домен>`.
+Именно `reload`, а не `restart`: на общем сервере restart уронил бы
+соседние сайты.
 
-- `deploy/nginx-sayr.conf` — если на сервере уже стоит nginx. Кладётся в
-  `/etc/nginx/sites-available/sayr`, симлинк в `sites-enabled`, потом
-  `nginx -t && systemctl reload nginx` и `certbot --nginx -d <домен>`.
-  Именно `reload`, а не `restart`: на общем сервере restart уронил бы
-  соседние сайты.
-- `deploy/Caddyfile` — если веб-сервера ещё нет. Caddy сам получает
-  и продлевает сертификат.
+Конфига для Caddy больше нет: на бою nginx, а заготовка отдавала бы
+`/media` с диска целиком — вместе с `reports/` и `deleted-photos/`.
 
 Домена нет? Бесплатный вариант — [duckdns.org](https://www.duckdns.org):
 заводится имя, указывается IP сервера, Let's Encrypt выдаёт на него
