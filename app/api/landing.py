@@ -14,12 +14,14 @@
 """
 
 import re
+import time
 
 from fastapi import APIRouter, Depends, Form, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..client_ip import limit_key
 from ..config import settings
 from ..db import get_session
 from ..models import TesterSignup
@@ -613,8 +615,32 @@ _THANKS_T = {
 }
 
 
+#: Сколько заявок на тест принимаем с одного адреса за час. Приманка ловит
+#: бота, который заполняет всё подряд, но не скрипт, написанный под эту
+#: форму: без предела он за ночь набил бы таблицу чужими адресами, а владелец
+#: разбирает её руками — и написал бы людям, которые ни о чём не просили.
+#: Двадцать — с запасом на сотового оператора, у которого за одним адресом
+#: пол-города. Счётчик в памяти процесса, как у формы обращений; IPv6
+#: считаем сетью /64
+_LIMIT, _WINDOW = 20, 3600
+_RECENT: dict[str, list[float]] = {}
+
+
+def _too_often(ip: str) -> bool:
+    now = time.monotonic()
+    for key in [k for k, v in _RECENT.items() if all(now - t > _WINDOW for t in v)]:
+        del _RECENT[key]
+    fresh = [t for t in _RECENT.get(ip, []) if now - t < _WINDOW]
+    _RECENT[ip] = fresh
+    if len(fresh) >= _LIMIT:
+        return True
+    fresh.append(now)
+    return False
+
+
 @router.post("/android-testers")
 async def android_tester_signup(
+    request: Request,
     email: str = Form(..., max_length=320),
     lang: str = Form("ru"),
     website: str = Form(""),
@@ -628,12 +654,22 @@ async def android_tester_signup(
     наружу, какие адреса лежат в базе, а боту — что его раскусили.
     """
     lang = lang if lang in ("ru", "uz") else "ru"
+    if settings.play_store_url:
+        # Форма пропадает со страницы, как только есть ссылка на Google Play
+        # (_tester_form), а ручка жила дальше и копила адреса, которые
+        # никто уже не разберёт. Скрипту — отказ, форме из старой вкладки —
+        # лендинг, где теперь стоит кнопка магазина
+        if "application/json" in accept:
+            raise HTTPException(410, "закрытый тест закончился")
+        return RedirectResponse("/uz" if lang == "uz" else "/", status_code=303)
     address = email.strip().lower()
     if not _EMAIL.fullmatch(address):
         raise HTTPException(422, "это не похоже на почту")
 
     # Поле-приманка заполнено — человек его не видит, значит это бот.
     if not website:
+        if _too_often(limit_key(request)):
+            raise HTTPException(429, "слишком много заявок с этого адреса")
         await session.execute(
             insert(TesterSignup)
             .values(email=address, lang=lang)

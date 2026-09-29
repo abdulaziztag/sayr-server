@@ -5,9 +5,12 @@
 наружу, какие адреса лежат в базе, а боту — что его раскусили.
 """
 
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select
 
+from app.api import landing
 from app.db import SessionLocal
+from app.main import app
 from app.models import TesterSignup
 
 
@@ -21,6 +24,8 @@ async def _cleanup() -> None:
     async with SessionLocal() as session:
         await session.execute(delete(TesterSignup))
         await session.commit()
+    # Счётчик частоты живёт в памяти процесса и переживает тест
+    landing._RECENT.clear()
 
 
 async def test_signup_lands_in_the_base(client):
@@ -96,3 +101,57 @@ async def test_form_lives_only_until_play_release(client, monkeypatch):
     monkeypatch.setattr(settings, "play_store_url", "https://play.google.com/x")
     with_store = (await client.get("/")).text
     assert "android-testers" not in with_store
+
+
+async def test_частые_заявки_с_одного_адреса_отбиваются(client, monkeypatch):
+    """Приманка ловит бота, что заполняет всё подряд, но не скрипт под эту
+    форму. IPv6 считаем сетью /64: внутри неё адрес меняется как угодно."""
+    monkeypatch.setattr(landing, "_LIMIT", 2)
+
+    async def sign(host: str, email: str) -> int:
+        transport = ASGITransport(app=app, client=(host, 40000))
+        async with AsyncClient(transport=transport, base_url="http://test") as c:
+            resp = await c.post(
+                "/android-testers",
+                data={"email": email, "lang": "ru", "website": ""},
+                headers={"Accept": "application/json"},
+            )
+        return resp.status_code
+
+    try:
+        assert await sign("2001:db8:1:2::a", "a@b.cd") == 200
+        assert await sign("2001:db8:1:2::b", "b@b.cd") == 200
+        assert await sign("2001:db8:1:2:ffff::1", "c@b.cd") == 429
+        assert await sign("2001:db8:1:3::1", "d@b.cd") == 200, "соседняя сеть ни при чём"
+        assert await _emails() == ["a@b.cd", "b@b.cd", "d@b.cd"]
+    finally:
+        await _cleanup()
+
+
+async def test_после_выхода_в_play_заявки_не_принимаются(client, monkeypatch):
+    """Форма пропала со страницы — ручка за ней тоже закрыта.
+
+    Скрипту — отказ, форме из старой вкладки — лендинг, где теперь стоит
+    кнопка магазина.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "play_store_url", "https://play.google.com/x")
+    try:
+        as_json = await client.post(
+            "/android-testers",
+            data={"email": "late@b.cd", "lang": "ru", "website": ""},
+            headers={"Accept": "application/json"},
+        )
+        assert as_json.status_code == 410
+
+        as_form = await client.post(
+            "/android-testers",
+            data={"email": "late@b.cd", "lang": "uz", "website": ""},
+            follow_redirects=False,
+        )
+        assert as_form.status_code == 303
+        assert as_form.headers["location"] == "/uz"
+        assert await _emails() == []
+    finally:
+        await _cleanup()
