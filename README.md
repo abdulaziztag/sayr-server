@@ -104,7 +104,8 @@ docker compose -f compose.prod.yml exec app python -m seed.seed
 ### Reverse proxy и TLS
 
 `deploy/nginx-sayr.conf` проксирует на `127.0.0.1:8000` и режет частоту
-запросов к входу, формам и телеметрии (ответ 429). Кладётся в
+запросов к входу и формам (ответ 429) и к телеметрии (ответ 503: 4xx
+приложения считают окончательным отказом и стёрли бы данные). Кладётся в
 `/etc/nginx/sites-available/sayr`, симлинк в `sites-enabled`, потом
 `nginx -t && systemctl reload nginx` и `certbot --nginx -d <домен>`.
 Именно `reload`, а не `restart`: на общем сервере restart уронил бы

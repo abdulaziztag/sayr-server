@@ -72,46 +72,53 @@ def _pick(uri: str) -> list:
     return prefix[2]
 
 
-def _zone(uri: str) -> str | None:
-    limits = _directives(_pick(uri), "limit_req")
-    if not limits:
-        return None
-    return dict(a.split("=", 1) for a in limits[0] if "=" in a)["zone"]
+def _zones(uri: str) -> set[str]:
+    return {
+        dict(a.split("=", 1) for a in args if "=" in a)["zone"]
+        for args in _directives(_pick(uri), "limit_req")
+    }
+
+
+def _status(uri: str) -> str:
+    """Чем nginx ответит сверх лимита: своё у location, иначе от server."""
+    own = _directives(_pick(uri), "limit_req_status")
+    return (own or _directives(SERVER, "limit_req_status"))[0][0]
 
 
 @pytest.mark.parametrize(
-    ("uri", "zone"),
+    ("uri", "zones"),
     [
-        # Коды входа платные
-        ("/api/v1/auth/request", "sayr_auth"),
-        ("/api/v1/auth/verify", "sayr_auth"),
+        # Коды входа платные: отправка ещё и под общим потолком — от смены
+        # адреса на каждый запрос
+        ("/api/v1/auth/request", {"sayr_auth", "sayr_auth_all"}),
+        ("/api/v1/auth/verify", {"sayr_auth"}),
         # Отчёты шлюза идут с адресов Telegram на всех сразу
-        ("/api/v1/auth/callback/telegram", None),
+        ("/api/v1/auth/callback/telegram", set()),
         # Пароли — от перебора; сама админка после входа без лимита
-        ("/admin/login", "sayr_login"),
-        ("/seasons/review/login", "sayr_login"),
-        ("/admin/", None),
-        ("/admin/place/list", None),
+        ("/admin/login", {"sayr_login"}),
+        ("/seasons/review/login", {"sayr_login"}),
+        ("/admin/", set()),
+        ("/admin/place/list", set()),
         # Открытые формы
-        ("/report", "sayr_forms"),
-        ("/android-testers", "sayr_forms"),
-        ("/uz/report", None),
+        ("/report", {"sayr_forms"}),
+        ("/android-testers", {"sayr_forms"}),
+        ("/uz/report", set()),
         # Телеметрия и нажатия — в разных зонах, чтобы одно не съедало другое
-        ("/api/v1/events", "sayr_api"),
-        ("/api/v1/push/devices", "sayr_api"),
-        ("/api/v1/push/devices/abc123", "sayr_api"),
-        ("/api/v1/places/chimgan/intents", "sayr_intents"),
-        ("/api/v1/places/chimgan/pace", "sayr_intents"),
+        ("/api/v1/events", {"sayr_api"}),
+        ("/api/v1/push/devices", {"sayr_api"}),
+        ("/api/v1/push/devices/abc123", {"sayr_api"}),
+        ("/api/v1/places/chimgan/intents", {"sayr_intents"}),
+        ("/api/v1/places/chimgan/pace", {"sayr_intents"}),
         # Каталог и всё остальное читается без лимита
-        ("/api/v1/places", None),
-        ("/api/v1/places/chimgan", None),
-        ("/api/v1/sync", None),
-        ("/media/photos/a.jpg", None),
-        ("/", None),
+        ("/api/v1/places", set()),
+        ("/api/v1/places/chimgan", set()),
+        ("/api/v1/sync", set()),
+        ("/media/photos/a.jpg", set()),
+        ("/", set()),
     ],
 )
-def test_лимит_стоит_ровно_на_ручках_которые_жгут_деньги_или_пароли(uri, zone):
-    assert _zone(uri) == zone
+def test_лимит_стоит_ровно_на_ручках_которые_жгут_деньги_или_пароли(uri, zones):
+    assert _zones(uri) == zones
 
 
 def test_зоны_объявлены_вне_server_и_с_префиксом_sayr():
@@ -124,8 +131,14 @@ def test_зоны_объявлены_вне_server_и_с_префиксом_sayr
             name = opts["zone"].split(":")[0]
             assert name.startswith("sayr_"), name
             zones[name] = args[1]
-    assert set(zones) == {"sayr_auth", "sayr_login", "sayr_forms", "sayr_api", "sayr_intents"}
-    assert set(zones.values()) == {"$sayr_limit_key"}
+    assert zones == {
+        "sayr_auth": "$sayr_limit_key",
+        "sayr_auth_all": "$sayr_limit_all",
+        "sayr_login": "$sayr_limit_key",
+        "sayr_forms": "$sayr_limit_key",
+        "sayr_api": "$sayr_limit_key",
+        "sayr_intents": "$sayr_limit_key",
+    }
     assert not _directives(SERVER, "limit_req_zone"), "limit_req_zone внутри server nginx не примет"
 
     for _, body in LOCATIONS:
@@ -136,14 +149,38 @@ def test_зоны_объявлены_вне_server_и_с_префиксом_sayr
 
 def test_get_и_head_не_считаются():
     # Страницу входа и форму можно обновлять сколько угодно — считаем отправки
-    maps = [(args, body) for args, body in TOP if args[:1] == ["map"]]
-    assert [args for args, _ in maps] == [["map", "$request_method", "$sayr_limit_key"]]
-    table = {args[0]: args[1] for args, _ in maps[0][1]}
-    assert table == {"GET": '""', "HEAD": '""', "default": "$binary_remote_addr"}
+    maps = {args[2]: body for args, body in TOP if args[:2] == ["map", "$request_method"]}
+    assert set(maps) == {"$sayr_limit_key", "$sayr_limit_all"}
+    tables = {var: {args[0]: args[1] for args, _ in body} for var, body in maps.items()}
+    assert tables["$sayr_limit_key"] == {"GET": '""', "HEAD": '""', "default": "$binary_remote_addr"}
+    # Общий потолок: ключ один на всех, но тоже только у отправок
+    assert tables["$sayr_limit_all"] == {"GET": '""', "HEAD": '""', "default": "all"}
 
 
-def test_сверх_лимита_отвечает_429():
-    assert _directives(SERVER, "limit_req_status") == [["429"]]
+@pytest.mark.parametrize(
+    "uri", ["/api/v1/auth/request", "/api/v1/auth/verify", "/admin/login", "/report"]
+)
+def test_людям_сверх_лимита_отвечает_429(uri):
+    # Экран входа 429 понимает и говорит «слишком много попыток»
+    assert _status(uri) == "429"
+
+
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "/api/v1/events",
+        "/api/v1/push/devices",
+        "/api/v1/push/devices/abc123",
+        "/api/v1/places/chimgan/intents",
+        "/api/v1/places/chimgan/pace",
+    ],
+)
+def test_телеметрии_сверх_лимита_отвечает_5xx_а_не_4xx(uri):
+    # Вышедшие приложения считают любой 4xx окончательным отказом: пачку
+    # событий стирают (Analytics.flush), голос за темп помечают доставленным
+    # (TripOutcomeSync). На 429 телефоны за одним NAT молча теряли бы данные,
+    # на 5xx очередь остаётся и уходит позже
+    assert _status(uri).startswith("5"), _status(uri)
 
 
 def test_скопированные_location_проксируют_как_корневой():
