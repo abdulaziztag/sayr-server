@@ -1237,7 +1237,9 @@ class Room(Base):
         DateTime(timezone=True), nullable=True
     )
     #: Группа в Telegram. none → pending (служба создаёт) → ready → left;
-    #: failed — создать не вышло, комната живёт без группы
+    #: leaving — организатор сказал /leave, Sayr Admin выходит и переписку
+    #: уже не хранит; failed — создать или собрать не вышло, комната живёт
+    #: без группы (если группу успели завести, служба из неё выйдет)
     tg_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
     #: Ключ доступа к группе для вызовов Telegram: без него после перезапуска
     #: службы группу не адресовать — строка сессии кэша не хранит
@@ -1358,7 +1360,7 @@ class TgJob(Base):
     __tablename__ = "tg_jobs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    #: create_group | invite_link | promote | kick | post | leave | forget
+    #: create_group | invite_link | promote | kick | post | leave
     kind: Mapped[str] = mapped_column(String(16))
     room_id: Mapped[int | None] = mapped_column(
         ForeignKey("rooms.id", ondelete="CASCADE"), nullable=True, index=True

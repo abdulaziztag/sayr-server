@@ -1,9 +1,11 @@
 """Комнаты попутчиков: требования, кто что видит, ссылка и заявки,
-блокировки, пуши, задания Sayr Admin, уборка и универсальные ссылки.
+блокировки, жалобы, пуши, задания Sayr Admin, уборка, параллельные запросы
+и универсальные ссылки.
 
 Человек и сессия заводятся прямо в базе — вход проверяется в test_auth.py.
 """
 
+import asyncio
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
@@ -172,6 +174,84 @@ async def test_одна_комната_на_день(client):
     )
     assert resp.status_code == 409
     assert resp.json()["detail"] == "busy_day"
+
+
+@pytest.fixture
+def slow_busy(monkeypatch):
+    """Проверка «день занят» с задержкой после себя: без замка оба
+    параллельных запроса успевают пройти её раньше, чем любой запишется"""
+    original = rooms_api._busy
+
+    async def slow(*args, **kwargs):
+        busy = await original(*args, **kwargs)
+        await asyncio.sleep(0.3)
+        return busy
+
+    monkeypatch.setattr(rooms_api, "_busy", slow)
+
+
+async def test_одна_комната_на_день_и_при_двух_запросах_разом(client, slow_busy):
+    h, _ = await person()
+    answers = await asyncio.gather(
+        *(
+            client.post("/api/v1/rooms", json={"place": p, "day": DAY.isoformat()}, headers=h)
+            for p in ("test-peak", "test-lake")
+        )
+    )
+    assert sorted(a.status_code for a in answers) == [201, 409]
+
+
+async def test_по_двум_ссылкам_разом_в_один_день_не_вступить(client, slow_busy):
+    invites = []
+    for name, place in (("Азиз", "test-peak"), ("Мадина", "test-lake")):
+        room = await open_room(client, (await person(name=name))[0], place=place, is_open=False)
+        invites.append(room["invite_url"].rsplit("/", 1)[1])
+    friend, _ = await person(name="Друг")
+    answers = await asyncio.gather(
+        *(client.post(f"/api/v1/invites/{i}/join", headers=friend) for i in invites)
+    )
+    assert sorted(a.status_code for a in answers) == [200, 409]
+
+
+async def test_двойное_нажатие_вступить_не_ломается(client, slow_busy):
+    room = await open_room(client, (await person())[0], is_open=False)
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    friend, friend_id = await person(name="Друг")
+    answers = await asyncio.gather(
+        *(client.post(f"/api/v1/invites/{invite}/join", headers=friend) for _ in range(2))
+    )
+    assert [a.status_code for a in answers] == [200, 200]
+    async with SessionLocal() as session:
+        rows = (
+            await session.execute(select(RoomMember).where(RoomMember.user_id == friend_id))
+        ).scalars().all()
+    assert len(rows) == 1
+
+
+async def test_две_заявки_разом_в_один_день_не_пройдут_обе(client, slow_busy):
+    codes = [
+        (await open_room(client, (await person(name=name))[0], place=place))["code"]
+        for name, place in (("Азиз", "test-peak"), ("Мадина", "test-lake"))
+    ]
+    asking, _ = await person(name="Сардор")
+    answers = await asyncio.gather(
+        *(client.post(f"/api/v1/rooms/{c}/requests", json={}, headers=asking) for c in codes)
+    )
+    assert sorted(a.status_code for a in answers) == [200, 409]
+
+
+async def test_двойное_одобрение_не_проходит_дважды(client, slow_busy):
+    org, _ = await person()
+    room = await open_room(client, org)
+    madina, madina_id = await person(name="Мадина")
+    await client.post(f"/api/v1/rooms/{room['code']}/requests", json={}, headers=madina)
+    request = (await client.get(f"/api/v1/rooms/{room['code']}", headers=org)).json()["requests"][0]
+    approve = f"/api/v1/rooms/{room['code']}/members/{request['member_id']}/approve"
+    answers = await asyncio.gather(*(client.post(approve, headers=org) for _ in range(2)))
+    assert sorted(a.status_code for a in answers) == [200, 409]
+    # Второй пуш «вас взяли» и вторая группа — ни к чему
+    assert await pushes(madina_id) == ["room_approved"]
+    assert [j.kind for j in await jobs()] == ["create_group"]
 
 
 async def test_мат_в_заметке_не_проходит(client):
@@ -447,10 +527,185 @@ async def test_удалённого_убирают_из_группы_и_по_с�
     out = await client.delete(f"/api/v1/rooms/{room['code']}/members/{member_id}", headers=org)
     assert out.status_code == 200
     kicks = await jobs("kick")
-    assert len(kicks) == 1 and kicks[0].payload == {"tg_user_id": 555, "tg_user_hash": None}
+    assert len(kicks) == 1
+    assert kicks[0].payload == {"tg_user_id": 555, "tg_user_hash": None, "tg_link": None}
     assert "room_removed" in await pushes(friend_id)
     back = await client.post(f"/api/v1/invites/{invite}/join", headers=friend)
     assert back.status_code == 403 and back.json()["detail"] == "removed"
+
+
+async def set_member(user_id: int, **fields) -> int:
+    async with SessionLocal() as session:
+        m = (
+            await session.execute(select(RoomMember).where(RoomMember.user_id == user_id))
+        ).scalar_one()
+        for k, v in fields.items():
+            setattr(m, k, v)
+        await session.commit()
+        return m.id
+
+
+async def _remove(client, room, org, friend, org_id, friend_id, member_id):
+    await client.delete(f"/api/v1/rooms/{room['code']}/members/{member_id}", headers=org)
+
+
+async def _leave(client, room, org, friend, org_id, friend_id, member_id):
+    await client.post(f"/api/v1/rooms/{room['code']}/leave", headers=friend)
+
+
+async def _blocked_by_organizer(client, room, org, friend, org_id, friend_id, member_id):
+    await client.post("/api/v1/blocks", json={"user_id": friend_id}, headers=org)
+
+
+async def _blocks_organizer(client, room, org, friend, org_id, friend_id, member_id):
+    await client.post("/api/v1/blocks", json={"user_id": org_id}, headers=friend)
+
+
+async def _banned(client, room, org, friend, org_id, friend_id, member_id):
+    async with SessionLocal() as session:
+        await rooms_api.ban_companions(session, await session.get(User, friend_id))
+        await session.commit()
+
+
+async def _deleted(client, room, org, friend, org_id, friend_id, member_id):
+    assert (await client.delete("/api/v1/me", headers=friend)).status_code == 204
+
+
+@pytest.mark.parametrize("cancelled", [False, True], ids=["идёт", "отменён"])
+@pytest.mark.parametrize(
+    "way", [_remove, _leave, _blocked_by_organizer, _blocks_organizer, _banned, _deleted]
+)
+async def test_ушедший_любым_путём_теряет_ссылку_в_группу(client, way, cancelled):
+    """Аккаунт службе ещё не известен — он не открыл ссылку. Раньше задание
+    не ставилось вовсе, и ссылка работала до конца похода. В отменённом
+    походе — так же: группа остаётся тем, кто идёт всё равно"""
+    org, org_id = await person()
+    room = await open_room(client, org, is_open=False)
+    await set_room(room["code"], tg_state="ready", tg_chat_id=-100123)
+    friend, friend_id = await person(name="Друг")
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    await client.post(f"/api/v1/invites/{invite}/join", headers=friend)
+    member_id = await set_member(friend_id, tg_link="https://t.me/+friend")
+    if cancelled:
+        await client.delete(f"/api/v1/rooms/{room['code']}", headers=org)
+
+    await way(client, room, org, friend, org_id, friend_id, member_id)
+    kicks = await jobs("kick")
+    assert len(kicks) == 1
+    assert kicks[0].payload == {
+        "tg_user_id": None, "tg_user_hash": None, "tg_link": "https://t.me/+friend",
+    }
+
+
+async def test_запрещённого_организатора_убирают_и_из_своей_группы(client):
+    org, org_id = await person()
+    room = await open_room(client, org, is_open=False)
+    await set_room(room["code"], tg_state="ready", tg_chat_id=-100123)
+    await set_member(org_id, tg_link="https://t.me/+org", tg_link_used=True, tg_user_id=501)
+    async with SessionLocal() as session:
+        await rooms_api.ban_companions(session, await session.get(User, org_id))
+        await session.commit()
+    kicks = await jobs("kick")
+    assert [k.payload["tg_user_id"] for k in kicks] == [501]
+
+
+@pytest.mark.parametrize("way", [_banned, _deleted], ids=["запрет", "удаление"])
+async def test_организатор_отменённого_похода_уходит_из_группы(client, way):
+    """Поход отменили раньше: группа живёт для тех, кто идёт всё равно, —
+    и запрещённому или удалившемуся организатору в ней не место"""
+    org, org_id = await person()
+    room = await open_room(client, org, is_open=False)
+    await set_room(room["code"], tg_state="ready", tg_chat_id=-100123)
+    await set_member(org_id, tg_link="https://t.me/+org", tg_link_used=True, tg_user_id=501)
+    await client.delete(f"/api/v1/rooms/{room['code']}", headers=org)
+    # В «ушедшем» пути он сам и есть тот, кого убирают
+    await way(client, room, None, org, None, org_id, None)
+    kicks = await jobs("kick")
+    assert [k.payload for k in kicks] == [
+        {"tg_user_id": 501, "tg_user_hash": None, "tg_link": "https://t.me/+org"}
+    ]
+    # Отменённый второй раз не отменяется: сообщение в группу одно
+    assert len(await jobs("post")) == 1
+
+
+async def test_новая_ссылка_в_группу_только_взамен_использованной(client, monkeypatch):
+    org, org_id = await person()
+    room = await open_room(client, org, is_open=False)
+    await set_room(room["code"], tg_state="ready", tg_chat_id=-100123)
+    url = f"/api/v1/rooms/{room['code']}/group-link"
+    await set_member(org_id, tg_link="https://t.me/+old")
+    # Ссылка ещё не использована — новая не нужна
+    resp = await client.post(url, headers=org)
+    assert resp.status_code == 409 and resp.json()["detail"] == "link_not_used"
+
+    await set_member(org_id, tg_link_used=True)
+    assert (await client.post(url, headers=org)).status_code == 202
+    [job] = await jobs("invite_link")
+    # Старую служба погасит
+    assert job.payload == {"renew": True, "revoke": "https://t.me/+old"}
+    # Задание ещё ждёт — второе не ставим, сколько ни жми
+    for _ in range(5):
+        again = await client.post(url, headers=org)
+        assert again.status_code == 409 and again.json()["detail"] == "link_pending"
+    assert len(await jobs("invite_link")) == 1
+
+    async with SessionLocal() as session:
+        (await session.get(TgJob, job.id)).status = "done"
+        await session.commit()
+    await set_member(org_id, tg_link="https://t.me/+new", tg_link_used=True)
+    soon = await client.post(url, headers=org)
+    assert soon.status_code == 429 and soon.json()["detail"] == "too_often"
+
+    monkeypatch.setattr(settings, "tg_link_renew_after_sec", 0)
+    assert (await client.post(url, headers=org)).status_code == 202
+    assert len(await jobs("invite_link")) == 2
+
+
+async def test_первую_ссылку_можно_заменить_сразу(client):
+    """В предел «Выдать новую» идут только сами замены: ссылку, выданную при
+    вступлении, перехватили в ту же минуту — новая всё равно положена"""
+    org, _ = await person()
+    room = await open_room(client, org, is_open=False)
+    await set_room(room["code"], tg_state="ready", tg_chat_id=-100123)
+    friend, friend_id = await person(name="Друг")
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    await client.post(f"/api/v1/invites/{invite}/join", headers=friend)
+    [first] = await jobs("invite_link")
+    async with SessionLocal() as session:
+        (await session.get(TgJob, first.id)).status = "done"
+        await session.commit()
+    await set_member(friend_id, tg_link="https://t.me/+stolen", tg_link_used=True)
+    resp = await client.post(f"/api/v1/rooms/{room['code']}/group-link", headers=friend)
+    assert resp.status_code == 202
+
+
+async def test_вышел_и_сразу_обратно_не_чаще_раза_в_десять_минут(client, monkeypatch):
+    """Каждый круг «вышел — вернулся» — гашение ссылки и новая от
+    единственного аккаунта Sayr Admin и пуш организатору"""
+    org, org_id = await person()
+    room = await open_room(client, org, is_open=False)
+    await set_room(room["code"], tg_state="ready", tg_chat_id=-100123)
+    friend, _ = await person(name="Друг")
+    join = f"/api/v1/invites/{room['invite_url'].rsplit('/', 1)[1]}/join"
+    assert (await client.post(join, headers=friend)).status_code == 200
+    for _ in range(5):
+        await client.post(f"/api/v1/rooms/{room['code']}/leave", headers=friend)
+        back = await client.post(join, headers=friend)
+        assert back.status_code == 429 and back.json()["detail"] == "too_often"
+    assert len(await jobs("invite_link")) == 1 and len(await jobs("kick")) == 1
+    assert (await pushes(org_id)).count("room_joined") == 1
+
+    monkeypatch.setattr(settings, "tg_link_renew_after_sec", 0)
+    assert (await client.post(join, headers=friend)).status_code == 200
+    assert len(await jobs("invite_link")) == 2
+
+
+async def test_уходящий_sayr_admin_для_людей_уже_вышел(client):
+    org, _ = await person()
+    room = await open_room(client, org, is_open=False)
+    await set_room(room["code"], tg_state="leaving", tg_chat_id=-100123)
+    view = (await client.get(f"/api/v1/rooms/{room['code']}", headers=org)).json()
+    assert view["group"]["state"] == "left"
 
 
 async def test_организатор_не_уходит_а_отменяет(client):
@@ -520,6 +775,119 @@ async def test_блокировка_в_общей_комнате_убирает(
     assert view["people"] == 1
 
 
+async def test_заблокировавшие_друг_друга_в_одной_комнате_друг_друга_не_видят(client):
+    org, _ = await person()
+    room = await open_room(client, org, is_open=False)
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    lola, lola_id = await person(name="Лола", telegram="lola_tg")
+    timur, timur_id = await person(name="Тимур", telegram="timur_tg")
+    for h in (lola, timur):
+        await client.post(f"/api/v1/invites/{invite}/join", headers=h)
+    await client.post("/api/v1/blocks", json={"user_id": timur_id}, headers=lola)
+
+    def names(view):
+        return {m["first_name"] for m in view["members"]}
+
+    code = room["code"]
+    assert names((await client.get(f"/api/v1/rooms/{code}", headers=lola)).json()) == {"Лола"}
+    assert names((await client.get(f"/api/v1/rooms/{code}", headers=timur)).json()) == {"Тимур"}
+    # Организатор видит всех, и из комнаты никого не убрали
+    inside = (await client.get(f"/api/v1/rooms/{code}", headers=org)).json()
+    assert names(inside) == {"Лола", "Тимур"} and inside["people"] == 3
+
+
+async def test_по_ссылке_не_вступить_к_заблокированному_участнику(client):
+    org, _ = await person()
+    room = await open_room(client, org, is_open=False)
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    timur, timur_id = await person(name="Тимур", telegram="timur_tg")
+    await client.post(f"/api/v1/invites/{invite}/join", headers=timur)
+    lola, lola_id = await person(name="Лола")
+    # Блок в любую сторону: заблокировал он её
+    await client.post("/api/v1/blocks", json={"user_id": lola_id}, headers=timur)
+
+    assert (await client.get(f"/api/v1/invites/{invite}", headers=lola)).status_code == 404
+    joined = await client.post(f"/api/v1/invites/{invite}/join", headers=lola)
+    assert joined.status_code == 404 and joined.json()["detail"] == "invite_not_found"
+    # Своему ссылка открывается как раньше
+    assert (await client.get(f"/api/v1/invites/{invite}", headers=timur)).status_code == 200
+
+
+async def test_к_заблокированному_участнику_не_взять_и_комната_его_не_выдаёт(client):
+    org, _ = await person()
+    room = await open_room(client, org)
+    code = room["code"]
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    lola, lola_id = await person(name="Лола")
+    await client.post(f"/api/v1/rooms/{code}/requests", json={}, headers=lola)
+    # Пока заявка ждала, вступил тот, с кем у неё блокировка
+    timur, timur_id = await person(name="Тимур")
+    await client.post(f"/api/v1/invites/{invite}/join", headers=timur)
+    await client.post("/api/v1/blocks", json={"user_id": timur_id}, headers=lola)
+    request = (await client.get(f"/api/v1/rooms/{code}", headers=org)).json()["requests"][0]
+    approve = f"/api/v1/rooms/{code}/members/{request['member_id']}/approve"
+    ok = await client.post(approve, headers=org)
+    assert ok.status_code == 409 and ok.json()["detail"] == "member_blocked"
+
+    # Третий, заблокированный Тимуром, видит комнату как все: пропавшая из
+    # ленты, она выдала бы, куда идёт Тимур. Попроситься может — не возьмут
+    aziz, aziz_id = await person(name="Сардор")
+    await client.post("/api/v1/blocks", json={"user_id": aziz_id}, headers=timur)
+    for url in ("/api/v1/rooms", "/api/v1/places/test-peak/rooms"):
+        guest = (await client.get(url)).json()["days"]
+        assert (await client.get(url, headers=aziz)).json()["days"] == guest != []
+    assert (await client.get(f"/api/v1/rooms/{code}", headers=aziz)).status_code == 200
+    req = await client.post(f"/api/v1/rooms/{code}/requests", json={}, headers=aziz)
+    assert req.status_code == 200 and req.json()["my_role"] == "requested"
+    requests = (await client.get(f"/api/v1/rooms/{code}", headers=org)).json()["requests"]
+    mine = next(r for r in requests if r["user_id"] == aziz_id)
+    ok = await client.post(f"/api/v1/rooms/{code}/members/{mine['member_id']}/approve", headers=org)
+    assert ok.status_code == 409 and ok.json()["detail"] == "member_blocked"
+
+
+async def test_ник_организатора_не_видит_тот_с_кем_блокировка(client):
+    org, org_id = await person(telegram="org_tg")
+    room = await open_room(client, org, is_open=False)
+    friend, _ = await person(name="Друг")
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    await client.post(f"/api/v1/invites/{invite}/join", headers=friend)
+    # Комната уже в архиве — блок из неё не выводит, а ник прятать всё равно надо
+    await set_room(room["code"], status="archived")
+    await client.post("/api/v1/blocks", json={"user_id": org_id}, headers=friend)
+    view = (await client.get(f"/api/v1/rooms/{room['code']}", headers=friend)).json()
+    assert view["my_role"] == "joined" and view["organizer"]["telegram_username"] is None
+
+
+async def test_заблокировавшие_друг_друга_не_войдут_в_комнату_разом(client, slow_busy):
+    org, _ = await person()
+    room = await open_room(client, org)
+    code = room["code"]
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    lola, lola_id = await person(name="Лола")
+    await client.post(f"/api/v1/rooms/{code}/requests", json={}, headers=lola)
+    timur, timur_id = await person(name="Тимур")
+    await client.post("/api/v1/blocks", json={"user_id": timur_id}, headers=lola)
+    request = (await client.get(f"/api/v1/rooms/{code}", headers=org)).json()["requests"][0]
+    # Организатор берёт Лолу в ту же минуту, когда Тимур входит по ссылке:
+    # каждый видит другого ещё не вступившим
+    answers = await asyncio.gather(
+        client.post(f"/api/v1/rooms/{code}/members/{request['member_id']}/approve", headers=org),
+        client.post(f"/api/v1/invites/{invite}/join", headers=timur),
+    )
+    # Кто первый — тот в комнате; второму — отказ (Тимуру по ссылке 404,
+    # организатору — member_blocked)
+    assert sorted(a.status_code for a in answers) in ([200, 404], [200, 409])
+    async with SessionLocal() as session:
+        joined = (
+            await session.execute(
+                select(RoomMember.user_id).where(
+                    RoomMember.user_id.in_([lola_id, timur_id]), RoomMember.status == "joined"
+                )
+            )
+        ).scalars().all()
+    assert len(joined) == 1
+
+
 async def test_жалоба_сохраняется(client):
     org, org_id = await person()
     room = await open_room(client, org)
@@ -533,6 +901,29 @@ async def test_жалоба_сохраняется(client):
     async with SessionLocal() as session:
         r = (await session.execute(select(RoomReport))).scalar_one()
         assert r.target_user_id == org_id and r.reason == "fake"
+
+
+async def test_жалобы_не_задваиваются_и_ограничены_в_сутки(client, monkeypatch):
+    monkeypatch.setattr(settings, "room_reports_per_day", 2)
+    org, org_id = await person()
+    room = await open_room(client, org)
+    madina, _ = await person(name="Мадина")
+    body = {"user_id": org_id, "room": room["code"], "reason": "spam"}
+    for _ in range(3):
+        resp = await client.post("/api/v1/reports", json=body, headers=madina)
+        assert resp.status_code == 204
+    others = [(await person(name=f"Другой{i}"))[1] for i in range(2)]
+    ok = await client.post(
+        "/api/v1/reports", json={"user_id": others[0], "reason": "spam"}, headers=madina
+    )
+    assert ok.status_code == 204
+    over = await client.post(
+        "/api/v1/reports", json={"user_id": others[1], "reason": "spam"}, headers=madina
+    )
+    assert over.status_code == 429 and over.json()["detail"] == "too_many_reports"
+    async with SessionLocal() as session:
+        rows = (await session.execute(select(RoomReport))).scalars().all()
+    assert sorted(r.target_user_id for r in rows) == sorted([org_id, others[0]])
 
 
 async def test_запрещённого_нет_в_поиске(client):
