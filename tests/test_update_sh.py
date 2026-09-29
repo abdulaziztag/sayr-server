@@ -45,11 +45,12 @@ exec git "${cmd#git-}" "$STUB_BARE"
 head=$(git rev-parse HEAD)
 echo "uv $* @ $head" >>"$STUB_LOG"
 [ "$1" = sync ] || exit 0
-[ "$head" != "${STUB_UV_SLOW_ON:-}" ] || sleep 2
+case ${STUB_UV_SLOW_ON:-} in "$head"|all) sleep 2 ;; esac
 if [ "$head" = "${STUB_UV_FAIL_ON:-}" ]; then
   echo "error: не собралось" >&2
   exit 1
 fi
+echo "synced @ $head" >>"$STUB_LOG"
 """,
     "sudo": """#!/bin/sh
 while [ $# -gt 0 ]; do
@@ -268,6 +269,7 @@ def _assert_back_on_c1(server, returncode: int) -> None:
     assert returncode != 0
     assert server.head() == server.c1, "каталог остался на новом коде"
     assert server.calls("uv sync")[-1].endswith(f"@ {server.c1}"), ".venv не пересобран под старый код"
+    assert server.calls("synced")[-1] == f"synced @ {server.c1}", "uv sync возврата не дошёл до конца"
     assert "systemctl restart sayr" not in server.calls("systemctl")
 
 
@@ -280,6 +282,27 @@ def test_оборванный_деплой_тоже_возвращает_кат�
     proc.send_signal(signal.SIGTERM)
     proc.communicate(timeout=60)
     _assert_back_on_c1(server, proc.returncode)
+
+
+def test_второй_ctrl_c_не_обрывает_возврат(server):
+    # Нетерпеливый второй Ctrl-C приходит, пока каталог возвращается.
+    # Ctrl-C бьёт по всей группе процессов терминала — и по uv тоже:
+    # без защиты .venv остался бы собранным наполовину
+    args, env = server.command(STUB_UV_SLOW_ON="all")
+    proc = subprocess.Popen(
+        args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True
+    )
+    _wait_for_sync(server)
+    os.killpg(proc.pid, signal.SIGINT)
+    deadline = time.monotonic() + 30
+    while len(server.calls("uv sync")) < 2 and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert server.calls("uv sync")[-1].endswith(f"@ {server.c1}"), "возврат не начался"
+    os.killpg(proc.pid, signal.SIGINT)
+    proc.communicate(timeout=60)
+
+    _assert_back_on_c1(server, proc.returncode)
+    assert server.calls("synced") == [f"synced @ {server.c1}"], "uv sync возврата оборван"
 
 
 def test_оборванный_ssh_без_терминала_возвращает_каталог(server):
