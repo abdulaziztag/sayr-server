@@ -5,18 +5,30 @@
 или подставлено ссылкой со страницы места.
 """
 
+import asyncio
 import io
 import os
+import struct
+import threading
+import time
+import zlib
+from contextlib import asynccontextmanager
 
+import pytest
+from fastapi import Request
+from httpx import ASGITransport, AsyncClient
 from PIL import Image
 from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
 
 from app.api import report
-from app.config import GPX_DIR, REPORTS_DIR
-from app.db import SessionLocal
+from app.client_ip import limit_key
+from app.config import GPX_DIR, REPORTS_DIR, settings
+from app.db import SessionLocal, engine
+from app.main import app
 from app.models import PlaceReport
 from app.services import attachments
+from app.typography import uz_display
 
 WATERFALL = "Тестовый водопад — Тестовый регион"
 
@@ -433,6 +445,335 @@ async def test_attachments_are_not_public(client):
     finally:
         await _cleanup()
         await _cleanup_files()
+
+
+# --- Бомбы, объём и частота ----------------------------------------------
+
+
+def _png_header(width: int, height: int) -> bytes:
+    """PNG, у которого есть только заголовок: размер любой, весит сотню байт.
+
+    Настоящий кадр 20000×20000 в тесте не собрать — он и есть та бомба,
+    от которой защищаемся. Да и не нужен он: отказ обязан прийти по
+    заголовку, до распаковки. Пикселей за заголовком почти нет, и попытка
+    их раскрыть кончается ошибкой «файл обрезан».
+    """
+    def chunk(kind: bytes, body: bytes) -> bytes:
+        return (struct.pack(">I", len(body)) + kind + body
+                + struct.pack(">I", zlib.crc32(kind + body)))
+
+    head = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", head)
+            + chunk(b"IDAT", zlib.compress(b"\x00" * 64)) + chunk(b"IEND", b""))
+
+
+def _webp_header(width: int, height: int) -> bytes:
+    """WebP без пикселей: один заголовок VP8L, сорок байт на любой размер."""
+    bits = (width - 1) | (height - 1) << 14
+    body = b"\x2f" + struct.pack("<I", bits) + b"\x00" * 15
+    chunk = b"VP8L" + struct.pack("<I", len(body)) + body
+    return b"RIFF" + struct.pack("<I", 4 + len(chunk)) + b"WEBP" + chunk
+
+
+@asynccontextmanager
+async def _from(host: str):
+    """Клиент с другого адреса. Жизненный цикл приложения держит `client`."""
+    transport = ASGITransport(app=app, client=(host, 40000))
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
+
+
+@pytest.mark.filterwarnings("ignore::PIL.Image.DecompressionBombWarning")
+async def test_огромный_по_пикселям_кадр_отбивается_до_записи(client):
+    """Сто байт с размером 20000×20000 — не снимок, а бомба для превью.
+
+    Раньше на 400 мегапикселях Pillow бросал DecompressionBombError мимо
+    узкого except, форма отвечала пятисотой, а файл уже лежал на диске
+    без строки в базе. Между сорока и восемьюдесятью мегапикселями Pillow
+    лишь предупреждал — и превью честно раскрывало гигабайт.
+    """
+    try:
+        for side in (20000, 7000):
+            resp = await client.post(
+                "/report",
+                data={"place": WATERFALL, "comment": "кадр", "lang": "ru",
+                      "website": ""},
+                files=[("files", ("бомба.png", _png_header(side, side), "image/png"))],
+                headers={"Accept": "application/json"},
+            )
+            assert resp.status_code == 422, side
+            assert resp.json()["detail"] == report.RU["too_large"].format(name="бомба.png")
+        assert await _rows() == []
+        assert await _files_on_disk() == [], "отвергнутый файл остался на диске"
+    finally:
+        await _cleanup()
+        await _cleanup_files()
+
+
+async def test_предел_по_пикселям_проверяется_до_распаковки(client, monkeypatch):
+    """Настоящий кадр больше предела отбивается, не дойдя до превью."""
+    decoded = []
+    monkeypatch.setattr(attachments, "shrink", lambda im, side: decoded.append(im))
+    monkeypatch.setattr(settings, "image_max_pixels", 24 * 24 - 1)
+    try:
+        resp = await client.post(
+            "/report",
+            data={"place": WATERFALL, "comment": "кадр", "lang": "uz", "website": ""},
+            files=[("files", ("katta.png", _png(24), "image/png"))],
+            headers={"Accept": "application/json"},
+        )
+        assert resp.status_code == 422
+        assert "katta.png" in resp.json()["detail"]
+        assert decoded == [], "кадр раскрыли, прежде чем отказать"
+        assert await _files_on_disk() == []
+    finally:
+        await _cleanup()
+        await _cleanup_files()
+
+
+async def test_битый_кадр_ложится_без_превью(client, monkeypatch):
+    """Заголовок цел, пиксели нет: файл принимаем, превью не будет.
+
+    Что бы ни бросил Pillow посреди распаковки — хоть наследника голого
+    Exception, — заявка доходит: файл к этому моменту уже записан, и
+    пятисотая оставила бы его сиротой.
+    """
+    try:
+        resp = await client.post(
+            "/report",
+            data={"place": WATERFALL, "comment": "обрезанный", "lang": "ru",
+                  "website": ""},
+            files=[("files", ("обрезан.png", _png_header(100, 100), "image/png"))],
+        )
+        assert resp.status_code == 200
+        name = (await _rows())[0].files[0].name
+        assert await _files_on_disk() == [name], "превью у битого кадра лишнее"
+        await _cleanup()
+        await _cleanup_files()
+
+        def blow_up(im, side):
+            raise Image.DecompressionBombError("посреди распаковки")
+
+        monkeypatch.setattr(attachments, "shrink", blow_up)
+        resp = await client.post(
+            "/report",
+            data={"place": WATERFALL, "comment": "взорвался", "lang": "ru",
+                  "website": ""},
+            files=[("files", ("вид.png", _png(), "image/png"))],
+        )
+        assert resp.status_code == 200
+        name = (await _rows())[0].files[0].name
+        assert await _files_on_disk() == [name]
+    finally:
+        await _cleanup()
+        await _cleanup_files()
+
+
+async def test_картинка_раскрывается_не_в_цикле_событий(client, monkeypatch):
+    """Превью считается в потоке: секунды процессора не должны стоять
+    всему воркеру, пока тот раскрывает чужой кадр."""
+    threads = []
+    save = attachments.save
+
+    def spy(data, name):
+        threads.append(threading.get_ident())
+        return save(data, name)
+
+    monkeypatch.setattr(attachments, "save", spy)
+    try:
+        resp = await client.post(
+            "/report",
+            data={"place": WATERFALL, "comment": "кадр", "lang": "ru", "website": ""},
+            files=[("files", ("вид.png", _png(), "image/png"))],
+        )
+        assert resp.status_code == 200
+        assert threads and threading.get_ident() not in threads
+    finally:
+        await _cleanup()
+        await _cleanup_files()
+
+
+async def test_суточный_объём_файлов_общий_для_всех_адресов(client, monkeypatch):
+    """Упёрлись в суточный объём — файлы не берём ни с какого адреса.
+
+    Предел по адресу живёт в памяти каждого воркера, а меняющийся адрес
+    его обходит; этот считается по базе. Заявка без файлов при этом
+    по-прежнему доходит.
+    """
+    first, second = _noise_png(), _noise_png()
+    monkeypatch.setattr(settings, "report_files_daily_bytes", len(first) + 16)
+    try:
+        resp = await client.post(
+            "/report",
+            data={"place": WATERFALL, "comment": "первый", "lang": "ru", "website": ""},
+            files=[("files", ("1.png", first, "image/png"))],
+        )
+        assert resp.status_code == 200
+        before = await _files_on_disk()
+
+        async with _from("198.51.100.7") as other:
+            resp = await other.post(
+                "/report",
+                data={"place": WATERFALL, "comment": "второй", "lang": "ru",
+                      "website": ""},
+                files=[("files", ("2.png", second, "image/png"))],
+                headers={"Accept": "application/json"},
+            )
+            assert resp.status_code == 429
+            assert resp.json()["detail"] == report.RU["no_room"]
+            assert await _files_on_disk() == before
+
+            resp = await other.post(
+                "/report",
+                data={"place": WATERFALL, "comment": "без файлов", "lang": "ru",
+                      "website": ""},
+            )
+            assert resp.status_code == 200
+        assert sorted(r.comment for r in await _rows()) == ["без файлов", "первый"]
+    finally:
+        await _cleanup()
+        await _cleanup_files()
+
+
+async def test_каталог_заявок_не_растёт_без_предела(client, monkeypatch):
+    """Очередь не разбирают неделями — каталог упирается в свой потолок."""
+    (REPORTS_DIR / "старое.bin").write_bytes(b"\x00" * 4096)
+    monkeypatch.setattr(settings, "reports_dir_max_bytes", 4096 + len(_png()) - 1)
+    try:
+        resp = await client.post(
+            "/report",
+            data={"place": WATERFALL, "comment": "кадр", "lang": "uz", "website": ""},
+            files=[("files", ("vid.png", _png(), "image/png"))],
+            headers={"Accept": "application/json"},
+        )
+        assert resp.status_code == 429
+        assert resp.json()["detail"] == uz_display(report.UZ["no_room"])
+        assert await _files_on_disk() == ["старое.bin"]
+        assert await _rows() == []
+    finally:
+        await _cleanup()
+        await _cleanup_files()
+
+
+async def test_одновременные_отправки_не_перелезают_через_объём(client, monkeypatch):
+    """Остаток сверяется второй раз — под замком, после очереди картинок.
+
+    Раньше отправки, пришедшие разом, видели один и тот же остаток и вместе
+    перелезали через него: восемь по файлу при объёме на один давали две
+    принятые, а шестьдесят с одного адреса — гигабайт за минуту.
+    """
+    sent = [_noise_png() for _ in range(6)]
+    monkeypatch.setattr(settings, "report_files_daily_bytes", max(map(len, sent)))
+    save = attachments.save
+
+    def slow(data, name):
+        # Раскрытие кадра — это время, и за него остальные отправки успевают
+        # сверить остаток. Без паузы гонка в тесте проявлялась бы через раз
+        time.sleep(0.1)
+        return save(data, name)
+
+    monkeypatch.setattr(attachments, "save", slow)
+
+    async def post(i: int, data: bytes) -> int:
+        async with _from(f"198.51.100.{20 + i}") as c:
+            resp = await c.post(
+                "/report",
+                data={"place": WATERFALL, "comment": f"разом {i}", "lang": "ru",
+                      "website": ""},
+                files=[("files", (f"{i}.png", data, "image/png"))],
+                headers={"Accept": "application/json"},
+            )
+        return resp.status_code
+
+    try:
+        codes = await asyncio.gather(*(post(i, data) for i, data in enumerate(sent)))
+        assert sorted(codes) == [200] + [429] * 5
+        (kept,) = [f.name for r in await _rows() for f in r.files]
+        assert await _files_on_disk() == sorted([kept, attachments.thumb_name(kept)])
+    finally:
+        await _cleanup()
+        await _cleanup_files()
+
+
+async def test_очередь_картинок_не_держит_соединение_с_базой(client, monkeypatch):
+    """Картинки раскрываются по одной на воркер, и очереди можно ждать долго.
+    Каждая отправка, ждавшая её с соединением в руках, выбывала из пула
+    в пятнадцать соединений: полтора десятка — и лента с админкой
+    отваливались по таймауту пула."""
+    held = []
+    save = attachments.save
+
+    def spy(data, name):
+        held.append(engine.pool.checkedout())
+        return save(data, name)
+
+    monkeypatch.setattr(attachments, "save", spy)
+    try:
+        resp = await client.post(
+            "/report",
+            data={"place": WATERFALL, "comment": "кадр", "lang": "ru", "website": ""},
+            files=[("files", ("вид.png", _png(), "image/png"))],
+        )
+        assert resp.status_code == 200
+        assert held == [0], "соединение с базой занято, пока картинка ждёт очереди"
+        assert len(await _rows()) == 1
+    finally:
+        await _cleanup()
+        await _cleanup_files()
+
+
+async def test_лёгкий_webp_под_пределом_отбивается_на_форме(client):
+    """36 мегапикселей — под пределом для RGB, но WebP раскрывается вчетверо
+    дороже, и превью такого кадра в сорок байт съедало шестьсот мегабайт —
+    с формы, открытой всем без входа."""
+    try:
+        resp = await client.post(
+            "/report",
+            data={"place": WATERFALL, "comment": "кадр", "lang": "ru", "website": ""},
+            files=[("files", ("вид.webp", _webp_header(6000, 6000), "image/webp"))],
+            headers={"Accept": "application/json"},
+        )
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == report.RU["too_large"].format(name="вид.webp")
+        assert await _files_on_disk() == []
+        assert await _rows() == []
+    finally:
+        await _cleanup()
+        await _cleanup_files()
+
+
+async def test_ipv6_считается_сетью_64(client, monkeypatch):
+    """Внутри своей /64 абонент меняет адрес хоть на каждый запрос."""
+    monkeypatch.setattr(report, "_LIMIT", 2)
+    try:
+        for host, code in (
+            ("2001:db8:1:2::a", 200),
+            ("2001:db8:1:2::b", 200),
+            ("2001:db8:1:2:ffff:ffff:ffff:ffff", 429),
+            ("2001:db8:1:3::1", 200),
+        ):
+            async with _from(host) as c:
+                resp = await c.post(
+                    "/report",
+                    data={"place": WATERFALL, "comment": host, "lang": "ru",
+                          "website": ""},
+                )
+            assert resp.status_code == code, host
+    finally:
+        await _cleanup()
+
+
+def test_ключ_адреса_для_счётчиков():
+    def key(host: str | None) -> str:
+        scope = {"type": "http", "client": (host, 1) if host else None}
+        return limit_key(Request(scope))
+
+    assert key("203.0.113.5") == "203.0.113.5"
+    assert key("203.0.113.5") != key("203.0.113.6"), "IPv4 считаем поштучно"
+    assert key("::ffff:203.0.113.5") == "203.0.113.5"
+    assert key("2001:db8:1:2::a") == key("2001:db8:1:2:aaaa::1") == "2001:db8:1:2::/64"
+    assert key("2001:db8:1:2::a") != key("2001:db8:1:3::a")
+    assert key(None) == "?"
 
 
 # --- Отметка «проверено» -------------------------------------------------

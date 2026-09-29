@@ -19,7 +19,8 @@ from ..auth.tokens import current_user
 from ..db import get_session
 from ..models import Gender, User, avatar_storage
 from ..moderation import is_clean
-from ..services.images import drop_avatar, store_avatar
+from ..services.images import (NotAnImage, TooManyPixels, drop_avatar, off_loop,
+                               store_avatar)
 from .rooms import on_account_deleted
 
 log = logging.getLogger(__name__)
@@ -93,12 +94,19 @@ async def set_avatar(
     session: AsyncSession = Depends(get_session),
 ) -> UserOut:
     data = await file.read()
+    # В очереди картинок (off_loop) можно простоять долго — соединение
+    # с базой на это время отдаём пулу. Строка человека после commit жива:
+    # expire_on_commit=False
+    await session.commit()
     try:
-        name = store_avatar(data, user.id)
+        name = await off_loop(store_avatar, data, user.id)
     except ValueError:
         raise HTTPException(status_code=413, detail="file_too_big") from None
-    except OSError:
-        # Не картинка или формат, который Pillow не открывает (HEIC):
+    except TooManyPixels:
+        # Лёгкий файл с огромным кадром: раскрытый, он съел бы гигабайт
+        raise HTTPException(status_code=422, detail="image_too_large") from None
+    except NotAnImage:
+        # Не картинка или формат, который мы не открываем (HEIC, GIF):
         # перекодировать в JPEG — дело приложения
         raise HTTPException(status_code=415, detail="not_an_image") from None
 
