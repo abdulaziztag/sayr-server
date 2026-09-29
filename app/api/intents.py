@@ -11,6 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth.tokens import optional_user
 from ..db import get_session
 from ..models import Place, PlacePaceStats, TripIntent, User
+from ..schemas import NO_NUL, SLUG
+# «Сегодня» — по Ташкенту, как у комнат. У службы нет TZ, и date.today()
+# шёл по часам сервера: с полуночи до пяти утра по Ташкенту вчерашний
+# день ещё принимался как сегодняшний, а окно счётчиков съезжало на сутки
+from .rooms import today as tashkent_today
 
 router = APIRouter(prefix="/api/v1", tags=["intents"])
 
@@ -32,7 +37,7 @@ class IntentsOut(BaseModel):
 
 class IntentIn(BaseModel):
     date: date
-    device_id: str = Field(min_length=8, max_length=64)
+    device_id: str = Field(min_length=8, max_length=64, pattern=NO_NUL)
 
 
 #: Насколько прошедший выход разошёлся с расчётным временем
@@ -41,7 +46,7 @@ Pace = Literal["faster", "expected", "slower"]
 
 class PaceIn(BaseModel):
     date: date
-    device_id: str = Field(min_length=8, max_length=64)
+    device_id: str = Field(min_length=8, max_length=64, pattern=NO_NUL)
     #: Состоялся ли выход. False — человек не пошёл, темпа тогда нет
     went: bool
     pace: Pace | None = None
@@ -61,6 +66,8 @@ def _mine(user: User | None, device_id: str | None):
 
 
 async def _place_id(slug: str, session: AsyncSession) -> int:
+    if not SLUG.match(slug):
+        raise HTTPException(404, "Место не найдено")
     stmt = select(Place.id).where(Place.slug == slug, Place.is_published)
     place_id = (await session.execute(stmt)).scalar_one_or_none()
     if place_id is None:
@@ -71,14 +78,14 @@ async def _place_id(slug: str, session: AsyncSession) -> int:
 @router.get("/places/{slug}/intents", response_model=IntentsOut)
 async def list_intents(
     slug: str,
-    device_id: str | None = None,
+    device_id: str | None = Query(None, pattern=NO_NUL),
     days: int = Query(DEFAULT_DAYS, ge=1, le=180),
     session: AsyncSession = Depends(get_session),
     user: User | None = Depends(optional_user),
 ):
     """Сколько человек собирается в место по дням — числа под датами календаря."""
     place_id = await _place_id(slug, session)
-    today = date.today()
+    today = tashkent_today()
     horizon = today + timedelta(days=days)
 
     counts = (
@@ -123,17 +130,16 @@ async def add_intent(
 ):
     """Отметиться на дату. Один голос на день (повтор не удваивает)."""
     place_id = await _place_id(slug, session)
-    if body.date < date.today():
+    today = tashkent_today()
+    if body.date < today:
         raise HTTPException(422, "Дата в прошлом")
     # Клиент даёт выбрать максимум два месяца вперёд; всё дальше — не человек
-    if body.date > date.today() + timedelta(days=180):
+    if body.date > today + timedelta(days=180):
         raise HTTPException(422, "Дата слишком далеко")
 
     # В день идут куда-то одно: старая отметка на эту же дату снимается.
     # У вошедшего — на всех его телефонах сразу
-    await session.execute(
-        delete(TripIntent).where(_mine(user, body.device_id), TripIntent.day == body.date)
-    )
+    await _drop(session, _mine(user, body.device_id), TripIntent.day == body.date)
     await session.execute(
         insert(TripIntent)
         .values(
@@ -155,17 +161,16 @@ async def add_intent(
 async def remove_intent(
     slug: str,
     date_: date = Query(alias="date"),
-    device_id: str = Query(min_length=8, max_length=64),
+    device_id: str = Query(min_length=8, max_length=64, pattern=NO_NUL),
     session: AsyncSession = Depends(get_session),
     user: User | None = Depends(optional_user),
 ):
     place_id = await _place_id(slug, session)
-    await session.execute(
-        delete(TripIntent).where(
-            TripIntent.place_id == place_id,
-            TripIntent.day == date_,
-            _mine(user, device_id),
-        )
+    await _drop(
+        session,
+        TripIntent.place_id == place_id,
+        TripIntent.day == date_,
+        _mine(user, device_id),
     )
     await session.commit()
     return await list_intents(slug, device_id, DEFAULT_DAYS, session, user)
@@ -187,8 +192,13 @@ async def set_pace(
     Повторный вызов **переносит** голос, а не добавляет второй: человек
     правит свой ответ тапом по записи в истории, и считаться дважды
     он не должен.
+
+    День — сегодняшний или прошедший: «как сходили» про поход, который
+    ещё впереди, — не ответ, а накрутка счётчика отметкой на любую дату.
     """
     place_id = await _place_id(slug, session)
+    if body.date > tashkent_today():
+        raise HTTPException(422, "День ещё не наступил")
 
     intent = (
         await session.execute(
@@ -214,6 +224,23 @@ async def set_pace(
 
     await session.commit()
     return await list_intents(slug, body.device_id, DEFAULT_DAYS, session, user)
+
+
+async def _drop(session: AsyncSession, *where) -> None:
+    """Снять отметки — и их голоса в счётчике темпа.
+
+    Счётчик живёт отдельно от отметок и сам не узнает, что ответ исчез:
+    отметка, снятая после вечернего вопроса, оставляла голос висеть,
+    а «отметить → ответить → снять» по кругу накручивало его без единой
+    отметки. Чистка по сроку (stats.purge) идёт мимо намеренно: там
+    отметка уходит, а голос обязан остаться.
+    """
+    gone = await session.execute(
+        delete(TripIntent).where(*where).returning(TripIntent.place_id, TripIntent.pace)
+    )
+    for place_id, pace in gone.all():
+        if pace is not None:
+            await _move_vote(place_id, pace, None, session)
 
 
 async def _move_vote(
