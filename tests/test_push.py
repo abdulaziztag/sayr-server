@@ -3,16 +3,18 @@
 from datetime import datetime, timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
+from app.auth.tokens import new_token
 from app.db import SessionLocal
-from app.models import Announcement, AnnouncementStatus, PushToken
-from app.push import SendResult
+from app.models import Announcement, AnnouncementStatus, PushToken, User, UserSession
+from app.push import SendResult, outbox
 from app.push.sender import run_once
 
 TOKEN_A = "a" * 64
 TOKEN_B = "b" * 64
 TOKEN_C = "c" * 152  # FCM-токены длинные
+PHONES = "+998970"
 
 
 async def _clear() -> None:
@@ -21,6 +23,9 @@ async def _clear() -> None:
             await session.delete(row)
         for row in (await session.execute(select(Announcement))).scalars():
             await session.delete(row)
+        # Люди из тестов привязки — со своей приставкой номера; сессии
+        # и очередь пушей уходят за ними каскадом
+        await session.execute(delete(User).where(User.phone.like(f"{PHONES}%")))
         await session.commit()
 
 
@@ -198,3 +203,126 @@ async def test_prune_forgets_tokens_disabled_a_month_ago():
     assert await _token(TOKEN_A) is None
     assert (await _token(TOKEN_B)).disabled_at is not None
     assert (await _token(TOKEN_C)).disabled_at is None
+
+
+# --- Чьё устройство: личные пуши только под входом ---------------------------
+#
+# Личные пуши о комнатах идут на токены устройств, где человек вошёл.
+# Номер устройства выбирает клиент, и раньше любой, кто знал чужой номер,
+# регистрировал под ним свой токен и получал чужие пуши.
+
+_phones = iter(range(1000000, 9999999))
+
+
+async def _person(device: str) -> tuple[dict, int]:
+    """Вошедший человек: (заголовки, id). Сам вход проверяется в test_auth.py"""
+    token, digest = new_token()
+    async with SessionLocal() as session:
+        user = User(phone=f"{PHONES}{next(_phones)}")
+        session.add(user)
+        await session.flush()
+        session.add(UserSession(user_id=user.id, token_hash=digest, device_id=device))
+        await session.commit()
+        return {"Authorization": f"Bearer {token}", "X-Device-Id": device}, user.id
+
+
+async def _register(client, token: str, headers: dict):
+    resp = await client.post(
+        "/api/v1/push/devices", json={"token": token, "platform": "ios"}, headers=headers
+    )
+    assert resp.status_code == 204
+
+
+async def _deliver(user_id: int) -> list[str]:
+    """Поставить человеку личный пуш и разослать: на какие токены он ушёл."""
+    calls: list[str] = []
+
+    async def ios(token, title, body, slug, announcement_id, extra=None, channel=None):
+        calls.append(token)
+        return SendResult(ok=True)
+
+    async with SessionLocal() as session:
+        outbox.enqueue(session, user_id, "room_approved", {"place": "Пик", "day": "2026-10-01"}, None)
+        await session.commit()
+        await outbox.send_outbox(session, {"ios": ios})
+    return calls
+
+
+async def test_вошедший_привязывает_токен_к_устройству_своей_сессии(client):
+    headers, user_id = await _person("phone-a-0001")
+    await _register(client, TOKEN_A, {**headers, "X-Device-Id": "phone-b-0002"})
+    assert (await _token(TOKEN_A)).device == "phone-a-0001"
+    assert await _deliver(user_id) == [TOKEN_A]
+
+
+async def test_гость_с_чужим_номером_устройства_не_получает_личных_пушей(client):
+    _, victim = await _person("phone-a-0001")
+    await _register(client, TOKEN_B, {"X-Device-Id": "phone-a-0001"})
+    row = await _token(TOKEN_B)
+    # Токен живой — общие рассылки ему идут, устройства у него нет
+    assert row.device is None and row.disabled_at is None
+    assert await _deliver(victim) == []
+
+
+async def test_токен_присланный_под_номером_до_входа_не_ждёт_хозяина(client):
+    # Номер ещё ничей — гость спокойно привязывает к нему свой токен
+    await _register(client, TOKEN_B, {"X-Device-Id": "phone-a-0001"})
+    assert (await _token(TOKEN_B)).device == "phone-a-0001"
+    headers, victim = await _person("phone-a-0001")
+    assert await _deliver(victim) == []
+
+    # Своё приложение после входа присылает токен заново — уже под сессией
+    await _register(client, TOKEN_A, headers)
+    assert await _deliver(victim) == [TOKEN_A]
+
+
+async def test_второй_аккаунт_с_тем_же_номером_устройства_не_перехватывает_пуши(client):
+    victim_headers, victim = await _person("phone-a-0001")
+    await _register(client, TOKEN_A, victim_headers)
+    thief_headers, thief = await _person("phone-a-0001")
+    await _register(client, TOKEN_B, thief_headers)
+    # Устройство держит последний вход: вошедший следом получает на свой
+    # токен только свои пуши. Хозяину это глушит личные пуши — цена
+    # правила, описанная в api/push.py, — но чужому они не уходят
+    assert await _deliver(thief) == [TOKEN_B]
+    assert await _deliver(victim) == []
+
+    # Хозяин присылает свой токен заново — устройство уже не его
+    await _register(client, TOKEN_A, victim_headers)
+    assert (await _token(TOKEN_A)).device is None
+    assert await _deliver(victim) == []
+    assert await _deliver(thief) == [TOKEN_B]
+
+
+async def test_выход_без_сети_не_оставляет_телефон_прежнему_аккаунту(client):
+    """Выход без сети гасит токен только в телефоне, а сессия на сервере
+    живёт. Раньше она держала устройство вечно: вошедший на этом телефоне
+    следом регистрировал токен без устройства и личных пушей не получал."""
+    first_headers, first = await _person("phone-a-0001")
+    await _register(client, TOKEN_A, first_headers)
+    assert await _deliver(first) == [TOKEN_A]
+
+    # Выход до сервера не дошёл, на том же телефоне входит другой человек.
+    # Токен телефона ещё не прислан заново, но прежнему он уже не служит
+    second_headers, second = await _person("phone-a-0001")
+    assert await _deliver(first) == []
+
+    await _register(client, TOKEN_A, second_headers)
+    assert (await _token(TOKEN_A)).device == "phone-a-0001"
+    assert await _deliver(second) == [TOKEN_A]
+    assert await _deliver(first) == []
+
+    # Второй вышел как следует — телефон не возвращается к первому
+    resp = await client.post("/api/v1/auth/logout", headers=second_headers)
+    assert resp.status_code == 204
+    assert await _deliver(second) == []
+    assert await _deliver(first) == []
+
+
+async def test_nul_в_токене_это_422(client):
+    resp = await client.post(
+        "/api/v1/push/devices", json={"token": "a" * 20 + "\x00", "platform": "ios"}
+    )
+    assert resp.status_code == 422
+    resp = await client.delete("/api/v1/push/devices/" + "a" * 20 + "%00")
+    assert resp.status_code == 422

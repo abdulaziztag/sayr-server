@@ -1,6 +1,7 @@
+import asyncio
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import Date, cast, delete, func, select
 
 from app import stats, stats_dashboard
 from app.config import settings
@@ -15,6 +16,9 @@ from app.models import (
     Place,
     TripIntent,
 )
+
+# Номера устройств — UUID, как у приложений: чужой формат в уникальные не идёт
+DEVICE = "7b2e4c90-1a3d-4f5e-8c6b-9d0a2e4f6b18"
 
 
 async def _events(**where):
@@ -34,16 +38,16 @@ async def _clear():
 
 async def test_catalog_open_recorded(client):
     await _clear()
-    await client.get("/api/v1/places", headers={"X-Device-Id": "dev-catalog"})
+    await client.get("/api/v1/places", headers={"X-Device-Id": DEVICE})
     events = await _events(kind="catalog")
     assert len(events) == 1
-    assert events[0].device == "dev-catalog"
+    assert events[0].device == DEVICE
     assert events[0].slug is None
 
 
 async def test_place_open_keeps_slug(client):
     await _clear()
-    await client.get("/api/v1/places/test-peak", headers={"X-Device-Id": "dev-place"})
+    await client.get("/api/v1/places/test-peak", headers={"X-Device-Id": DEVICE})
     events = await _events(kind="place")
     assert [e.slug for e in events] == ["test-peak"]
 
@@ -67,6 +71,17 @@ async def test_missing_header_writes_null_device(client):
         assert (await session.execute(select(Device))).scalars().all() == []
 
 
+async def test_выдуманный_заголовок_устройства_считается_как_его_отсутствие(client):
+    """Просмотр в счёт, в уникальные и в devices — нет: иначе перебором
+    заголовка на обычных GET дашборд накручивался «новыми устройствами»."""
+    await _clear()
+    await client.get("/api/v1/places", headers={"X-Device-Id": "not-a-uuid"})
+    events = await _events(kind="catalog")
+    assert [e.device for e in events] == [None]
+    async with SessionLocal() as session:
+        assert (await session.execute(select(Device))).scalars().all() == []
+
+
 async def test_failed_request_is_not_recorded(client):
     await _clear()
     resp = await client.get("/api/v1/places/no-such-place")
@@ -76,11 +91,11 @@ async def test_failed_request_is_not_recorded(client):
 
 async def test_first_seen_written_once(client):
     await _clear()
-    await client.get("/api/v1/places", headers={"X-Device-Id": "dev-twice"})
-    await client.get("/api/v1/places", headers={"X-Device-Id": "dev-twice"})
+    await client.get("/api/v1/places", headers={"X-Device-Id": DEVICE})
+    await client.get("/api/v1/places", headers={"X-Device-Id": DEVICE})
     async with SessionLocal() as session:
         devices = (await session.execute(select(Device))).scalars().all()
-    assert [d.device for d in devices] == ["dev-twice"]
+    assert [d.device for d in devices] == [DEVICE]
     assert devices[0].first_seen == date.today()
 
 
@@ -299,7 +314,7 @@ def test_clean_mark():
 async def test_header_on_regular_request_touches_device(client):
     await _clear()
     await client.get("/api/v1/places", headers={
-        "X-Device-Id": "dev-app-header", "X-Sayr-App": "android/1.7.0 ru 14"})
+        "X-Device-Id": DEVICE, "X-Sayr-App": "android/1.7.0 ru 14"})
     async with SessionLocal() as session:
         device = (await session.execute(select(Device))).scalar_one()
     assert (device.platform, device.app_version, device.lang, device.os_major) == (
@@ -310,7 +325,7 @@ async def test_header_on_regular_request_touches_device(client):
 async def test_debug_request_is_not_recorded(client):
     await _clear()
     await client.get("/api/v1/places", headers={
-        "X-Device-Id": "dev-debug-get", "X-Sayr-App": "android/1.7.0-debug ru 14"})
+        "X-Device-Id": DEVICE, "X-Sayr-App": "android/1.7.0-debug ru 14"})
     assert await _events(kind="catalog") == []
 
 
@@ -423,7 +438,12 @@ async def test_rotate_weeks_skips_weeks_already_counted():
 
 
 async def test_backfill_fills_days_the_rotation_skips():
-    """На бою у прошлых дней daily_stats уже есть, и ротация их не трогает."""
+    """На бою у прошлых дней daily_stats уже есть, а daily_counts нет.
+
+    Раньше такие дни досчитывал только stats_backfill. Теперь день в окне
+    хранения, разошедшийся со свёрткой, ротация пересчитывает сама,
+    а backfill поверх даёт те же числа, а не удвоенные.
+    """
     from app import stats_backfill
 
     await _clear()
@@ -437,7 +457,8 @@ async def test_backfill_fills_days_the_rotation_skips():
         ])
         await session.commit()
         await stats.rotate(session, today=today)
-        assert (await session.execute(select(DailyCount))).scalars().all() == []
+        row = (await session.execute(select(DailyCount))).scalar_one()
+    assert (row.day, row.kind, row.key, row.events, row.devices) == (d3, "place", "a", 1, 1)
 
     done = await stats_backfill.run(days=5, today=today)
     assert d3 in done and len(done) == 5
@@ -445,3 +466,219 @@ async def test_backfill_fills_days_the_rotation_skips():
         row = (await session.execute(select(DailyCount))).scalar_one()
     assert (row.day, row.kind, row.key, row.events, row.devices) == (d3, "place", "a", 1, 1)
 
+
+async def test_поздние_события_за_свёрнутый_день_досчитываются(client):
+    """Второе событие за вчера доехало с телефона после ротации.
+
+    Раньше вчера сворачивалось один раз, и сырьё показывало два финиша,
+    а свёртка — один; через 30 дней сырьё стиралось, и второй терялся
+    навсегда. Воронка при этом видела больше устройств, чем событий.
+    """
+    await _clear()
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    other = "3d5f7a9c-2b4e-4d6f-8a1c-3e5b7d9f1a2c"
+    at = _at(yesterday).isoformat()
+
+    async def finish(device: str, event_id: str):
+        resp = await client.post(
+            "/api/v1/events",
+            json={"events": [{"id": event_id, "kind": "nav_finish", "key": "test-peak", "at": at}]},
+            headers={"X-Device-Id": device},
+        )
+        assert resp.status_code == 204
+
+    await finish(DEVICE, "late0001")
+    async with SessionLocal() as session:
+        await stats.rotate(session, today=today)
+    await finish(other, "late0002")
+    async with SessionLocal() as session:
+        await stats.rotate(session, today=today)
+        row = (
+            await session.execute(
+                select(DailyCount).where(DailyCount.day == yesterday, DailyCount.kind == "nav_finish")
+            )
+        ).scalar_one()
+        daily = await session.get(DailyStat, yesterday)
+    assert (row.events, row.devices) == (2, 2)
+    assert daily.active_devices == 2
+
+    # Сверка сошлась — третий проход день не трогает, а числа на месте
+    async with SessionLocal() as session:
+        await stats.rotate(session, today=today)
+        row = (
+            await session.execute(
+                select(DailyCount).where(DailyCount.day == yesterday, DailyCount.kind == "nav_finish")
+            )
+        ).scalar_one()
+    assert (row.events, row.devices) == (2, 2)
+
+
+async def test_две_ротации_разом_пересчитывают_день_без_ссоры():
+    """Оба воркера просыпаются в один час и пересчитывают те же дни:
+    второй ждёт первого и пишет поверх те же числа, а не падает."""
+    await _clear()
+    today = date.today()
+    days = [today - timedelta(days=n) for n in (1, 2, 3)]
+    async with SessionLocal() as session:
+        for day in days:
+            session.add(DailyStat(day=day, active_devices=9))
+            session.add_all([
+                ApiEvent(kind="place", slug=f"p{i}", device=f"d{i}", ts=_at(day)) for i in range(5)
+            ])
+        await session.commit()
+
+    async def one():
+        async with SessionLocal() as session:
+            await stats.rotate(session, today=today)
+
+    await asyncio.gather(one(), one())
+    async with SessionLocal() as session:
+        for day in days:
+            daily = await session.get(DailyStat, day)
+            assert (daily.active_devices, daily.place_opens) == (5, 5)
+        total = (
+            await session.execute(select(func.sum(DailyCount.events)))
+        ).scalar_one()
+    assert total == 15
+
+
+async def test_день_на_краю_срока_не_затирается_остатком_сырья():
+    """Самый старый день окна чистка уже подъедает: свёртка по остатку
+    записала бы меньше, чем было, поэтому его ротация не пересчитывает."""
+    await _clear()
+    today = date.today()
+    edge = today - timedelta(days=settings.stats_retention_days)
+    async with SessionLocal() as session:
+        session.add_all([
+            DailyStat(day=edge, active_devices=5, place_opens=5),
+            DailyCount(day=edge, kind="place", key="a", events=5, devices=5),
+            # Всё, что осталось от дня после утренних чисток
+            ApiEvent(kind="place", slug="a", device="d1", ts=_at(edge)),
+        ])
+        await session.commit()
+        await stats.rotate(session, today=today)
+        row = (await session.execute(select(DailyCount))).scalar_one()
+        daily = await session.get(DailyStat, edge)
+    assert (row.events, row.devices) == (5, 5)
+    assert daily.place_opens == 5
+
+
+
+async def test_второй_воркер_дождавшись_первого_день_не_пересчитывает(monkeypatch):
+    """Оба воркера видят расхождение до замка. Второй, дождавшись первого,
+    сверяет день заново и находит его уже досчитанным — иначе каждый
+    разошедшийся день пересчитывался бы дважды подряд."""
+    await _clear()
+    today = date.today()
+    days = [today - timedelta(days=n) for n in (1, 2, 3)]
+    async with SessionLocal() as session:
+        for day in days:
+            session.add(DailyStat(day=day, active_devices=9))
+            session.add_all([
+                ApiEvent(kind="place", slug=f"p{i}", device=f"d{i}", ts=_at(day)) for i in range(5)
+            ])
+        await session.commit()
+
+    rolled: list[date] = []
+    rollup_day = stats.rollup_day
+
+    async def counted(session, day):
+        rolled.append(day)
+        await rollup_day(session, day)
+
+    monkeypatch.setattr(stats, "rollup_day", counted)
+
+    async def one():
+        async with SessionLocal() as session:
+            await stats.rotate(session, today=today)
+
+    await asyncio.gather(one(), one())
+    assert sorted(rolled) == sorted(days)
+
+
+async def test_событие_у_края_окна_досчитывается_и_после_полуночи(client):
+    """Глубоко запоздавшее событие ложится на двое суток внутрь срока.
+
+    На сутки внутрь его день в полночь становился краем окна, который
+    ротация уже не пересчитывает: событие, доехавшее после последнего
+    прохода за сутки, в свёртку не попадало и пропадало с сырьём.
+    """
+    await _clear()
+    today = date.today()
+    ancient = (datetime.now().astimezone() - timedelta(days=45)).isoformat()
+
+    async def opened(event_id: str):
+        resp = await client.post(
+            "/api/v1/events",
+            json={"events": [{"id": event_id, "kind": "app_open", "at": ancient}]},
+            headers={"X-Device-Id": DEVICE},
+        )
+        assert resp.status_code == 204
+
+    await opened("edge0001")
+    async with SessionLocal() as session:
+        day = (await session.execute(select(cast(ApiEvent.ts, Date)))).scalar_one()
+        # Последний проход сегодняшних суток
+        await stats.rotate(session, today=today)
+    await opened("edge0002")
+    async with SessionLocal() as session:
+        # Первый проход завтрашних
+        await stats.rotate(session, today=today + timedelta(days=1))
+        events = (
+            await session.execute(
+                select(func.sum(DailyCount.events)).where(DailyCount.day == day)
+            )
+        ).scalar_one()
+    assert events == 2
+
+
+async def test_край_окна_берётся_по_часам_базы():
+    """Сырьё делится на дни в часовом поясе базы, и край окна — тоже.
+
+    Если дата хоста отстала от даты базы, край по одной дате хоста
+    пропустил бы в пересчёт день, который чистка уже подъела, и свёртка
+    по остатку затёрла бы полные числа меньшими.
+    """
+    await _clear()
+    async with SessionLocal() as session:
+        edge = (
+            await session.execute(
+                select(cast(func.now() - timedelta(days=settings.stats_retention_days), Date))
+            )
+        ).scalar_one()
+        session.add_all([
+            DailyStat(day=edge, active_devices=5, place_opens=5),
+            DailyCount(day=edge, kind="place", key="a", events=5, devices=5),
+            ApiEvent(kind="place", slug="a", device="d1", ts=_at(edge)),
+        ])
+        await session.commit()
+        # Хост на сутки позади базы
+        behind = edge + timedelta(days=settings.stats_retention_days - 1)
+        await stats.rotate(session, today=behind)
+        row = (await session.execute(select(DailyCount))).scalar_one()
+        daily = await session.get(DailyStat, edge)
+    assert (row.events, daily.place_opens) == (5, 5)
+
+
+async def test_backfill_не_затирает_день_на_краю_срока():
+    """Ручной досчёт с --days во весь срок: край окна чистка уже подъела,
+    и свёртка по остатку записала бы меньше, чем было."""
+    from app import stats_backfill
+
+    await _clear()
+    today = date.today()
+    edge = today - timedelta(days=settings.stats_retention_days)
+    async with SessionLocal() as session:
+        session.add_all([
+            DailyCount(day=edge, kind="place", key="a", events=5, devices=5),
+            ApiEvent(kind="place", slug="a", device="d1", ts=_at(edge)),
+        ])
+        await session.commit()
+
+    done = await stats_backfill.run(days=settings.stats_retention_days, today=today)
+    assert edge not in done
+    assert len(done) == settings.stats_retention_days - 1
+    async with SessionLocal() as session:
+        row = (await session.execute(select(DailyCount))).scalar_one()
+    assert (row.day, row.events, row.devices) == (edge, 5, 5)

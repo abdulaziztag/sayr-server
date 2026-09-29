@@ -8,7 +8,9 @@ from app.api.events import DAILY_CAP, clamp_at, validate_key
 from app.db import SessionLocal
 from app.models import ApiEvent, Device
 
-HEADERS = {"X-Device-Id": "dev-events", "X-Sayr-App": "android/1.7.0 ru 14"}
+# Номера устройств — UUID, как у приложений: чужой формат сервер не считает
+DEVICE = "0f8e3c2a-5b1d-4c7e-9a6f-2d4b8e1c7a90"
+HEADERS = {"X-Device-Id": DEVICE, "X-Sayr-App": "android/1.7.0 ru 14"}
 
 
 async def _clear():
@@ -49,9 +51,9 @@ async def test_batch_is_written_with_keys(client):
     assert resp.status_code == 204
     rows = await _rows()
     assert [(r.kind, r.slug, r.device) for r in rows] == [
-        ("nav_start", "test-peak", "dev-events"),
-        ("sticker_layout", "3", "dev-events"),
-        ("app_open", None, "dev-events"),
+        ("nav_start", "test-peak", DEVICE),
+        ("sticker_layout", "3", DEVICE),
+        ("app_open", None, DEVICE),
     ]
     assert all(r.client_id for r in rows)
 
@@ -121,8 +123,12 @@ def test_clamp_at_keeps_day_within_window():
     now = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
     future = clamp_at("2026-09-25T00:00:00Z", now, 30)
     assert future == now
+    # На двое суток внутрь срока: самый старый день окна ротация уже
+    # не пересчитывает, а следующий за ним — только до конца суток
     ancient = clamp_at("2020-01-01T00:00:00Z", now, 30)
-    assert ancient == now - timedelta(days=30)
+    assert ancient == now - timedelta(days=28)
+    edge = clamp_at("2026-08-22T06:00:00Z", now, 30)
+    assert edge == now - timedelta(days=28)
     yesterday = clamp_at("2026-09-19T07:00:00Z", now, 30)
     assert yesterday == datetime(2026, 9, 19, 7, 0, tzinfo=timezone.utc)
     naive = clamp_at("2026-09-19T07:00:00", now, 30)
@@ -152,7 +158,8 @@ async def test_daily_cap_silently_stops_writing(client):
 async def test_debug_build_is_not_counted(client):
     await _clear()
     await _post(client, [_event("e7000001", "app_open")],
-                headers={"X-Device-Id": "dev-debug", "X-Sayr-App": "ios/1.7.1-debug ru 26"})
+                headers={"X-Device-Id": "5c3a9e1b-7d2f-4a6c-8b0e-1f9d3c5a7e24",
+                         "X-Sayr-App": "ios/1.7.1-debug ru 26"})
     assert await _rows() == []
     async with SessionLocal() as session:
         assert (await session.execute(select(Device))).scalars().all() == []
@@ -165,12 +172,33 @@ async def test_missing_device_header_writes_nothing(client):
     assert await _rows() == []
 
 
+async def test_выдуманный_номер_устройства_не_становится_новым_устройством(client):
+    """Приложения шлют UUID; всё остальное — не наш клиент.
+
+    Каждый новый номер заводил строку в devices и новый суточный потолок:
+    перебором заголовка дашборд накручивался «новыми устройствами».
+    """
+    await _clear()
+    for fake in ("dev-events", "x" * 64, "0f8e3c2a-5b1d-4c7e-9a6f-2d4b8e1c7a9"):
+        resp = await _post(client, [_event(f"e8{len(fake):07d}", "app_open")],
+                           headers={"X-Device-Id": fake, "X-Sayr-App": "android/1.7.0 ru 14"})
+        assert resp.status_code == 204
+    assert await _rows() == []
+    async with SessionLocal() as session:
+        assert (await session.execute(select(Device))).scalars().all() == []
+
+    # Регистр UUID не важен: iOS шлёт заглавными, Android — строчными
+    await _post(client, [_event("e8100001", "app_open")],
+                headers={"X-Device-Id": DEVICE.upper()})
+    assert [r.device for r in await _rows()] == [DEVICE.upper()]
+
+
 async def test_header_fills_device_once_per_day(client):
     await _clear()
     await _post(client, [_event("e9000001", "app_open")],
-                headers={"X-Device-Id": "dev-hdr", "X-Sayr-App": "ios/1.7.1 uz 26"})
+                headers={"X-Device-Id": DEVICE, "X-Sayr-App": "ios/1.7.1 uz 26"})
     await _post(client, [_event("e9000002", "app_open")],
-                headers={"X-Device-Id": "dev-hdr", "X-Sayr-App": "ios/9.9.9 ru 27"})
+                headers={"X-Device-Id": DEVICE, "X-Sayr-App": "ios/9.9.9 ru 27"})
     async with SessionLocal() as session:
         device = (await session.execute(select(Device))).scalar_one()
     assert device.platform == "ios"

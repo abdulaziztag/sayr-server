@@ -88,3 +88,84 @@ async def test_collections_field_is_present_and_empty_by_default(client):
     detail = (await client.get(f"/api/v1/places/{items[0]['slug']}")).json()
     assert detail["collections"] == []
 
+
+# --- Кривой ввод: 404 и 422, а не 500 ------------------------------------------
+#
+# До проверок всё это доходило до базы и падало там DataError: NUL Postgres
+# в тексте не принимает, числа за пределами int4 и бесконечность в cos() —
+# тоже. Человек получал 500, а журнал — трассировку на каждый такой запрос.
+
+
+async def test_слаг_не_по_форме_это_не_найдено(client):
+    for path in (
+        "/api/v1/places/a%00b",
+        "/api/v1/places/a%00b/weather",
+        "/api/v1/places/a%00b/intents",
+        "/p/a%00b",
+        "/api/v1/places/Test-Peak",
+    ):
+        resp = await client.get(path)
+        assert resp.status_code == 404, path
+    resp = await client.post(
+        "/api/v1/places/a%00b/intents", json={"date": "2030-01-01", "device_id": "device-0001"}
+    )
+    assert resp.status_code == 404
+
+
+async def test_админка_не_сохраняет_слаг_не_по_форме():
+    """Раз ручки отсекают слаг не по форме ещё до базы, завести такой
+    нельзя: место стояло бы в каталоге, но не открывалось бы ни
+    в приложении, ни по ссылке /p/."""
+    import pytest
+
+    from app.admin import PlaceAdmin
+    from app.models import Place
+
+    view = PlaceAdmin()
+    for bad in ("Chimgan", "big_lake", "-lake", "чимган", "a" * 121, ""):
+        with pytest.raises(ValueError):
+            await view.on_model_change({"slug": bad}, Place(), True, None)
+    data = {"slug": " chimgan-2 "}
+    await view.on_model_change(data, Place(), True, None)
+    assert data["slug"] == "chimgan-2"
+
+
+async def test_nul_в_тексте_запроса_это_422(client):
+    resp = await client.get("/api/v1/places", params={"q": "во\x00да"})
+    assert resp.status_code == 422
+    resp = await client.get(
+        "/api/v1/places/test-peak/intents", params={"device_id": "dev\x00ice-01"}
+    )
+    assert resp.status_code == 422
+    resp = await client.post(
+        "/api/v1/places/test-peak/intents",
+        json={"date": "2030-01-01", "device_id": "dev\x00ice-01"},
+    )
+    assert resp.status_code == 422
+    resp = await client.delete(
+        "/api/v1/places/test-peak/intents",
+        params={"date": "2030-01-01", "device_id": "dev\x00ice-01"},
+    )
+    assert resp.status_code == 422
+
+
+async def test_числа_за_пределами_базы_это_422(client):
+    for params in ({"offset": 10**20}, {"region_id": 10**20}, {"region_id": -(10**20)}):
+        resp = await client.get("/api/v1/places", params=params)
+        assert resp.status_code == 422, params
+
+
+async def test_near_только_земные_координаты(client):
+    for near in ("inf,0", "0,-inf", "nan,0", "91,0", "0,181"):
+        resp = await client.get("/api/v1/places", params={"near": near})
+        assert resp.status_code == 422, near
+    resp = await client.get("/api/v1/places", params={"near": "-90,180"})
+    assert resp.status_code == 200
+    # Точка напротив водопада на шаре: косинус округляется чуть ниже −1,
+    # и acos без зажима снизу ронял запрос
+    resp = await client.get(
+        "/api/v1/places", params={"near": "-41.62,-109.9", "radius_km": 1000}
+    )
+    assert resp.status_code == 200
+    assert resp.json() == []
+

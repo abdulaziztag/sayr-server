@@ -1,3 +1,5 @@
+import math
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +9,8 @@ from ..db import get_session
 from ..models import Difficulty, Place, PlaceCategory, PlaceNeighbor, PlacePlan, PlanDay, Season
 from ..schemas import (
     DEFAULT_LANG,
+    NO_NUL,
+    SLUG,
     Lang,
     NearbyOut,
     PlaceDetail,
@@ -27,18 +31,28 @@ router = APIRouter(prefix="/api/v1", tags=["places"])
 # да и человеку внизу карточки нужен короткий список «что захвачу заодно»,
 # а не второй каталог
 NEARBY_LIMIT = 6
+#: Потолок номера региона и сдвига. Номер региона — int4, сдвиг дальше
+#: каталога в сотню мест бессмыслен, а число за пределами типа Postgres
+#: встречал ошибкой, и человек получал 500 вместо 422
+INT_MAX = 2**31 - 1
 
 
 def _distance_km_expr(lat: float, lng: float):
     """Хаверсин на встроенных функциях Postgres — расширения не нужны.
 
-    На каталоге в сотни мест точность и скорость эквивалентны PostGIS."""
+    На каталоге в сотни мест точность и скорость эквивалентны PostGIS.
+    Косинус зажат с обеих сторон: у точки напротив места на шаре округление
+    даёт −1.0000000000000002, и acos падал ошибкой — 500 на честные
+    координаты."""
     return 6371 * func.acos(
-        func.least(
-            1.0,
-            func.cos(func.radians(lat)) * func.cos(func.radians(Place.lat))
-            * func.cos(func.radians(Place.lng) - func.radians(lng))
-            + func.sin(func.radians(lat)) * func.sin(func.radians(Place.lat)),
+        func.greatest(
+            -1.0,
+            func.least(
+                1.0,
+                func.cos(func.radians(lat)) * func.cos(func.radians(Place.lat))
+                * func.cos(func.radians(Place.lng) - func.radians(lng))
+                + func.sin(func.radians(lat)) * func.sin(func.radians(Place.lat)),
+            ),
         )
     )
 
@@ -48,14 +62,14 @@ async def list_places(
     session: AsyncSession = Depends(get_session),
     category: list[PlaceCategory] | None = Query(None),
     difficulty: list[Difficulty] | None = Query(None),
-    region_id: int | None = None,
+    region_id: int | None = Query(None, ge=1, le=INT_MAX),
     season: Season | None = None,
     kid_friendly: bool | None = None,
-    q: str | None = Query(None, max_length=100),
+    q: str | None = Query(None, max_length=100, pattern=NO_NUL),
     near: str | None = Query(None, description="lat,lng — сортирует по удалённости"),
     radius_km: float = Query(150, gt=0, le=1000),
     limit: int = Query(100, ge=1, le=200),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=INT_MAX),
     lang: Lang = Query(DEFAULT_LANG, description="язык текстов; без него — русский"),
 ):
     stmt = (
@@ -106,6 +120,11 @@ async def list_places(
             lat, lng = float(lat_s), float(lng_s)
         except ValueError:
             raise HTTPException(422, "near должен быть в формате 'lat,lng'")
+        # float() понимает и «inf», и «nan»: бесконечность Postgres в cos()
+        # не берёт и падает, а NaN молча даёт мусорный порядок
+        if not (math.isfinite(lat) and math.isfinite(lng)
+                and -90 <= lat <= 90 and -180 <= lng <= 180):
+            raise HTTPException(422, "near вне земных координат")
         distance_km = _distance_km_expr(lat, lng)
         stmt = stmt.where(distance_km <= radius_km).order_by(distance_km)
     else:
@@ -121,6 +140,8 @@ async def list_places(
 
 
 async def _get_place_or_404(slug: str, session: AsyncSession) -> Place:
+    if not SLUG.match(slug):
+        raise HTTPException(404, "Место не найдено")
     stmt = (
         select(Place)
         .options(

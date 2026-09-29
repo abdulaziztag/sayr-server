@@ -30,6 +30,19 @@ def test_versions_compare_as_numbers_not_strings():
     assert parse_version("garbage") == (0, 0, 0)
 
 
+def test_надстрочные_цифры_не_роняют_разбор():
+    """isdigit() считает «²» цифрой, а int() на ней падал — 500 на запрос."""
+    assert parse_version("1.²") == (1, 0, 0)
+    assert parse_version("2²") == (2, 0, 0)
+
+
+async def test_кривая_версия_в_запросе_это_ответ_а_не_500(client):
+    await _set("ios", "1.3.0", force=True)
+    resp = await client.get("/api/v1/app/update", params={"platform": "ios", "version": "1.²"})
+    assert resp.status_code == 200
+    assert resp.json()["force"] is True
+
+
 async def test_no_row_means_no_pressure(client):
     resp = await client.get("/api/v1/app/update", params={"platform": "ios", "version": "1.0.0"})
     assert resp.status_code == 200

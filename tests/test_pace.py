@@ -6,13 +6,29 @@
 счётчиком людей, а не нажатий.
 """
 
-from datetime import date, timedelta
+import asyncio
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import delete, select
 
 from app import stats
+from app.api import rooms as rooms_api
+from app.api.auth import _adopt_intents
+# «Сегодня» — по Ташкенту, как у сервера: на машине в UTC вечером
+# date.today() отставал бы на сутки, и отметка «на сегодня» уходила в прошлое
+from app.api.rooms import today as tashkent_today
+from app.auth.tokens import new_token
 from app.db import SessionLocal
-from app.models import ApiEvent, DailyStat, Device, PlacePaceStats, Place, TripIntent
+from app.models import (
+    ApiEvent,
+    DailyStat,
+    Device,
+    PlacePaceStats,
+    Place,
+    TripIntent,
+    User,
+    UserSession,
+)
 
 SLUG = "test-peak"
 DEVICE = "dev-pace-0001"
@@ -64,14 +80,14 @@ async def _pace(client, day: date, went: bool, pace: str | None, device: str = D
 async def test_pace_needs_an_intent(client):
     """Поправку присылает тот, кто планировал, — иначе накрутить можно с нуля."""
     await _clear()
-    resp = await _pace(client, date.today(), went=True, pace="slower")
+    resp = await _pace(client, tashkent_today(), went=True, pace="slower")
     assert resp.status_code == 404
     assert await _counters() is None
 
 
 async def test_first_answer_counts_once(client):
     await _clear()
-    today = date.today()
+    today = tashkent_today()
     await _intent(client, today)
     assert (await _pace(client, today, went=True, pace="slower")).status_code == 200
     assert await _counters() == (0, 0, 1)
@@ -79,7 +95,7 @@ async def test_first_answer_counts_once(client):
 
 async def test_same_answer_twice_does_not_double(client):
     await _clear()
-    today = date.today()
+    today = tashkent_today()
     await _intent(client, today)
     await _pace(client, today, went=True, pace="slower")
     await _pace(client, today, went=True, pace="slower")
@@ -89,7 +105,7 @@ async def test_same_answer_twice_does_not_double(client):
 async def test_changed_answer_moves_the_vote(client):
     """Правка ответа переносит голос, а не добавляет второй."""
     await _clear()
-    today = date.today()
+    today = tashkent_today()
     await _intent(client, today)
     await _pace(client, today, went=True, pace="slower")
     await _pace(client, today, went=True, pace="faster")
@@ -99,7 +115,7 @@ async def test_changed_answer_moves_the_vote(client):
 async def test_did_not_go_clears_the_vote(client):
     """«Не пошёл» снимает прежний голос: темпа у несостоявшегося выхода нет."""
     await _clear()
-    today = date.today()
+    today = tashkent_today()
     await _intent(client, today)
     await _pace(client, today, went=True, pace="expected")
     assert await _counters() == (0, 1, 0)
@@ -115,7 +131,7 @@ async def test_did_not_go_clears_the_vote(client):
 
 async def test_two_devices_count_separately(client):
     await _clear()
-    today = date.today()
+    today = tashkent_today()
     await _intent(client, today, device=DEVICE)
     await _intent(client, today, device="dev-pace-0002")
     await _pace(client, today, went=True, pace="slower", device=DEVICE)
@@ -150,7 +166,7 @@ async def test_counter_survives_purge(client):
 async def test_old_clients_see_no_change(client):
     """Отметка и её снятие отвечают ровно тем же, чем отвечали."""
     await _clear()
-    today = date.today()
+    today = tashkent_today()
     resp = await client.post(
         f"/api/v1/places/{SLUG}/intents",
         json={"date": today.isoformat(), "device_id": DEVICE},
@@ -160,10 +176,166 @@ async def test_old_clients_see_no_change(client):
     assert resp.json()["days"] == [{"date": today.isoformat(), "count": 1, "mine": True}]
 
 
+async def _unmark(client, day: date, device: str = DEVICE, slug: str = SLUG):
+    resp = await client.delete(
+        f"/api/v1/places/{slug}/intents", params={"date": day.isoformat(), "device_id": device}
+    )
+    assert resp.status_code == 200
+
+
+async def test_снятая_отметка_забирает_свой_голос(client):
+    """Ответил вечером, потом снял отметку — голоса в счётчике не остаётся."""
+    await _clear()
+    day = tashkent_today()
+    await _intent(client, day)
+    await _pace(client, day, went=True, pace="slower")
+    assert await _counters() == (0, 0, 1)
+
+    await _unmark(client, day)
+    assert await _counters() == (0, 0, 0)
+
+
+async def test_отметить_ответить_снять_по_кругу_не_копит_голоса(client):
+    """Без этого три круга давали slower=3 при нуле отметок."""
+    await _clear()
+    day = tashkent_today()
+    for _ in range(3):
+        await _intent(client, day)
+        assert (await _pace(client, day, went=True, pace="slower")).status_code == 200
+        await _unmark(client, day)
+    assert await _counters() == (0, 0, 0)
+    async with SessionLocal() as session:
+        assert (await session.execute(select(TripIntent))).scalars().all() == []
+
+
+async def test_новая_отметка_на_тот_же_день_снимает_голос_прежней(client):
+    """В день идут куда-то одно: отметка в другое место заменяет прежнюю —
+    и её ответ тоже, иначе голос за несостоявшийся теперь поход остался бы."""
+    await _clear()
+    day = tashkent_today()
+    await _intent(client, day)
+    await _pace(client, day, went=True, pace="faster")
+    await _intent(client, day, slug="test-lake")
+    assert await _counters() == (0, 0, 0)
+
+    # И повторная отметка того же места: строка новая, ответа у неё нет
+    await _intent(client, day)
+    await _pace(client, day, went=True, pace="expected")
+    await _intent(client, day)
+    assert await _counters() == (0, 0, 0)
+
+
+async def test_темп_на_будущий_день_не_принимается(client):
+    """«Как сходили» — про прошедший или сегодняшний поход. Отметка
+    на сто дней вперёд не даёт голосовать заранее."""
+    await _clear()
+    for ahead in (1, 100):
+        day = tashkent_today() + timedelta(days=ahead)
+        await _intent(client, day)
+        resp = await _pace(client, day, went=True, pace="slower")
+        assert resp.status_code == 422
+    assert await _counters() is None
+
+
+async def test_сегодня_для_отметок_по_ташкенту(client, monkeypatch):
+    """С полуночи до пяти утра по Ташкенту часы сервера (UTC) ещё во вчера.
+
+    Вчерашняя отметка тогда проходила как сегодняшняя. Часы встают на
+    20:30 UTC — в Ташкенте уже половина второго следующего дня, — и год
+    вперёд от настоящей даты, чтобы с ней «сегодня» машины не совпало.
+    """
+    await _clear()
+    utc = (datetime.now(timezone.utc) + timedelta(days=400)).replace(
+        hour=20, minute=30, second=0, microsecond=0
+    )
+
+    class Frozen(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return utc.astimezone(tz) if tz else utc
+
+    monkeypatch.setattr(rooms_api, "datetime", Frozen)
+    utc_day, tashkent = utc.date(), utc.date() + timedelta(days=1)
+    assert tashkent_today() == tashkent
+
+    resp = await client.post(
+        f"/api/v1/places/{SLUG}/intents",
+        json={"date": utc_day.isoformat(), "device_id": DEVICE},
+    )
+    assert resp.status_code == 422, "по Ташкенту это уже вчера"
+    await _intent(client, tashkent)
+    listed = await client.get(f"/api/v1/places/{SLUG}/intents", params={"device_id": DEVICE})
+    assert listed.json()["days"] == [{"date": tashkent.isoformat(), "count": 1, "mine": True}]
+    assert (await _pace(client, tashkent, went=True, pace="slower")).status_code == 200
+    resp = await _pace(client, tashkent + timedelta(days=1), went=True, pace="slower")
+    assert resp.status_code == 422
+
+
+async def test_одинаковые_ответы_разом_дают_один_голос(client):
+    """Пачка одинаковых ответов, пришедших одновременно, — один голос.
+
+    Без замка на отметку каждый запрос читал прежний темп пустым и
+    прибавлял свой голос: восемь разом давали пять голосов на одну
+    отметку, а снятие отметки забирало один.
+    """
+    await _clear()
+    day = tashkent_today()
+    # Строка счётчика уже есть: иначе запросы выстроила бы в очередь
+    # её вставка, и гонка бы не проявилась
+    await _intent(client, day, device="dev-pace-0002")
+    await _pace(client, day, went=True, pace="faster", device="dev-pace-0002")
+    for _ in range(3):
+        await _intent(client, day)
+        replies = await asyncio.gather(
+            *(_pace(client, day, went=True, pace="slower") for _ in range(8))
+        )
+        assert [r.status_code for r in replies] == [200] * 8
+        assert await _counters() == (1, 0, 1)
+        await _unmark(client, day)
+        assert await _counters() == (1, 0, 0)
+
+
+async def test_вход_убирает_гостевой_дубль_вместе_с_голосом(client):
+    """При входе гостевая отметка, на которую у человека есть своя
+    с другого телефона, уходит — и её ответ «как сходили» тоже."""
+    await _clear()
+    day = tashkent_today()
+    token, digest = new_token()
+    async with SessionLocal() as session:
+        user = User(phone="+998971000001")
+        session.add(user)
+        await session.flush()
+        session.add(UserSession(user_id=user.id, token_hash=digest, device_id="dev-pace-own"))
+        await session.commit()
+    try:
+        # Своя отметка с другого телефона — уже под входом
+        resp = await client.post(
+            f"/api/v1/places/{SLUG}/intents",
+            json={"date": day.isoformat(), "device_id": "dev-pace-own"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200
+        # Гостем на этом телефоне: отметка и ответ
+        await _intent(client, day)
+        await _pace(client, day, went=True, pace="slower")
+        assert await _counters() == (0, 0, 1)
+
+        async with SessionLocal() as session:
+            await _adopt_intents(session, await session.get(User, user.id), DEVICE)
+            await session.commit()
+            left = (await session.execute(select(TripIntent))).scalars().all()
+        assert [(i.user_id, i.device_id) for i in left] == [(user.id, "dev-pace-own")]
+        assert await _counters() == (0, 0, 0)
+    finally:
+        async with SessionLocal() as session:
+            await session.execute(delete(User).where(User.id == user.id))
+            await session.commit()
+
+
 async def test_answer_horizon_matches_get(client):
     """Ответ после отметки не короче обычного: раньше здесь было 60 против 62."""
     await _clear()
-    far = date.today() + timedelta(days=61)
+    far = tashkent_today() + timedelta(days=61)
     await _intent(client, far)
     listed = await client.get(
         f"/api/v1/places/{SLUG}/intents", params={"device_id": DEVICE}

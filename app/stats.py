@@ -15,7 +15,19 @@ from urllib.parse import parse_qs
 
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import Date, cast, delete, distinct, func, or_, select, update
+from sqlalchemy import (
+    Date,
+    DateTime,
+    and_,
+    cast,
+    delete,
+    distinct,
+    func,
+    literal,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -49,6 +61,20 @@ def clean_mark(raw: str | None) -> str | None:
     if not raw:
         return None
     return "".join(c for c in raw[:_MARK_MAX] if c.isalnum() or c in "-_") or None
+
+
+# Номер устройства — UUID, который приложение заводит при первом запуске:
+# так на обеих платформах с первой версии. Остальное — не наш клиент,
+# и такой номер не заводит строку в devices и не попадает в уникальные:
+# иначе каждый выдуманный заголовок ложился бы на дашборд «новым
+# устройством». От перебора настоящих UUID это не защита — её держит
+# limit_req в nginx
+_DEVICE_ID = re.compile(r"^[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$")
+
+
+def clean_device(raw: str | None) -> str | None:
+    value = (raw or "").strip()
+    return value if _DEVICE_ID.match(value) else None
 
 
 @dataclass(frozen=True)
@@ -164,7 +190,9 @@ class StatsMiddleware:
         app_header = None
         for name, value in scope.get("headers", []):
             if name == DEVICE_HEADER:
-                device = value.decode("latin-1", "ignore").strip()[:64] or None
+                # Чужой формат — как заголовка нет: просмотр в счёт,
+                # в уникальные нет
+                device = clean_device(value.decode("latin-1", "ignore"))
             elif name == APP_HEADER:
                 app_header = value.decode("latin-1", "ignore")
         info = parse_app_header(app_header)
@@ -234,6 +262,10 @@ async def _record(
 
 # MARK: - Ротация
 
+#: Первая половина ключа advisory-блокировки пересчёта дня; вторая — сам
+#: день. Число любое, лишь бы его не брал никто другой в этой базе
+_ROLLUP_LOCK = 20260815
+
 
 async def rotate(session: AsyncSession, today: date | None = None) -> None:
     """Досчитать агрегаты за закрытые дни и стереть сырьё старше срока.
@@ -243,39 +275,111 @@ async def rotate(session: AsyncSession, today: date | None = None) -> None:
     daily_stats, откатывалась вместе с ней и чистка сырья — то есть падал
     ровно тот шаг, ради которого всё и затевалось. На бою это случилось
     19 августа: UniqueViolation по daily_stats_pkey.
+
+    Закрытый день сворачивается не один раз. События с телефона едут
+    из гор с опозданием до срока хранения (api/events.py, clamp_at),
+    а дашборд берёт закрытые дни только из свёрток: свёрнутый однажды
+    день терял всё, что доехало после, — навсегда, когда сырьё стиралось.
+    Поэтому день пересчитывается, пока сырьё за него целиком в окне
+    и его число событий разошлось со свёрткой. Сверка стоит почти столько
+    же, сколько прежний поиск несвёрнутых дней, — тот же проход по сырью,
+    только с подсчётом, — а пересчитываются лишь разошедшиеся дни, а не
+    все тридцать каждый час. Сам пересчёт читает сырьё одного дня
+    по индексу (_on_day), а не всё окно.
     """
     today = today or date.today()
+    day_of = cast(ApiEvent.ts, Date)
+    # Самый старый день окна чистка уже подъедает, а более ранние стёрла:
+    # пересчёт свернул бы остаток и затёр полные числа меньшими
+    fresh = await _edge(session, today)
 
     done = set(
         (await session.execute(select(DailyStat.day).where(DailyStat.day < today)))
         .scalars()
         .all()
     )
-    days = (
+    raw = dict(
         (
             await session.execute(
-                select(distinct(cast(ApiEvent.ts, Date))).where(
-                    cast(ApiEvent.ts, Date) < today
-                )
+                select(day_of, func.count()).where(day_of < today).group_by(day_of)
+            )
+        ).all()
+    )
+    rolled = dict(
+        (
+            await session.execute(
+                select(DailyCount.day, func.sum(DailyCount.events))
+                .where(DailyCount.day > fresh, DailyCount.day < today)
+                .group_by(DailyCount.day)
+            )
+        ).all()
+    )
+    for day in sorted(raw):
+        if day in done and (day <= fresh or rolled.get(day) == raw[day]):
+            continue
+        # Один день — один воркер: юнит поднимает uvicorn с двумя, и оба
+        # крутят ротацию в один и тот же час. Второй ждёт, пока первый
+        # закоммитит, и пишет поверх те же числа, а не сцепляется с ним
+        # на строках свёрток. Дни идут по порядку — взаимной блокировки нет
+        await session.execute(select(func.pg_advisory_xact_lock(_ROLLUP_LOCK, day.toordinal())))
+        # Второй дождался первого — а с ним и его работы: сверка заново,
+        # уже по закоммиченному, иначе тот же день пересчитывался бы
+        # дважды подряд
+        if await _in_sync(session, day):
+            continue
+        # Сначала daily_counts, потом daily_stats: сверка идёт по первой,
+        # и событие, доехавшее между ними, должно дать расхождение
+        # и пересчёт в следующий час, а не спрятаться в совпавшей сумме
+        await rollup_day(session, day)
+        totals = await _totals(session, day)
+        stmt = insert(DailyStat).values(**totals)
+        await session.execute(
+            stmt.on_conflict_do_update(
+                index_elements=[DailyStat.day],
+                set_={k: stmt.excluded[k] for k in totals if k != "day"},
             )
         )
-        .scalars()
-        .all()
-    )
-    for day in sorted(set(days) - done):
-        # on_conflict_do_nothing: юнит поднимает uvicorn с двумя воркерами,
-        # и каждый крутит свою ротацию. Проигравший молча проходит мимо
-        # вместо того, чтобы уронить транзакцию
-        await session.execute(
-            insert(DailyStat)
-            .values(**await _totals(session, day))
-            .on_conflict_do_nothing(index_elements=[DailyStat.day])
-        )
-        await rollup_day(session, day)
     await session.commit()
 
     await rotate_weeks(session, today)
     await purge(session, today)
+
+
+async def _edge(session: AsyncSession, today: date) -> date:
+    """Последний день, сырьё за который чистка могла уже подъесть.
+
+    Чистка режет по моменту «сейчас − срок», а сырьё делится на дни
+    в часовом поясе базы (cast(ts AS date)). Край по одной дате хоста
+    верен, только пока пояса совпадают: будь база впереди, день у края
+    был бы уже подъеден, а сверка сочла бы его целым и затёрла свёртку
+    остатком. Берётся больший из двух краёв — осторожнее.
+    """
+    cutoff = datetime.now().astimezone() - timedelta(days=settings.stats_retention_days)
+    purged = (await session.execute(select(cast(literal(cutoff), Date)))).scalar_one()
+    return max(today - timedelta(days=settings.stats_retention_days), purged)
+
+
+async def _in_sync(session: AsyncSession, day: date) -> bool:
+    """Свёртка дня сходится с сырьём: строка daily_stats есть,
+    и событий в daily_counts столько же, сколько в api_events."""
+    raw = select(func.count()).select_from(ApiEvent).where(_on_day(day)).scalar_subquery()
+    rolled = select(func.sum(DailyCount.events)).where(DailyCount.day == day).scalar_subquery()
+    stat = select(DailyStat.day).where(DailyStat.day == day).exists()
+    events, counted, has_stat = (await session.execute(select(raw, rolled, stat))).one()
+    return has_stat and events == counted
+
+
+def _on_day(day: date):
+    """Сырьё одного дня — диапазоном по ts, а не cast(ts AS date) = день.
+
+    Смысл тот же: date → timestamptz даёт полночь в часовом поясе базы,
+    как и приведение в обратную сторону. Но диапазон берёт индекс по ts,
+    а приведение на каждый запрос свёртки читало всё сырьё окна — по
+    шесть-восемь проходов на каждый пересчитываемый день.
+    """
+    start = cast(literal(day), DateTime(timezone=True))
+    end = cast(literal(day + timedelta(days=1)), DateTime(timezone=True))
+    return and_(ApiEvent.ts >= start, ApiEvent.ts < end)
 
 
 async def rollup_day(session: AsyncSession, day: date) -> None:
@@ -286,7 +390,7 @@ async def rollup_day(session: AsyncSession, day: date) -> None:
     повторный прогон того же дня — досчёт, второй воркер, ручной
     `stats_backfill` — обязан давать те же числа, а не удвоенные.
     """
-    same_day = cast(ApiEvent.ts, Date) == day
+    same_day = _on_day(day)
     key = func.coalesce(ApiEvent.slug, "")
 
     rows = (
@@ -455,7 +559,7 @@ async def purge(session: AsyncSession, today: date | None = None) -> None:
 
 async def _totals(session: AsyncSession, day: date) -> dict:
     """Числа одного дня — из сырых событий."""
-    same_day = cast(ApiEvent.ts, Date) == day
+    same_day = _on_day(day)
 
     async def count(*where) -> int:
         return (

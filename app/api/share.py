@@ -18,7 +18,7 @@ from sqlalchemy.orm import selectinload
 from ..config import settings
 from ..db import get_session
 from ..models import Place
-from ..schemas import DEFAULT_LANG, Lang, pick
+from ..schemas import DEFAULT_LANG, SLUG, Lang, pick
 from ..typography import uz_display
 from .app_links import phone_redirect, smart_banner, store_buttons
 
@@ -111,6 +111,8 @@ async def share_page(
     session: AsyncSession = Depends(get_session),
     lang: Lang = Query(DEFAULT_LANG, description="язык страницы; без него — русский"),
 ) -> Response:
+    if not SLUG.match(slug):
+        raise HTTPException(404, "Место не найдено")
     stmt = (
         select(Place)
         .where(Place.slug == slug, Place.is_published)

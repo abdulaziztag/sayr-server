@@ -42,6 +42,21 @@ def bearer(request: Request) -> str | None:
     return value.strip() or None
 
 
+async def live_session(request: Request, session: AsyncSession) -> UserSession | None:
+    """Живая сессия по токену из запроса; без токена или с погашенным — None."""
+    token = bearer(request)
+    if not token:
+        return None
+    return (
+        await session.execute(
+            select(UserSession).where(
+                UserSession.token_hash == token_hash(token),
+                UserSession.revoked_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+
+
 async def optional_user(
     request: Request, session: AsyncSession = Depends(get_session)
 ) -> User | None:
@@ -50,17 +65,7 @@ async def optional_user(
     Гостевой путь обязан работать без токена: каталог, планы и статистика
     открыты всем, аккаунт нужен только там, где без него никак.
     """
-    token = bearer(request)
-    if not token:
-        return None
-    row = (
-        await session.execute(
-            select(UserSession).where(
-                UserSession.token_hash == token_hash(token),
-                UserSession.revoked_at.is_(None),
-            )
-        )
-    ).scalar_one_or_none()
+    row = await live_session(request, session)
     if row is None:
         return None
 
@@ -82,17 +87,7 @@ async def current_session(
     request: Request, session: AsyncSession = Depends(get_session)
 ) -> UserSession:
     """Сессия этого устройства — нужна выходу, чтобы погасить одну её."""
-    token = bearer(request)
-    row = None
-    if token:
-        row = (
-            await session.execute(
-                select(UserSession).where(
-                    UserSession.token_hash == token_hash(token),
-                    UserSession.revoked_at.is_(None),
-                )
-            )
-        ).scalar_one_or_none()
+    row = await live_session(request, session)
     if row is None:
         raise HTTPException(status_code=401, detail="unauthorized")
     return row

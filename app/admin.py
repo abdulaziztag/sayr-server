@@ -56,6 +56,7 @@ from .models import (
     photo_storage,
 )
 from .reports import STATUS_RU, telegram_url, topic_names
+from .schemas import SLUG
 from .seasons import LIMITS
 from .services import attachments
 from .services.gpx import recorded_from_target, reverse_track, thin_if_heavy, track_stats
@@ -257,6 +258,16 @@ class PlaceAdmin(ModelView, model=Place):
         # и из автоматической предзагрузки sqladmin — плитке они нужны,
         # иначе шаблон полезет за ними лениво и упадёт на greenlet
         return super().details_query(request).options(selectinload(Place.photos))
+
+    async def on_model_change(self, data: dict, model: Place, is_created: bool, request) -> None:
+        # Слаг — адрес места в приложениях и в ссылках /p/. Ручки мест
+        # отсекают слаг не по форме как «не найдено» ещё до базы
+        # (schemas.SLUG): место с заглавной буквой или подчёркиванием
+        # в слаге стояло бы в каталоге, но не открывалось
+        if "slug" in data:
+            data["slug"] = (data["slug"] or "").strip()
+            if not SLUG.match(data["slug"]):
+                raise ValueError("Слаг — только строчная латиница, цифры и дефис")
 
     @expose("/photo-add", methods=["POST"])
     async def add_photos(self, request: Request) -> Response:

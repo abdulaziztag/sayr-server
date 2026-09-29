@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from typing import Literal
 
@@ -11,6 +12,15 @@ from .typography import uz_display
 # (AppLanguage на обеих платформах); «как в системе» там нет, и здесь тоже
 Lang = Literal["ru", "uz"]
 DEFAULT_LANG: Lang = "ru"
+
+# Слаг места: строчная латиница, цифры и дефис — так их заводит каталог
+# и так их проверяет приём событий (api/events.py). Адрес с чем-то другим
+# заведомо не место и до базы не идёт: NUL, например, Postgres в тексте
+# не принимает вовсе, и вместо «не найдено» выходила ошибка сервера
+SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{0,119}$")
+#: Шаблон свободного текста из запроса — любой, кроме NUL: его Postgres
+#: не хранит в строках и отвечает DataError, то есть 500 вместо 422
+NO_NUL = r"^[^\x00]*$"
 
 
 def pick(ru: str, uz: str | None, lang: Lang) -> str:
