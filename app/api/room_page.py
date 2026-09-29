@@ -1,5 +1,6 @@
 """Ссылки, которые открывают приложение: приглашение в комнату
-https://sayr.info/r/{invite} и файлы «универсальных» ссылок.
+https://sayr.info/r/{invite}, заявка в открытую комнату
+https://sayr.info/j/{code} и файлы «универсальных» ссылок.
 
 С установленным приложением ссылку перехватывает система — iOS по
 `apple-app-site-association`, Android по `assetlinks.json` — и открывает
@@ -7,6 +8,7 @@ https://sayr.info/r/{invite} и файлы «универсальных» ссы
 и когда зовут, кто зовёт, и кнопки магазинов.
 """
 
+import re
 from html import escape
 
 from fastapi import APIRouter, Depends, Query
@@ -22,7 +24,7 @@ from ..push.outbox import day_text
 from ..schemas import DEFAULT_LANG, Lang, pick
 from ..typography import uz_display
 from .app_links import smart_banner, store_buttons
-from .rooms import _organizer
+from .rooms import _end, _genders, _organizer, _people, askable
 
 router = APIRouter(tags=["links"])
 
@@ -37,7 +39,9 @@ async def apple_app_site_association() -> JSONResponse:
                 "details": [
                     {
                         "appIDs": app_ids,
-                        "components": [{"/": "/p/*"}, {"/": "/r/*"}],
+                        # /j/ — заявка в открытую комнату: приложение
+                        # показывает комнату с «Попроситься»
+                        "components": [{"/": "/p/*"}, {"/": "/r/*"}, {"/": "/j/*"}],
                     }
                 ]
             }
@@ -66,6 +70,26 @@ async def assetlinks() -> JSONResponse:
     )
 
 
+# Одна вёрстка у приглашения своих и у заявки в открытую комнату: обе —
+# «куда и когда» с кнопкой в приложение, различается только то, кто что
+# видит. Стиль вставляется через format, поэтому скобки здесь одинарные
+_STYLE = """<style>
+  body { margin: 0; font-family: -apple-system, system-ui, sans-serif;
+         background: #F3EEE3; color: #161A17; }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 24px 20px 40px; }
+  img.cover { width: 100%; border-radius: 24px; aspect-ratio: 4/3; object-fit: cover; }
+  h1 { font-size: 26px; margin: 18px 0 6px; line-height: 1.25; }
+  .meta { color: #8A8272; font-size: 13px; text-transform: uppercase;
+          letter-spacing: 0.06em; margin-bottom: 14px; }
+  p { line-height: 1.55; color: #57524A; }
+  p.people { color: #161A17; font-weight: 600; margin-bottom: 0; }
+  a.btn { display: block; text-align: center; padding: 15px; border-radius: 999px;
+          text-decoration: none; font-weight: 600; margin-top: 12px; }
+  a.open { background: #2F5D3F; color: #FBF8F1; margin-top: 22px; }
+  a.store { background: #FBF8F1; color: #161A17; border: 1.5px solid #DCD4C4; }
+  .hint { text-align: center; color: #8A8272; font-size: 12px; margin-top: 10px; }
+</style>"""
+
 _PAGE = """<!doctype html>
 <html lang="{lang}">
 <head>
@@ -76,21 +100,7 @@ _PAGE = """<!doctype html>
 <meta property="og:description" content="{desc}">
 {og_image}
 {banner}
-<style>
-  body {{ margin: 0; font-family: -apple-system, system-ui, sans-serif;
-         background: #F3EEE3; color: #161A17; }}
-  .wrap {{ max-width: 480px; margin: 0 auto; padding: 24px 20px 40px; }}
-  img.cover {{ width: 100%; border-radius: 24px; aspect-ratio: 4/3; object-fit: cover; }}
-  h1 {{ font-size: 26px; margin: 18px 0 6px; line-height: 1.25; }}
-  .meta {{ color: #8A8272; font-size: 13px; text-transform: uppercase;
-           letter-spacing: 0.06em; margin-bottom: 14px; }}
-  p {{ line-height: 1.55; color: #57524A; }}
-  a.btn {{ display: block; text-align: center; padding: 15px; border-radius: 999px;
-           text-decoration: none; font-weight: 600; margin-top: 12px; }}
-  a.open {{ background: #2F5D3F; color: #FBF8F1; margin-top: 22px; }}
-  a.store {{ background: #FBF8F1; color: #161A17; border: 1.5px solid #DCD4C4; }}
-  .hint {{ text-align: center; color: #8A8272; font-size: 12px; margin-top: 10px; }}
-</style>
+{style}
 </head>
 <body>
 <div class="wrap">
@@ -99,6 +109,46 @@ _PAGE = """<!doctype html>
   <div class="meta">{meta}</div>
   <p>{desc}</p>
   <a class="btn open" href="sayr://invite/{invite}">{open_label}</a>
+  <div class="hint">{hint}</div>
+  {stores}
+</div>
+</body>
+</html>"""
+
+# Заявка в открытую комнату. Ссылку выкладывают в большие чаты, где её
+# откроет кто угодно и без входа, поэтому людей на странице нет вовсе —
+# ни имени организатора, ни фото: только место, дни и числа. Карточки
+# людей, как и в приложении, — вошедшим. Превью для Telegram — полным
+# набором og- и twitter-тегов
+_REQUEST_PAGE = """<!doctype html>
+<html lang="{lang}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title} — Sayr</title>
+<meta name="description" content="{desc}">
+<link rel="canonical" href="{url}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sayr">
+<meta property="og:url" content="{url}">
+<meta property="og:title" content="{title}">
+<meta property="og:description" content="{desc}">
+<meta property="og:image" content="{image}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{title}">
+<meta name="twitter:description" content="{desc}">
+<meta name="twitter:image" content="{image}">
+{banner}
+{style}
+</head>
+<body>
+<div class="wrap">
+  {cover}
+  <h1>{place}</h1>
+  <div class="meta">{meta}</div>
+  <p class="people">{people}</p>
+  <p>{explain}</p>
+  <a class="btn open" href="sayr://room/{code}">{open_label}</a>
   <div class="hint">{hint}</div>
   {stores}
 </div>
@@ -125,6 +175,16 @@ _T = {
         "gone_title": "Ссылка больше не действует",
         "gone_text": "Поход отменён или прошёл, либо организатор сменил ссылку.",
         "days": "{n} дн.",
+        "looking": "Ищут попутчиков",
+        "explain": "Открытая комната: попроситься можно в приложении Sayr — "
+        "организатор решает, кого взять.",
+        "ask": "Попроситься в приложении",
+        "gone_request": "Поход отменён или прошёл, либо организатор больше "
+        "не ищет попутчиков.",
+        # Одно, два, пять — как plurals в приложениях
+        "people": ("человек", "человека", "человек"),
+        "men": ("мужчина", "мужчины", "мужчин"),
+        "women": ("женщина", "женщины", "женщин"),
     },
     "uz": {
         "calls": "{name} sizni {place}ga taklif qilmoqda",
@@ -136,6 +196,16 @@ _T = {
         "gone_title": "Havola endi ishlamaydi",
         "gone_text": "Sayohat bekor qilingan yoki oʻtib ketgan, yoki tashkilotchi havolani almashtirgan.",
         "days": "{n} kun",
+        "looking": "Hamroh izlashmoqda",
+        "explain": "Ochiq xona: Sayr ilovasida qoʻshilishni soʻrash mumkin — "
+        "kimni olishni tashkilotchi hal qiladi.",
+        "ask": "Ilovada qoʻshilishni soʻrash",
+        "gone_request": "Sayohat bekor qilingan yoki oʻtib ketgan, yoki tashkilotchi "
+        "endi hamroh izlamayapti.",
+        # Son bilan ot birlikda turadi: «3 kishi»
+        "people": ("kishi",) * 3,
+        "men": ("erkak",) * 3,
+        "women": ("ayol",) * 3,
     },
 }
 
@@ -187,5 +257,111 @@ async def invite_page(
         # открыть ту же ссылку снова
         stores=store_buttons(lang, "invite"),
         banner=smart_banner(f"{settings.public_url}/r/{room.invite}"),
+        style=_STYLE,
+    )
+    return HTMLResponse(uz_display(page))
+
+
+#: Код комнаты — 8 знаков без похожих букв (rooms._token). Чужое в базу
+#: не шлём: NUL-байт в адресе дал бы 422 вместо страницы «не действует»
+_CODE = re.compile(r"[a-z0-9]{4,32}")
+#: Превью, когда у места нет снимков, — картинка лендинга
+_DEFAULT_IMAGE = "/static/img/shot-catalog.jpg"
+
+
+def _count(n: int, forms: tuple[str, str, str]) -> str:
+    """«1 человек», «3 человека», «5 человек»"""
+    one, few, many = forms
+    if n % 10 == 1 and n % 100 != 11:
+        word = one
+    elif 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+        word = few
+    else:
+        word = many
+    return f"{n} {word}"
+
+
+def _dates(room: Room, lang: Lang) -> str:
+    """25 сентября; у многодневки — 25–27 сентября или 30 сентября – 2 октября"""
+    end = _end(room)
+    if end == room.day:
+        return day_text(room.day, lang)
+    if end.month == room.day.month:
+        return f"{room.day.day}–{day_text(end, lang)}"
+    return f"{day_text(room.day, lang)} – {day_text(end, lang)}"
+
+
+@router.get("/j/{code}", response_class=HTMLResponse)
+async def request_page(
+    code: str,
+    lang: Lang = Query(DEFAULT_LANG),
+    session: AsyncSession = Depends(get_session),
+) -> HTMLResponse:
+    """Заявка в открытую комнату: https://sayr.info/j/{code}.
+
+    «Позвать своих» (/r/) пускает сразу, без одобрения и без анкеты — для
+    друзей в самый раз, а выложенная в большую группу вроде «ГОРЦА» такая
+    ссылка впустила бы в комнату кого угодно. Эта ведёт в ту же комнату
+    к «Попроситься»: заявку разбирает организатор, анкету и 18+ проверяет
+    сервер. Код комнаты не секрет — он и так виден в поиске."""
+    t = _T[lang]
+    room = None
+    if settings.rooms_open and _CODE.fullmatch(code):
+        room = (
+            await session.execute(
+                select(Room)
+                .where(Room.code == code)
+                .options(
+                    selectinload(Room.place).selectinload(Place.photos),
+                    selectinload(Room.members).selectinload(RoomMember.user),
+                )
+            )
+        ).scalar_one_or_none()
+    # Нет такой, только для своих, отменена или прошла — одна и та же
+    # страница с тем же 404: по ответу не понять, стоит ли за кодом комната
+    # только для своих
+    if room is None or not askable(room):
+        page = _GONE.format(lang=lang, title=t["gone_title"], text=t["gone_request"])
+        return HTMLResponse(uz_display(page), status_code=404)
+
+    place = pick(room.place.name, room.place.name_uz, lang)
+    dates = _dates(room, lang)
+    title = f"{place} · {dates}"
+    # Числа, как у чужого в приложении: сколько человек и сколько среди них
+    # мужчин и женщин. Кто пол не указал, не попадает ни в одно число
+    men, women = _genders(room)
+    people = [_count(_people(room), t["people"])]
+    if men:
+        people.append(_count(men, t["men"]))
+    if women:
+        people.append(_count(women, t["women"]))
+    people_line = " · ".join(people)
+    url = f"{settings.public_url}/j/{room.code}"
+    # Превью в Telegram берёт картинку только по полному адресу
+    photo = (
+        f"{settings.public_url}{room.place.photos[0].url}" if room.place.photos else None
+    )
+    page = _REQUEST_PAGE.format(
+        lang=lang,
+        title=escape(title),
+        place=escape(place),
+        meta=escape(f"{t['looking']} · {dates}"),
+        people=escape(people_line),
+        explain=escape(t["explain"]),
+        desc=escape(f"{people_line}. {t['explain']}"),
+        url=escape(url),
+        image=escape(photo or f"{settings.public_url}{_DEFAULT_IMAGE}"),
+        cover=f'<img class="cover" src="{escape(photo)}" alt="">' if photo else "",
+        # Кнопка и баннер Safari ведут на sayr://room/{код}, а не на https-адрес
+        # этой же страницы: его понимают и уже вышедшие сборки — открывают
+        # комнату с «Попроситься», — а /j/ приложения узнают только со
+        # следующей версии. Да и ссылку на свой же домен Safari приложению
+        # не отдаёт, открывает страницу снова
+        code=escape(room.code),
+        banner=smart_banner(f"sayr://room/{room.code}"),
+        open_label=t["ask"],
+        hint=t["hint"],
+        stores=store_buttons(lang, "request"),
+        style=_STYLE,
     )
     return HTMLResponse(uz_display(page))

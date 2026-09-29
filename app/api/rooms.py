@@ -87,6 +87,13 @@ def _end(room: Room) -> date:
     return room.day + timedelta(days=max(1, room.days) - 1)
 
 
+def askable(room: Room) -> bool:
+    """К комнате можно попроситься: открыта, не отменена и поход не прошёл —
+    то же, что проверяет заявка. Ссылка /j/ живёт ровно столько же: иначе
+    её раздавали бы туда, где «Попроситься» уже ответит отказом"""
+    return room.is_open and room.status == "active" and _end(room) >= today()
+
+
 # MARK: - Ответы
 
 
@@ -136,6 +143,11 @@ class RoomOut(BaseModel):
     members: list[CardOut] = []
     requests: list[CardOut] = []
     invite_url: str | None = None
+    #: Ссылка для незнакомых sayr.info/j/{код}: по ней не вступают, а просятся,
+    #: и берёт организатор. «Позвать своих» пускает сразу и без анкеты — такую
+    #: в большую группу не выложишь. Видна всем, кто видит комнату: код и так
+    #: виден в поиске. Пусто, если к комнате попроситься нельзя
+    request_url: str | None = None
     group: GroupOut | None = None
 
 
@@ -268,6 +280,8 @@ def _out(room: Room, viewer: User, lang: Lang, hidden: set[int]) -> RoomOut:
         ),
         my_role=role,
     )
+    if askable(room):
+        out.request_url = f"{settings.public_url}/j/{room.code}"
     if insider:
         out.members = [
             _card(m, contact=True)

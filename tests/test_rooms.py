@@ -21,6 +21,7 @@ from app.models import (
     Gender,
     LoginRequest,
     Place,
+    PlacePhoto,
     PushOutbox,
     PushToken,
     Room,
@@ -33,6 +34,7 @@ from app.models import (
     UserSession,
     avatar_storage,
     masked_phone,
+    photo_storage,
 )
 from app.push import SendResult
 from app.push.outbox import render, send_outbox
@@ -1224,11 +1226,139 @@ async def test_страница_приглашения_на_узбекском_�
         assert "\u02bb" not in text and "\u02bc" not in text
 
 
+#: День в следующем году: у дат на странице известный вид, и поход
+#: гарантированно впереди
+NEXT_YEAR = TODAY.year + 1
+
+
+async def test_ссылка_для_заявок_только_у_открытой_комнаты(client):
+    org, _ = await person()
+    room = await open_room(client, org)
+    assert room["request_url"] == f"https://sayr.info/j/{room['code']}"
+    # Чужому — та же ссылка: код и так виден в поиске
+    stranger, _ = await person(name="Мадина")
+    seen = (await client.get(f"/api/v1/rooms/{room['code']}", headers=stranger)).json()
+    assert seen["request_url"] == room["request_url"]
+    assert seen["invite_url"] is None
+
+    closed = await client.patch(
+        f"/api/v1/rooms/{room['code']}", json={"is_open": False}, headers=org
+    )
+    assert closed.json()["request_url"] is None
+    assert closed.json()["invite_url"]
+
+    lake = await open_room(client, org, place="test-lake", is_open=False,
+                           day=(DAY + timedelta(days=3)).isoformat())
+    assert lake["request_url"] is None
+
+
+async def test_ссылка_для_заявок_гаснет_с_отменой(client):
+    org, _ = await person()
+    room = await open_room(client, org)
+    await client.delete(f"/api/v1/rooms/{room['code']}", headers=org)
+    view = (await client.get(f"/api/v1/rooms/{room['code']}", headers=org)).json()
+    assert view["status"] == "cancelled" and view["request_url"] is None
+
+
+async def test_страница_заявки_в_открытую_комнату(client):
+    org, _ = await person(gender=Gender.male)
+    room = await open_room(client, org, days=3)
+    await set_room(room["code"], day=date(NEXT_YEAR, 9, 25))
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    friend, _ = await person(name="Лола", telegram="lola_tg", gender=Gender.female)
+    await client.post(f"/api/v1/invites/{invite}/join", headers=friend)
+    async with SessionLocal() as session:
+        place = (await session.execute(select(Place).where(Place.slug == "test-peak"))).scalar_one()
+        session.add(PlacePhoto(place_id=place.id, sort_order=0,
+                               file=StorageFile(name="peak-cover.jpg", storage=photo_storage)))
+        await session.commit()
+        place_id = place.id
+    try:
+        page = await client.get(f"/j/{room['code']}")
+    finally:
+        async with SessionLocal() as session:
+            await session.execute(delete(PlacePhoto).where(PlacePhoto.place_id == place_id))
+            await session.commit()
+
+    assert page.status_code == 200
+    html = page.text
+    assert '<meta property="og:title" content="Тестовый пик · 25–27 сентября">' in html
+    assert '<meta property="og:image" content="https://sayr.info/media/photos/peak-cover.jpg">' in html
+    assert f'<meta property="og:url" content="https://sayr.info/j/{room["code"]}">' in html
+    assert (
+        '<meta property="og:description" content="2 человека · 1 мужчина · 1 женщина. '
+        "Открытая комната: попроситься можно в приложении Sayr — организатор решает, "
+        'кого взять.">'
+    ) in html
+    assert '<meta name="twitter:card" content="summary_large_image">' in html
+    assert f"sayr://room/{room['code']}" in html
+    assert "Попроситься в приложении" in html
+    # Людей на странице нет: ни имён, ни фото, ни ников, ни секрета «своих»
+    for secret in ("Азиз", "Лола", "aziz_tg", "lola_tg", "/media/avatars", invite):
+        assert secret not in html
+
+
+async def test_страница_заявки_без_снимка_места_берёт_картинку_сайта(client):
+    org, _ = await person()
+    room = await open_room(client, org, days=3)
+    await set_room(room["code"], day=date(NEXT_YEAR, 9, 30))
+    page = await client.get(f"/j/{room['code']}")
+    assert '<meta property="og:image" content="https://sayr.info/static/img/shot-catalog.jpg">' in page.text
+    assert 'class="cover"' not in page.text
+    # Пол не указан — только общее число
+    assert "1 человек." in page.text
+    assert "Тестовый пик · 30 сентября – 2 октября" in page.text
+
+
+async def test_страница_заявки_на_узбекском_без_разорванных_букв(client):
+    org, _ = await person()
+    room = await open_room(client, org, place="test-lake")
+    await set_room(room["code"], day=date(NEXT_YEAR, 9, 25))
+    page = await client.get(f"/j/{room['code']}", params={"lang": "uz"})
+    assert page.status_code == 200
+    assert 'content="Test ko\u2018li · 25-sentabr"' in page.text
+    assert "Ochiq xona: Sayr ilovasida qo\u2018shilishni so\u2018rash mumkin" in page.text
+    assert "1 kishi" in page.text
+    gone = await client.get("/j/nothing1", params={"lang": "uz"})
+    assert "hamroh izlamayapti" in gone.text
+    for text in (page.text, gone.text):
+        assert "\u02bb" not in text and "\u02bc" not in text
+
+
+async def test_страница_заявки_не_выдаёт_комнаты_только_для_своих(client):
+    """Нет кода, комната только для своих, отменена, прошла, комнаты
+    выключены — ответ один в один: по нему не понять, есть ли что за кодом"""
+    org, _ = await person()
+    closed = await open_room(client, org, is_open=False)
+    cancelled = await open_room(client, org, day=(DAY + timedelta(days=2)).isoformat())
+    await client.delete(f"/api/v1/rooms/{cancelled['code']}", headers=org)
+    past = await open_room(client, org, day=(DAY + timedelta(days=4)).isoformat())
+    await set_room(past["code"], day=TODAY - timedelta(days=1))
+    alive = await open_room(client, org, day=(DAY + timedelta(days=6)).isoformat())
+
+    unknown = await client.get("/j/zzzzzzzz")
+    assert unknown.status_code == 404
+    assert "Ссылка больше не действует" in unknown.text
+    for code in (closed["code"], cancelled["code"], past["code"], "a%00b"):
+        resp = await client.get(f"/j/{code}")
+        assert (resp.status_code, resp.text) == (404, unknown.text), code
+    assert (await client.get(f"/j/{alive['code']}")).status_code == 200
+
+
+async def test_страница_заявки_молчит_при_выключенных_комнатах(client, monkeypatch):
+    org, _ = await person()
+    room = await open_room(client, org)
+    monkeypatch.setattr(settings, "rooms_open", False)
+    resp = await client.get(f"/j/{room['code']}")
+    assert resp.status_code == 404 and "Ссылка больше не действует" in resp.text
+
+
 async def test_файлы_универсальных_ссылок(client):
     aasa = (await client.get("/.well-known/apple-app-site-association")).json()
     detail = aasa["applinks"]["details"][0]
     assert detail["appIDs"] == ["Z39Z5TJZCG.uz.sayr.ios"]
     assert {"/": "/r/*"} in detail["components"] and {"/": "/p/*"} in detail["components"]
+    assert {"/": "/j/*"} in detail["components"]
     links = (await client.get("/.well-known/assetlinks.json")).json()
     assert links[0]["target"]["package_name"] == "uz.sayr.android"
     prints = links[0]["target"]["sha256_cert_fingerprints"]
