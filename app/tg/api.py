@@ -7,7 +7,8 @@
 Всё проверено по документации Telegram API и Telethon 1.45 (спека
 попутчиков, «Проверено по Telegram API»): группу может создать только
 пользовательский аккаунт; личная ссылка — `exportChatInvite` с
-`usage_limit = 1`; кто вошёл по ссылке — `getChatInviteImporters`.
+`usage_limit = 1`; кто вошёл по ссылке — `getChatInviteImporters`;
+погасить ссылку — `editExportedChatInvite` с `revoked`.
 """
 
 from datetime import datetime
@@ -45,6 +46,7 @@ class TgApi(Protocol):
     async def send(self, chat: Chat, text: str) -> int: ...
     async def pin(self, chat: Chat, message_id: int) -> None: ...
     async def export_link(self, chat: Chat, title: str, expire: datetime) -> str: ...
+    async def revoke_link(self, chat: Chat, link: str) -> None: ...
     async def link_importers(self, chat: Chat, link: str) -> list[tuple[int, int]]: ...
     async def promote(self, chat: Chat, user_id: int, user_hash: int) -> None: ...
     async def kick(self, chat: Chat, user_id: int, user_hash: int) -> None: ...
@@ -101,9 +103,13 @@ class TelethonApi:
         await self._call(EditPhotoRequest(self._channel(chat), InputChatUploadedPhoto(file=uploaded)))
 
     async def show_history(self, chat: Chat) -> None:
+        from telethon import errors
         from telethon.tl.functions.channels import TogglePreHistoryHiddenRequest
 
-        await self._call(TogglePreHistoryHiddenRequest(self._channel(chat), enabled=False))
+        try:
+            await self._call(TogglePreHistoryHiddenRequest(self._channel(chat), enabled=False))
+        except errors.ChatNotModifiedError:
+            pass  # уже видна: повтор сборки после сбоя
 
     async def send(self, chat: Chat, text: str) -> int:
         from telethon import errors
@@ -117,9 +123,15 @@ class TelethonApi:
         return message.id
 
     async def pin(self, chat: Chat, message_id: int) -> None:
+        from telethon import errors
         from telethon.tl.functions.messages import UpdatePinnedMessageRequest
 
-        await self._call(UpdatePinnedMessageRequest(peer=self._peer(chat), id=message_id, silent=True))
+        try:
+            await self._call(
+                UpdatePinnedMessageRequest(peer=self._peer(chat), id=message_id, silent=True)
+            )
+        except errors.ChatNotModifiedError:
+            pass  # уже закреплено: повтор сборки после сбоя
 
     async def export_link(self, chat: Chat, title: str, expire: datetime) -> str:
         from telethon.tl.functions.messages import ExportChatInviteRequest
@@ -130,6 +142,23 @@ class TelethonApi:
             )
         )
         return result.link
+
+    async def revoke_link(self, chat: Chat, link: str) -> None:
+        """Погасить личную ссылку. Истёкшая или уже погашенная — не ошибка:
+        войти по ней и так нельзя, а это всё, что нужно"""
+        from telethon import errors
+        from telethon.tl.functions.messages import EditExportedChatInviteRequest
+
+        try:
+            await self._call(
+                EditExportedChatInviteRequest(peer=self._peer(chat), link=link, revoked=True)
+            )
+        except (
+            errors.InviteHashExpiredError,
+            errors.InviteHashInvalidError,
+            errors.InviteRevokedMissingError,
+        ):
+            pass
 
     async def link_importers(self, chat: Chat, link: str) -> list[tuple[int, int]]:
         from telethon.tl.functions.messages import GetChatInviteImportersRequest

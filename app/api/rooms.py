@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -242,7 +242,9 @@ def _genders(room: Room) -> tuple[int, int]:
     return joined.count(Gender.male), joined.count(Gender.female)
 
 
-def _out(room: Room, viewer: User, lang: Lang) -> RoomOut:
+def _out(room: Room, viewer: User, lang: Lang, hidden: set[int]) -> RoomOut:
+    """`hidden` — с кем у смотрящего блокировка: если оба уже были в комнате,
+    когда один заблокировал другого, друг друга (и ники) они больше не видят"""
     mine = _mine(room, viewer)
     role = _role(mine)
     insider = role in ("organizer", "joined")
@@ -266,19 +268,27 @@ def _out(room: Room, viewer: User, lang: Lang) -> RoomOut:
         out.members = [
             _card(m, contact=True)
             for m in room.members
-            if m.status == "joined" and m.role != "organizer"
+            if m.status == "joined" and m.role != "organizer" and m.user_id not in hidden
         ]
         out.invite_url = f"{settings.public_url}/r/{room.invite}"
         out.group = GroupOut(
-            state=room.tg_state,
+            # «Уходит» — внутреннее состояние службы: для людей Sayr Admin
+            # уже вышел, приложения этого слова не знают
+            state="left" if room.tg_state == "leaving" else room.tg_state,
             link=mine.tg_link if mine.tg_link and not mine.tg_link_used else None,
             link_used=mine.tg_link_used,
         )
     if role == "organizer":
         out.requests = [
-            _card(m, contact=False) for m in room.members if m.status == "requested"
+            _card(m, contact=False)
+            for m in room.members
+            if m.status == "requested" and m.user_id not in hidden
         ]
     return out
+
+
+async def _reply(session: AsyncSession, room: Room, viewer: User, lang: Lang) -> RoomOut:
+    return _out(room, viewer, lang, await blocked_ids(session, viewer.id))
 
 
 def _brief(room: Room, viewer: User | None, lang: Lang) -> RoomBrief:
@@ -341,6 +351,23 @@ async def blocked_ids(session: AsyncSession, user_id: int) -> set[int]:
         )
     ).all()
     return {b if a == user_id else a for a, b in rows}
+
+
+def _blocked(room: Room, hidden: set[int]) -> bool:
+    """В комнате есть тот, с кем блокировка: организатор или любой вступивший.
+    Не только организатор — иначе двое, заблокировавшие друг друга, сошлись бы
+    в одной комнате и увидели ники друг друга"""
+    return any(m.user_id in hidden for m in room.members if m.status == "joined")
+
+
+async def _lock_user(session: AsyncSession, user_id: int) -> None:
+    """Держать строку человека до конца транзакции. Проверка «одна комната
+    на день» и запись — два шага: без замка два параллельных запроса оба
+    прошли бы проверку раньше, чем любой запишется. NO KEY UPDATE, а не
+    UPDATE: не мешает внешним ключам — пушу этому человеку из чужого запроса"""
+    await session.execute(
+        select(User.id).where(User.id == user_id).with_for_update(key_share=True)
+    )
 
 
 async def _busy(
@@ -430,14 +457,22 @@ def _after_join(session: AsyncSession, room: Room, member: RoomMember) -> None:
 
 
 def kick(session: AsyncSession, room: Room, member: RoomMember) -> None:
-    """Ушёл из комнаты — уходит и из группы, если служба знает его аккаунт"""
-    if room.tg_state == "ready" and member.tg_user_id:
+    """Ушёл из комнаты — уходит и из группы. Задание и тогда, когда служба
+    его аккаунта не знает: личная ссылка гаснет, иначе удалённый открыл бы её
+    позже и оказался в группе со всеми никами. Пока группа создаётся, тоже:
+    ссылку ему могли успеть выдать. Аккаунт и ссылку кладём в задание
+    заранее — строка участия может уйти вместе с удалённым аккаунтом"""
+    if room.tg_state in ("pending", "ready", "leaving"):
         session.add(
             TgJob(
                 kind="kick",
                 room_id=room.id,
                 member_id=member.id,
-                payload={"tg_user_id": member.tg_user_id, "tg_user_hash": member.tg_user_hash},
+                payload={
+                    "tg_user_id": member.tg_user_id,
+                    "tg_user_hash": member.tg_user_hash,
+                    "tg_link": member.tg_link,
+                },
             )
         )
 
@@ -547,8 +582,9 @@ async def _open_rooms(
     session: AsyncSession, user: User | None, ahead: int, slug: str | None = None
 ) -> list[Room]:
     """Живые открытые комнаты на `ahead` дней вперёд — одного места или всех
-    опубликованных. Без организаторов под запретом и без тех, с кем у
-    смотрящего блокировка в любую сторону"""
+    опубликованных. Без организаторов под запретом и без комнат, где есть
+    тот, с кем у смотрящего блокировка в любую сторону: попроситься туда
+    всё равно нельзя"""
     start = today()
     query = (
         select(Room)
@@ -574,7 +610,7 @@ async def _open_rooms(
         organizer = _organizer(room)
         if organizer is None or organizer.user.companions_banned_at is not None:
             continue
-        if organizer.user_id in hidden:
+        if _blocked(room, hidden):
             continue
         shown.append(room)
     return shown
@@ -597,6 +633,7 @@ async def open_room(
     ).scalar_one_or_none()
     if place is None:
         raise HTTPException(status_code=404, detail="place_not_found")
+    await _lock_user(session, user.id)
     if await _busy(session, user.id, body.day, body.days):
         raise HTTPException(status_code=409, detail="busy_day")
 
@@ -624,7 +661,7 @@ async def open_room(
         )
     )
     await session.commit()
-    return _out(await _load(session, id=room.id), user, lang)
+    return await _reply(session, await _load(session, id=room.id), user, lang)
 
 
 @router.get("/rooms/{code}", response_model=RoomOut, dependencies=[Depends(rooms_on)])
@@ -636,15 +673,20 @@ async def room_view(
 ) -> RoomOut:
     room = await _room_for(session, code)
     role = _role(_mine(room, user))
-    if role in ("organizer", "joined"):
-        return _out(room, user, lang)
-    # Чужому — только открытую и живую комнату, и не того, с кем блокировка
-    organizer = _organizer(room)
     hidden = await blocked_ids(session, user.id)
+    if role in ("organizer", "joined"):
+        return _out(room, user, lang, hidden)
+    # Чужому — только открытую и живую комнату и без тех, с кем блокировка.
+    # Просившемуся и бывшему — свою заявку он видеть должен, прячем только
+    # от блокировки с организатором
+    organizer = _organizer(room)
     visible = (room.is_open and room.status == "active") or role != "none"
-    if not visible or (organizer and organizer.user_id in hidden):
+    blocked = _blocked(room, hidden) if role == "none" else bool(
+        organizer and organizer.user_id in hidden
+    )
+    if not visible or blocked:
         raise HTTPException(status_code=404, detail="room_not_found")
-    return _out(room, user, lang)
+    return _out(room, user, lang, hidden)
 
 
 @router.patch("/rooms/{code}", response_model=RoomOut, dependencies=[Depends(rooms_on)])
@@ -673,7 +715,7 @@ async def room_edit(
     if "transport" in fields or "seats" in fields:
         mine.seats = _check_transport(mine.transport, body.seats if "seats" in fields else mine.seats)
     await session.commit()
-    return _out(await _load(session, id=room.id), user, lang)
+    return await _reply(session, await _load(session, id=room.id), user, lang)
 
 
 @router.delete("/rooms/{code}", status_code=204, dependencies=[Depends(rooms_on)])
@@ -702,15 +744,17 @@ async def invite_reset(
     _require_organizer(room, user)
     room.invite = _token(12)
     await session.commit()
-    return _out(room, user, lang)
+    return await _reply(session, room, user, lang)
 
 
 async def _by_invite(session: AsyncSession, invite: str, user: User) -> Room:
     room = await _load(session, invite=invite)
     if room is None or room.status != "active":
         raise HTTPException(status_code=404, detail="invite_not_found")
-    organizer = _organizer(room)
-    if organizer and organizer.user_id in await blocked_ids(session, user.id):
+    # Со стороны ссылка не ведёт туда, где есть тот, с кем блокировка. Своему
+    # комната открывается как была: он в ней раньше, чем заблокировал
+    inside = _role(_mine(room, user)) in ("organizer", "joined")
+    if not inside and _blocked(room, await blocked_ids(session, user.id)):
         raise HTTPException(status_code=404, detail="invite_not_found")
     return room
 
@@ -723,7 +767,7 @@ async def invite_view(
     session: AsyncSession = Depends(get_session),
 ) -> RoomOut:
     """Комната по ссылке «Позвать своих» — до вступления, даже закрытая"""
-    return _out(await _by_invite(session, invite, user), user, lang)
+    return await _reply(session, await _by_invite(session, invite, user), user, lang)
 
 
 @router.post("/invites/{invite}/join", response_model=RoomOut, dependencies=[Depends(rooms_on)])
@@ -736,12 +780,14 @@ async def invite_join(
 ) -> RoomOut:
     """Своих — без одобрения: ссылку им дал организатор или участник"""
     body = body or JoinIn()
+    # Замок — до чтения комнаты: второй такой же запрос увидит уже записанное
+    await _lock_user(session, user.id)
     room = await _by_invite(session, invite, user)
     _require_active(room)
     mine = _mine(room, user)
     role = _role(mine)
     if role in ("organizer", "joined"):
-        return _out(room, user, lang)
+        return await _reply(session, room, user, lang)
     if role == "removed":
         raise HTTPException(status_code=403, detail="removed")
     _require_not_banned(user)
@@ -767,7 +813,7 @@ async def invite_join(
     notify(session, room, room.organizer_id, "room_joined", user.first_name)
     _after_join(session, room, mine)
     await session.commit()
-    return _out(await _load(session, id=room.id), user, lang)
+    return await _reply(session, await _load(session, id=room.id), user, lang)
 
 
 @router.post("/rooms/{code}/requests", response_model=RoomOut, dependencies=[Depends(rooms_on)])
@@ -778,9 +824,10 @@ async def room_request(
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ) -> RoomOut:
+    # Замок — до чтения комнаты: второй такой же запрос увидит уже записанное
+    await _lock_user(session, user.id)
     room = await _room_for(session, code)
-    organizer = _organizer(room)
-    if not room.is_open or (organizer and organizer.user_id in await blocked_ids(session, user.id)):
+    if not room.is_open or _blocked(room, await blocked_ids(session, user.id)):
         raise HTTPException(status_code=404, detail="room_not_found")
     _require_active(room)
     mine = _mine(room, user)
@@ -810,7 +857,7 @@ async def room_request(
     mine.decided_at = None
     notify(session, room, room.organizer_id, "room_request", user.first_name)
     await session.commit()
-    return _out(await _load(session, id=room.id), user, lang)
+    return await _reply(session, await _load(session, id=room.id), user, lang)
 
 
 def _member(room: Room, member_id: int) -> RoomMember:
@@ -840,6 +887,11 @@ async def member_approve(
         raise HTTPException(status_code=409, detail="not_requested")
     if member.user.companions_banned_at is not None:
         raise HTTPException(status_code=409, detail="member_banned")
+    # Пока заявка ждала, в комнату мог вступить тот, с кем у просящегося
+    # блокировка: вместе их не сводим
+    if _blocked(room, await blocked_ids(session, member.user_id)):
+        raise HTTPException(status_code=409, detail="member_blocked")
+    await _lock_user(session, member.user_id)
     if await _busy(session, member.user_id, room.day, room.days, skip_room=room.id):
         raise HTTPException(status_code=409, detail="member_busy")
     member.status = "joined"
@@ -847,7 +899,7 @@ async def member_approve(
     notify(session, room, member.user_id, "room_approved")
     _after_join(session, room, member)
     await session.commit()
-    return _out(await _load(session, id=room.id), user, lang)
+    return await _reply(session, await _load(session, id=room.id), user, lang)
 
 
 @router.post(
@@ -871,7 +923,7 @@ async def member_decline(
     member.decided_at = datetime.now(timezone.utc)
     notify(session, room, member.user_id, "room_declined")
     await session.commit()
-    return _out(await _load(session, id=room.id), user, lang)
+    return await _reply(session, await _load(session, id=room.id), user, lang)
 
 
 @router.delete(
@@ -896,7 +948,7 @@ async def member_remove(
     if was_joined:
         kick(session, room, member)
     await session.commit()
-    return _out(await _load(session, id=room.id), user, lang)
+    return await _reply(session, await _load(session, id=room.id), user, lang)
 
 
 @router.post("/rooms/{code}/leave", status_code=204, dependencies=[Depends(rooms_on)])
@@ -927,16 +979,38 @@ async def group_link(
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    """Личная ссылка сгорела (её перехватили) — выдать новую"""
+    """Личная ссылка сгорела (её перехватили) — выдать новую. Только взамен
+    использованной и не чаще раза в `tg_link_renew_after_sec`: каждая ссылка —
+    вызов exportChatInvite от единственного аккаунта Sayr Admin, и частые
+    вызовы Telegram наказывает паузой для всех групп разом"""
     room = await _room_for(session, code)
     mine = _mine(room, user)
     if _role(mine) not in ("organizer", "joined"):
         raise HTTPException(status_code=403, detail="members_only")
     if room.tg_state != "ready":
         raise HTTPException(status_code=409, detail="group_not_ready")
+    if mine.tg_link and not mine.tg_link_used:
+        raise HTTPException(status_code=409, detail="link_not_used")
+    # Замок — чтобы двойное нажатие не поставило два задания разом
+    await _lock_user(session, user.id)
+    last = (
+        await session.execute(
+            select(TgJob)
+            .where(TgJob.kind == "invite_link", TgJob.member_id == mine.id)
+            .order_by(TgJob.id.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if last is not None and last.status == "pending":
+        raise HTTPException(status_code=409, detail="link_pending")
+    since = datetime.now(timezone.utc) - timedelta(seconds=settings.tg_link_renew_after_sec)
+    if last is not None and last.created_at > since:
+        raise HTTPException(status_code=429, detail="too_often")
+    # Старую служба погасит, прежде чем выдать новую
+    payload = {"revoke": mine.tg_link} if mine.tg_link else {}
     mine.tg_link = None
     mine.tg_link_used = False
-    session.add(TgJob(kind="invite_link", room_id=room.id, member_id=mine.id, payload={}))
+    session.add(TgJob(kind="invite_link", room_id=room.id, member_id=mine.id, payload=payload))
     await session.commit()
     return {"state": "pending"}
 
@@ -983,6 +1057,9 @@ async def report(
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ) -> None:
+    """Жалобы разбирает владелец руками, поэтому очередь бережём: одна
+    неразобранная жалоба на ту же цель от того же человека и не больше
+    `room_reports_per_day` в сутки — иначе любой аккаунт завалил бы её"""
     if body.user_id is None and body.room is None:
         raise HTTPException(status_code=422, detail="target_required")
     room_id = None
@@ -990,10 +1067,41 @@ async def report(
         room = (await session.execute(select(Room).where(Room.code == body.room))).scalar_one_or_none()
         room_id = room.id if room else None
     target = await session.get(User, body.user_id) if body.user_id else None
+    target_id = target.id if target else None
+    # Замок — чтобы две одинаковые жалобы разом не прошли обе проверки
+    await _lock_user(session, user.id)
+    same = (
+        await session.execute(
+            select(RoomReport.id)
+            .where(
+                RoomReport.reporter_id == user.id,
+                RoomReport.target_user_id.is_not_distinct_from(target_id),
+                RoomReport.room_id.is_not_distinct_from(room_id),
+                RoomReport.resolved_at.is_(None),
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if same is not None:
+        # Та же жалоба уже ждёт разбора — вторая ничего не добавит. Человеку
+        # отвечаем как обычно: жалоба у нас
+        return
+    recent = (
+        await session.execute(
+            select(func.count())
+            .select_from(RoomReport)
+            .where(
+                RoomReport.reporter_id == user.id,
+                RoomReport.created_at > datetime.now(timezone.utc) - timedelta(days=1),
+            )
+        )
+    ).scalar_one()
+    if recent >= settings.room_reports_per_day:
+        raise HTTPException(status_code=429, detail="too_many_reports")
     session.add(
         RoomReport(
             reporter_id=user.id,
-            target_user_id=target.id if target else None,
+            target_user_id=target_id,
             room_id=room_id,
             reason=body.reason,
             text=body.text.strip(),
@@ -1013,7 +1121,9 @@ async def block(
     session: AsyncSession = Depends(get_session),
 ) -> None:
     """Заблокировать. Если уже в одной комнате: организатор убирает его,
-    а если организатор — он, сам человек из комнаты выходит"""
+    а если организатор — он, сам человек из комнаты выходит. Двое простых
+    участников остаются, но друг друга в комнате больше не видят (`_out`),
+    а в чужие комнаты друг к другу не попадают (`_blocked`)"""
     if body.user_id == user.id:
         raise HTTPException(status_code=422, detail="self_block")
     if await session.get(User, body.user_id) is None:
@@ -1111,6 +1221,10 @@ async def housekeeping(session: AsyncSession, day: date) -> None:
         room.archived_at = now
         if room.tg_state == "ready":
             session.add(TgJob(kind="leave", room_id=room.id, payload={"text": "farewell"}))
+        elif room.tg_state == "failed" and room.tg_chat_id and room.tg_left_at is None:
+            # Группу завели, а собрать не вышло: людей в ней нет, прощаться
+            # не с кем — но и сидеть в ней Sayr Admin вечно незачем
+            session.add(TgJob(kind="leave", room_id=room.id, payload={}))
     await session.execute(
         delete(RoomMember).where(
             RoomMember.status.in_(("declined", "left", "removed")),
@@ -1132,7 +1246,9 @@ async def housekeeping(session: AsyncSession, day: date) -> None:
 
 async def ban_companions(session: AsyncSession, user: User) -> None:
     """«Запретить попутчиков» по жалобе: свои походы отменяются, из чужих
-    комнат и групп человека убирают. Коммитит вызывающий."""
+    комнат и групп человека убирают. Из групп своих отменённых — тоже:
+    группа остаётся тем, кто идёт всё равно, а жалоба была как раз на него.
+    Коммитит вызывающий."""
     user.companions_banned_at = datetime.now(timezone.utc)
     now = user.companions_banned_at
     rooms = (
@@ -1150,6 +1266,7 @@ async def ban_companions(session: AsyncSession, user: User) -> None:
         mine = _mine(room, user)
         if _role(mine) == "organizer":
             cancel(session, room)
+            kick(session, room, mine)
         elif mine.status in LIVE:
             joined = mine.status == "joined"
             mine.status, mine.decided_at = "removed", now
@@ -1162,9 +1279,9 @@ async def ban_companions(session: AsyncSession, user: User) -> None:
 
 async def on_account_deleted(session: AsyncSession, user: User) -> None:
     """Перед удалением человека: его походы отменяются (всем пуш, в группу
-    сообщение), из чужих групп служба его убирает. Строки участия уйдут
-    каскадом вместе с человеком — поэтому аккаунт Telegram кладём
-    в задание заранее"""
+    сообщение), из групп — и чужих, и своих — служба его убирает, личные
+    ссылки гасит. Строки участия уйдут каскадом вместе с человеком — поэтому
+    аккаунт Telegram и ссылку кладём в задание заранее"""
     rows = (
         await session.execute(
             select(Room)
@@ -1180,7 +1297,7 @@ async def on_account_deleted(session: AsyncSession, user: User) -> None:
         mine = _mine(room, user)
         if _role(mine) == "organizer":
             cancel(session, room)
-        elif mine.status == "joined":
+        if mine.status == "joined":
             kick(session, room, mine)
     # Его сообщения из групп — тоже: удаление аккаунта уносит всё его
     await session.execute(delete(TgMessage).where(TgMessage.user_id == user.id))
