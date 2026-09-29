@@ -200,13 +200,18 @@ async def set_pace(
     if body.date > tashkent_today():
         raise HTTPException(422, "День ещё не наступил")
 
+    # Строка под замком до конца ответа: иначе одинаковые ответы разом
+    # читали бы один и тот же прежний темп, и каждый добавлял бы свой голос,
+    # а снятие отметки забирало бы потом только один
     intent = (
         await session.execute(
-            select(TripIntent).where(
+            select(TripIntent)
+            .where(
                 TripIntent.place_id == place_id,
                 TripIntent.day == body.date,
                 _mine(user, body.device_id),
             )
+            .with_for_update()
         )
     ).scalar_one_or_none()
     if intent is None:
@@ -238,7 +243,17 @@ async def _drop(session: AsyncSession, *where) -> None:
     gone = await session.execute(
         delete(TripIntent).where(*where).returning(TripIntent.place_id, TripIntent.pace)
     )
-    for place_id, pace in gone.all():
+    await take_back_votes(session, gone.all())
+
+
+async def take_back_votes(session: AsyncSession, gone) -> None:
+    """Забрать из счётчика темпа голоса удалённых отметок.
+
+    `gone` — пары (место, темп) из DELETE … RETURNING. Нужна и там,
+    где отметки удаляют со своим условием: гостевые дубли при входе
+    (auth._adopt_intents) уходят так же, как снятые руками.
+    """
+    for place_id, pace in gone:
         if pace is not None:
             await _move_vote(place_id, pace, None, session)
 

@@ -39,6 +39,7 @@ from ..config import settings
 from ..db import get_session
 from ..models import LoginRequest, TripIntent, User, UserSession
 from ..stats import parse_app_header
+from .intents import take_back_votes
 
 log = logging.getLogger(__name__)
 
@@ -316,7 +317,9 @@ async def _adopt_intents(session: AsyncSession, user: User, device_id: str | Non
 
     Он отмечал «Пойду» гостем, а теперь вошёл — терять отметки нельзя.
     Сначала убираем гостевые, на которые у него уже есть свой голос
-    с другого телефона: иначе один человек считался бы дважды.
+    с другого телефона: иначе один человек считался бы дважды. Убираем
+    вместе с ответом «как сходили» — иначе голос темпа остался бы висеть
+    без отметки, как при обычном её снятии.
     """
     if not device_id:
         return
@@ -330,11 +333,12 @@ async def _adopt_intents(session: AsyncSession, user: User, device_id: str | Non
         )
         .exists()
     )
-    await session.execute(
-        delete(TripIntent).where(
-            TripIntent.device_id == device_id, TripIntent.user_id.is_(None), already
-        )
+    gone = await session.execute(
+        delete(TripIntent)
+        .where(TripIntent.device_id == device_id, TripIntent.user_id.is_(None), already)
+        .returning(TripIntent.place_id, TripIntent.pace)
     )
+    await take_back_votes(session, gone.all())
     await session.execute(
         update(TripIntent)
         .where(TripIntent.device_id == device_id, TripIntent.user_id.is_(None))
