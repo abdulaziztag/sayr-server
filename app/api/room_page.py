@@ -13,7 +13,7 @@ from html import escape
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -24,7 +24,7 @@ from ..push.outbox import day_text
 from ..schemas import DEFAULT_LANG, Lang, pick
 from ..typography import uz_display
 from .app_links import smart_banner, store_buttons
-from .rooms import _end, _genders, _organizer, _people, askable
+from .rooms import _end, _organizer, _people, askable, today
 
 router = APIRouter(tags=["links"])
 
@@ -117,9 +117,9 @@ _PAGE = """<!doctype html>
 
 # Заявка в открытую комнату. Ссылку выкладывают в большие чаты, где её
 # откроет кто угодно и без входа, поэтому людей на странице нет вовсе —
-# ни имени организатора, ни фото: только место, дни и числа. Карточки
-# людей, как и в приложении, — вошедшим. Превью для Telegram — полным
-# набором og- и twitter-тегов
+# ни имени организатора, ни фото, ни пола: только место, дни и сколько
+# человек. Карточки людей, как и в приложении, — вошедшим. Превью для
+# Telegram — полным набором og- и twitter-тегов
 _REQUEST_PAGE = """<!doctype html>
 <html lang="{lang}">
 <head>
@@ -183,8 +183,6 @@ _T = {
         "не ищет попутчиков.",
         # Одно, два, пять — как plurals в приложениях
         "people": ("человек", "человека", "человек"),
-        "men": ("мужчина", "мужчины", "мужчин"),
-        "women": ("женщина", "женщины", "женщин"),
     },
     "uz": {
         "calls": "{name} sizni {place}ga taklif qilmoqda",
@@ -204,8 +202,6 @@ _T = {
         "endi hamroh izlamayapti.",
         # Son bilan ot birlikda turadi: «3 kishi»
         "people": ("kishi",) * 3,
-        "men": ("erkak",) * 3,
-        "women": ("ayol",) * 3,
     },
 }
 
@@ -307,10 +303,20 @@ async def request_page(
     t = _T[lang]
     room = None
     if settings.rooms_open and _CODE.fullmatch(code):
+        # Условия askable — прямо в запросе: комната только для своих,
+        # отменённая или прошедшая не находится тем же одним запросом, что
+        # и несуществующий код. Иначе за ней догружались бы место, снимки
+        # и люди, и по времени ответа было бы видно, что код занят
         room = (
             await session.execute(
                 select(Room)
-                .where(Room.code == code)
+                .where(
+                    Room.code == code,
+                    Room.is_open,
+                    Room.status == "active",
+                    # _end(room) >= today(): последний день похода ещё впереди
+                    Room.day + func.greatest(Room.days, 1) > today(),
+                )
                 .options(
                     selectinload(Room.place).selectinload(Place.photos),
                     selectinload(Room.members).selectinload(RoomMember.user),
@@ -319,7 +325,8 @@ async def request_page(
         ).scalar_one_or_none()
     # Нет такой, только для своих, отменена или прошла — одна и та же
     # страница с тем же 404: по ответу не понять, стоит ли за кодом комната
-    # только для своих
+    # только для своих. askable — мерило, общее с заявкой и request_url:
+    # запрос выше его лишь повторяет, и разойтись им это не даст
     if room is None or not askable(room):
         page = _GONE.format(lang=lang, title=t["gone_title"], text=t["gone_request"])
         return HTMLResponse(uz_display(page), status_code=404)
@@ -327,15 +334,11 @@ async def request_page(
     place = pick(room.place.name, room.place.name_uz, lang)
     dates = _dates(room, lang)
     title = f"{place} · {dates}"
-    # Числа, как у чужого в приложении: сколько человек и сколько среди них
-    # мужчин и женщин. Кто пол не указал, не попадает ни в одно число
-    men, women = _genders(room)
-    people = [_count(_people(room), t["people"])]
-    if men:
-        people.append(_count(men, t["men"]))
-    if women:
-        people.append(_count(women, t["women"]))
-    people_line = " · ".join(people)
+    # Только общее число. Мужчин и женщин приложение показывает вошедшим,
+    # а эту страницу и её превью видит кто угодно без входа: «1 человек ·
+    # 1 женщина» с местом и датой в публичной группе — это объявление, что
+    # девушка идёт туда одна
+    people_line = _count(_people(room), t["people"])
     url = f"{settings.public_url}/j/{room.code}"
     # Превью в Telegram берёт картинку только по полному адресу
     photo = (

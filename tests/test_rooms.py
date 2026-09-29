@@ -11,12 +11,12 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from fastapi_storages import StorageFile
-from sqlalchemy import delete, select
+from sqlalchemy import delete, event, select
 
 from app.api import rooms as rooms_api
 from app.auth.tokens import new_token
 from app.config import AVATARS_DIR, settings
-from app.db import SessionLocal
+from app.db import SessionLocal, engine
 from app.models import (
     Gender,
     LoginRequest,
@@ -1286,15 +1286,18 @@ async def test_страница_заявки_в_открытую_комнату(
     assert '<meta property="og:image" content="https://sayr.info/media/photos/peak-cover.jpg">' in html
     assert f'<meta property="og:url" content="https://sayr.info/j/{room["code"]}">' in html
     assert (
-        '<meta property="og:description" content="2 человека · 1 мужчина · 1 женщина. '
+        '<meta property="og:description" content="2 человека. '
         "Открытая комната: попроситься можно в приложении Sayr — организатор решает, "
         'кого взять.">'
     ) in html
     assert '<meta name="twitter:card" content="summary_large_image">' in html
     assert f"sayr://room/{room['code']}" in html
     assert "Попроситься в приложении" in html
-    # Людей на странице нет: ни имён, ни фото, ни ников, ни секрета «своих»
-    for secret in ("Азиз", "Лола", "aziz_tg", "lola_tg", "/media/avatars", invite):
+    # Людей на странице нет: ни имён, ни фото, ни ников, ни секрета «своих».
+    # И ни пола: превью с «1 женщина» в публичной группе — объявление, что
+    # девушка идёт одна, а мужчин и женщин приложение показывает вошедшим
+    for secret in ("Азиз", "Лола", "aziz_tg", "lola_tg", "/media/avatars", invite,
+                   "мужчин", "женщин"):
         assert secret not in html
 
 
@@ -1319,6 +1322,7 @@ async def test_страница_заявки_на_узбекском_без_ра
     assert 'content="Test ko\u2018li · 25-sentabr"' in page.text
     assert "Ochiq xona: Sayr ilovasida qo\u2018shilishni so\u2018rash mumkin" in page.text
     assert "1 kishi" in page.text
+    assert "erkak" not in page.text and "ayol" not in page.text
     gone = await client.get("/j/nothing1", params={"lang": "uz"})
     assert "hamroh izlamayapti" in gone.text
     for text in (page.text, gone.text):
@@ -1343,6 +1347,40 @@ async def test_страница_заявки_не_выдаёт_комнаты_т
         resp = await client.get(f"/j/{code}")
         assert (resp.status_code, resp.text) == (404, unknown.text), code
     assert (await client.get(f"/j/{alive['code']}")).status_code == 200
+
+
+async def test_страница_заявки_не_выдаёт_комнату_временем_ответа(client):
+    """Комната только для своих, отменённая или прошедшая не догружается:
+    запросов к базе ровно столько же, сколько на несуществующий код, —
+    иначе занятый код выдало бы время ответа"""
+    org, _ = await person()
+    closed = await open_room(client, org, is_open=False)
+    cancelled = await open_room(client, org, day=(DAY + timedelta(days=2)).isoformat())
+    await client.delete(f"/api/v1/rooms/{cancelled['code']}", headers=org)
+    # Трёхдневный поход, последний день которого вчера
+    past = await open_room(client, org, day=(DAY + timedelta(days=4)).isoformat(), days=3)
+    await set_room(past["code"], day=TODAY - timedelta(days=3))
+    alive = await open_room(client, org, day=(DAY + timedelta(days=8)).isoformat())
+
+    statements: list[str] = []
+
+    def count(conn, cursor, statement, *args):
+        statements.append(statement)
+
+    async def queries(code: str) -> int:
+        statements.clear()
+        event.listen(engine.sync_engine, "before_cursor_execute", count)
+        try:
+            await client.get(f"/j/{code}")
+        finally:
+            event.remove(engine.sync_engine, "before_cursor_execute", count)
+        return len(statements)
+
+    unknown = await queries("zzzzzzzz")
+    for code in (closed["code"], cancelled["code"], past["code"]):
+        assert await queries(code) == unknown, code
+    # Живую комнату догружают — значит, счёт настоящий
+    assert await queries(alive["code"]) > unknown
 
 
 async def test_страница_заявки_молчит_при_выключенных_комнатах(client, monkeypatch):
