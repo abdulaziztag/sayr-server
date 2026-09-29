@@ -5,10 +5,12 @@
 или подставлено ссылкой со страницы места.
 """
 
+import asyncio
 import io
 import os
 import struct
 import threading
+import time
 import zlib
 from contextlib import asynccontextmanager
 
@@ -22,7 +24,7 @@ from sqlalchemy.orm import selectinload
 from app.api import report
 from app.client_ip import limit_key
 from app.config import GPX_DIR, REPORTS_DIR, settings
-from app.db import SessionLocal
+from app.db import SessionLocal, engine
 from app.main import app
 from app.models import PlaceReport
 from app.services import attachments
@@ -465,6 +467,14 @@ def _png_header(width: int, height: int) -> bytes:
             + chunk(b"IDAT", zlib.compress(b"\x00" * 64)) + chunk(b"IEND", b""))
 
 
+def _webp_header(width: int, height: int) -> bytes:
+    """WebP без пикселей: один заголовок VP8L, сорок байт на любой размер."""
+    bits = (width - 1) | (height - 1) << 14
+    body = b"\x2f" + struct.pack("<I", bits) + b"\x00" * 15
+    chunk = b"VP8L" + struct.pack("<I", len(body)) + body
+    return b"RIFF" + struct.pack("<I", 4 + len(chunk)) + b"WEBP" + chunk
+
+
 @asynccontextmanager
 async def _from(host: str):
     """Клиент с другого адреса. Жизненный цикл приложения держит `client`."""
@@ -639,6 +649,93 @@ async def test_каталог_заявок_не_растёт_без_предел
         assert resp.status_code == 429
         assert resp.json()["detail"] == uz_display(report.UZ["no_room"])
         assert await _files_on_disk() == ["старое.bin"]
+        assert await _rows() == []
+    finally:
+        await _cleanup()
+        await _cleanup_files()
+
+
+async def test_одновременные_отправки_не_перелезают_через_объём(client, monkeypatch):
+    """Остаток сверяется второй раз — под замком, после очереди картинок.
+
+    Раньше отправки, пришедшие разом, видели один и тот же остаток и вместе
+    перелезали через него: восемь по файлу при объёме на один давали две
+    принятые, а шестьдесят с одного адреса — гигабайт за минуту.
+    """
+    sent = [_noise_png() for _ in range(6)]
+    monkeypatch.setattr(settings, "report_files_daily_bytes", max(map(len, sent)))
+    save = attachments.save
+
+    def slow(data, name):
+        # Раскрытие кадра — это время, и за него остальные отправки успевают
+        # сверить остаток. Без паузы гонка в тесте проявлялась бы через раз
+        time.sleep(0.1)
+        return save(data, name)
+
+    monkeypatch.setattr(attachments, "save", slow)
+
+    async def post(i: int, data: bytes) -> int:
+        async with _from(f"198.51.100.{20 + i}") as c:
+            resp = await c.post(
+                "/report",
+                data={"place": WATERFALL, "comment": f"разом {i}", "lang": "ru",
+                      "website": ""},
+                files=[("files", (f"{i}.png", data, "image/png"))],
+                headers={"Accept": "application/json"},
+            )
+        return resp.status_code
+
+    try:
+        codes = await asyncio.gather(*(post(i, data) for i, data in enumerate(sent)))
+        assert sorted(codes) == [200] + [429] * 5
+        (kept,) = [f.name for r in await _rows() for f in r.files]
+        assert await _files_on_disk() == sorted([kept, attachments.thumb_name(kept)])
+    finally:
+        await _cleanup()
+        await _cleanup_files()
+
+
+async def test_очередь_картинок_не_держит_соединение_с_базой(client, monkeypatch):
+    """Картинки раскрываются по одной на воркер, и очереди можно ждать долго.
+    Каждая отправка, ждавшая её с соединением в руках, выбывала из пула
+    в пятнадцать соединений: полтора десятка — и лента с админкой
+    отваливались по таймауту пула."""
+    held = []
+    save = attachments.save
+
+    def spy(data, name):
+        held.append(engine.pool.checkedout())
+        return save(data, name)
+
+    monkeypatch.setattr(attachments, "save", spy)
+    try:
+        resp = await client.post(
+            "/report",
+            data={"place": WATERFALL, "comment": "кадр", "lang": "ru", "website": ""},
+            files=[("files", ("вид.png", _png(), "image/png"))],
+        )
+        assert resp.status_code == 200
+        assert held == [0], "соединение с базой занято, пока картинка ждёт очереди"
+        assert len(await _rows()) == 1
+    finally:
+        await _cleanup()
+        await _cleanup_files()
+
+
+async def test_лёгкий_webp_под_пределом_отбивается_на_форме(client):
+    """36 мегапикселей — под пределом для RGB, но WebP раскрывается вчетверо
+    дороже, и превью такого кадра в сорок байт съедало шестьсот мегабайт —
+    с формы, открытой всем без входа."""
+    try:
+        resp = await client.post(
+            "/report",
+            data={"place": WATERFALL, "comment": "кадр", "lang": "ru", "website": ""},
+            files=[("files", ("вид.webp", _webp_header(6000, 6000), "image/webp"))],
+            headers={"Accept": "application/json"},
+        )
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == report.RU["too_large"].format(name="вид.webp")
+        assert await _files_on_disk() == []
         assert await _rows() == []
     finally:
         await _cleanup()

@@ -17,6 +17,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from html import escape
 
+from anyio import to_thread
 from fastapi import (APIRouter, Depends, File, Form, Header, HTTPException,
                      Query, Request, UploadFile)
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -543,7 +544,7 @@ def _key(text: str) -> str:
 #: хранить адрес отправителя, а на /privacy обещано, что от неё остаются
 #: место, темы, текст, контакт и файлы — и больше ничего. Диск от того,
 #: кто обходит этот предел, держит другой, общий для всех воркеров, —
-#: суточный объём файлов по базе (_room).
+#: суточный объём файлов по базе (_today).
 #:
 #: Тридцать, а не пять: сотовые операторы держат за одним адресом пол-города,
 #: и низкий порог молча съедал бы живые заявки. Упёршемуся отвечаем словами,
@@ -627,12 +628,24 @@ async def _attached(
     чтобы не держать в памяти чужие сто мегабайт. Настоящая же оборона
     от такого стоит раньше — `client_max_body_size` у nginx, который
     обрывает толстое тело, не доводя его до приложения.
+
+    Возвращается с замком `_ROOM_LOCK`, взятым в транзакции `session`:
+    заявку вызывающий кладёт и фиксирует в ней же, и только после этого
+    следующая отправка увидит её байты в суточном объёме.
     """
     if len(files) > attachments.MAX_FILES:
         raise HTTPException(422, uz_display(t["too_many"]))
     if not files:
         return []
+    # Первая сверка с остатком — без замка и до чтения файлов: когда объём
+    # кончился, отказываем сразу, не раскрыв ни одной картинки
     room = await _room(session)
+    # Дальше очередь картинок (off_loop), и стоять в ней можно долго.
+    # Соединение с базой на это время отдаём пулу: полтора десятка отправок
+    # в очереди иначе держали бы весь пул воркера, и лента с админкой
+    # отваливались бы по его таймауту. Строки каталога после commit
+    # остаются живыми — expire_on_commit=False
+    await session.commit()
 
     rows: list[PlaceReportFile] = []
     written: list[str] = []
@@ -661,6 +674,14 @@ async def _attached(
                     size=size,
                 )
             )
+        # Вторая сверка — под замком и уже с файлами на диске. Пока мы стояли
+        # в очереди, остаток могли съесть соседние отправки, в том числе из
+        # другого воркера. Без замка все, кто пришёл разом, видели бы один
+        # и тот же остаток и вместе перелезали через него во сколько угодно
+        # раз: шестьдесят отправок с одного адреса — гигабайт за минуту
+        await session.execute(select(func.pg_advisory_xact_lock(_ROOM_LOCK)))
+        if not await _fits(session, total):
+            raise HTTPException(429, uz_display(t["no_room"]))
     except attachments.Rejected as no:
         _forget(written)
         # «Пустой файл» отдельного разговора не стоит: браузер присылает
@@ -675,29 +696,52 @@ async def _attached(
     return rows
 
 
-async def _room(session: AsyncSession) -> int:
-    """Сколько байт файлов форма ещё примет — меньший из двух остатков.
+#: Имя замка (pg_advisory_xact_lock), под которым отправка с файлами
+#: сверяется с остатком и кладёт заявку. Число любое, лишь бы другой
+#: код не брал замок с тем же: это имя, а не значение
+_ROOM_LOCK = 0x5359_5246
 
-    Суточный считаем по строкам в базе, а не счётчиком в памяти: воркеров
-    два, и у каждого был бы свой. Файл, пришедший дважды, на диске один,
-    а здесь посчитан дважды — предел от этого только строже. Отправки,
-    пришедшие одновременно, видят один и тот же остаток и могут вместе
-    перелезть через него, каждая не больше чем на шестнадцать мегабайт:
-    предел держит порядок величины, а не байт.
 
-    Каталог — по самому диску, с превью вместе: он растёт, пока очередь
-    не разбирают, и сутки тут ни при чём.
+async def _today(session: AsyncSession) -> int:
+    """Сколько байт файлов пришло к заявкам за последние сутки.
+
+    По строкам в базе, а не счётчиком в памяти: воркеров два, и у каждого
+    был бы свой. Файл, пришедший дважды, на диске один, а здесь посчитан
+    дважды — предел от этого только строже.
     """
     since = datetime.now(timezone.utc) - timedelta(days=1)
-    today = (
+    return (
         await session.execute(
             select(func.coalesce(func.sum(PlaceReportFile.size), 0))
             .where(PlaceReportFile.created_at >= since)
         )
     ).scalar_one()
+
+
+async def _room(session: AsyncSession) -> int:
+    """Сколько байт файлов форма ещё примет — меньший из двух остатков.
+
+    Каталог — по самому диску, с превью вместе: он растёт, пока очередь
+    не разбирают, и сутки тут ни при чём. Обход каталога — в потоке: это
+    stat на каждый файл, и цикл событий на нём стоять не должен.
+    """
+    on_disk = await to_thread.run_sync(attachments.stored_bytes)
     return min(
-        settings.report_files_daily_bytes - today,
-        settings.reports_dir_max_bytes - attachments.stored_bytes(),
+        settings.report_files_daily_bytes - await _today(session),
+        settings.reports_dir_max_bytes - on_disk,
+    )
+
+
+async def _fits(session: AsyncSession, total: int) -> bool:
+    """Влезает ли отправка в `total` байт, чьи файлы уже лежат на диске.
+
+    Звать под `_ROOM_LOCK`. Каталог меряется уже вместе с этими файлами,
+    а суточный объём — без них: строк в базе у них ещё нет.
+    """
+    on_disk = await to_thread.run_sync(attachments.stored_bytes)
+    return (
+        await _today(session) + total <= settings.report_files_daily_bytes
+        and on_disk <= settings.reports_dir_max_bytes
     )
 
 
@@ -750,6 +794,10 @@ async def report_submit(
         rows = await _catalog(session, lang)
         typed = place.strip()[:200]
         place_id = _resolve(rows, typed)
+        # Файлы — раньше строки заявки: _attached отпускает соединение на время
+        # очереди картинок, а возвращается с замком объёма, и commit ниже
+        # его снимает
+        files = await _attached(sent, t, session)
         session.add(
             PlaceReport(
                 place_id=place_id,
@@ -760,7 +808,7 @@ async def report_submit(
                 comment=comment,
                 contact=normalize_contact(contact)[:120] or None,
                 lang=lang,
-                files=await _attached(sent, t, session),
+                files=files,
             )
         )
         await session.commit()
