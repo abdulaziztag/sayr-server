@@ -8,11 +8,16 @@ os.environ.setdefault("SAYR_MEDIA_DIR", tempfile.mkdtemp(prefix="sayr-media-"))
 # Обязательные в проде — в тестах подставляем заведомо непригодные значения
 os.environ.setdefault("SAYR_ADMIN_PASSWORD", "test-only")
 os.environ.setdefault("SAYR_SECRET_KEY", "test-only")
+# Не setdefault: README советует включать документацию в server/.env, а
+# тесты проверяют боевое поведение — схема закрыта. Переменная окружения
+# сильнее .env, так что локальная настройка разработчика тестам не мешает
+os.environ["SAYR_API_DOCS"] = "false"
 
 import pytest
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 
+from app import login_guard
 from app.db import engine
 from app.main import app
 from app.models import Base, Difficulty, OvernightType, Place, PlaceCategory, Region
@@ -122,6 +127,18 @@ async def prepare_db():
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+
+
+@pytest.fixture(autouse=True)
+def forget_login_failures():
+    """Счётчик промахов входа (app/login_guard.py) живёт в памяти процесса
+    и переживает тест. Клиенты тестов ходят с одного 127.0.0.1, а пока у
+    проверки сезонов нет своего пароля, её промахи считаются в дверь
+    админки: шесть неверных паролей в одном файле — и admin_client
+    в следующих получал бы 429 вместо входа, смотря по порядку тестов"""
+    login_guard._FAILS.clear()
+    yield
+    login_guard._FAILS.clear()
 
 
 @pytest.fixture

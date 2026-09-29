@@ -43,7 +43,14 @@ MAX_LOCK_SEC = 15 * 60
 #: Сутки без промахов — адрес забыт
 FORGET_SEC = 24 * 3600
 
-#: «дверь:адрес» → (промахов подряд, время последнего, заперто до)
+#: Больше адресов не помним. Запись заводит каждый промах с нового адреса,
+#: а у кого своя /48, у того таких /64 десятки тысяч — словарь рос бы
+#: без края. Вытесняются те, кто промахивался давнее всех
+MAX_SLOTS = 10_000
+
+#: «дверь:адрес» → (промахов подряд, время последнего, заперто до).
+#: Ключи идут по времени последнего промаха: failed() переставляет запись
+#: в конец, так что забытые и вытесняемые всегда лежат в начале
 _FAILS: dict[str, tuple[int, float, float]] = {}
 
 
@@ -53,7 +60,10 @@ def client_key(request: Request) -> str:
     IPv6 — сетью /64, а не адресом: провайдер выдаёт абоненту целую /64,
     и адресов в ней хватит, чтобы на каждую попытку брать новый.
     Адрес клиента uvicorn берёт из X-Forwarded-For — nginx стоит на том
-    же сервере, а 127.0.0.1 uvicorn доверяет по умолчанию.
+    же сервере, а 127.0.0.1 uvicorn доверяет по умолчанию. Прокси с другого
+    адреса надо назвать uvicorn в --forwarded-allow-ips (так сделано
+    в compose.prod.yml): иначе для счётчика все клиенты — один адрес
+    прокси, и шесть чужих промахов запирают вход всем, владельцу тоже.
     """
     host = request.client.host if request.client else ""
     try:
@@ -71,16 +81,33 @@ def _slot(door: str, request: Request) -> str:
     return f"{door}:{client_key(request)}"
 
 
+def _forget_stale(now: float) -> None:
+    """Снимает с начала словаря адреса, молчавшие сутки.
+
+    Раньше каждая попытка входа перебирала словарь целиком — на сотнях
+    тысяч адресов это миллисекунды, на которые встаёт весь воркер. Ключи
+    идут по времени промаха, поэтому хватает дойти до первого свежего.
+    Пауза у снятых давно кончилась: она короче суток.
+    """
+    while _FAILS:
+        oldest = next(iter(_FAILS))
+        if now - _FAILS[oldest][1] <= FORGET_SEC:
+            return
+        del _FAILS[oldest]
+
+
 def locked_for(door: str, request: Request) -> int:
     """Сколько секунд ещё заперто; 0 — пароль можно проверять.
 
     Пока заперто, пароль не проверяется вовсе, даже верный: иначе перебор
     просто шёл бы дальше, а пауза лишь меняла бы текст ответа на промахах.
+
+    Между этой проверкой и failed()/passed() у вызывающего не должно быть
+    ни одного await: иначе залп параллельных запросов весь проходит
+    проверку раньше, чем первый из них запишет промах.
     """
     now = time.monotonic()
-    for stale in [k for k, (_, last, until) in _FAILS.items()
-                  if now - last > FORGET_SEC and now >= until]:
-        del _FAILS[stale]
+    _forget_stale(now)
     entry = _FAILS.get(_slot(door, request))
     if entry is None:
         return 0
@@ -90,14 +117,18 @@ def locked_for(door: str, request: Request) -> int:
 def failed(door: str, request: Request) -> None:
     """Промах. После FREE_FAILURES подряд — пауза, каждая вдвое длиннее"""
     now = time.monotonic()
+    _forget_stale(now)
     slot = _slot(door, request)
-    count = _FAILS.get(slot, (0, 0.0, 0.0))[0] + 1
+    # pop, а не get: запись встаёт в конец словаря, к самым свежим
+    count = _FAILS.pop(slot, (0, 0.0, 0.0))[0] + 1
     until = now
     if count > FREE_FAILURES:
         # Степень ограничена, чтобы число не росло без края: потолок
         # всё равно наступает на пятой паузе
         until = now + min(MAX_LOCK_SEC, FIRST_LOCK_SEC * 2 ** min(count - FREE_FAILURES - 1, 10))
     _FAILS[slot] = (count, now, until)
+    while len(_FAILS) > MAX_SLOTS:
+        del _FAILS[next(iter(_FAILS))]
 
 
 def passed(door: str, request: Request) -> None:

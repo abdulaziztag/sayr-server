@@ -52,6 +52,7 @@ from .models import (
     TgStatus,
     TesterSignup,
     User,
+    masked_phone,
     photo_storage,
 )
 from .reports import STATUS_RU, telegram_url, topic_names
@@ -138,10 +139,14 @@ class BasicAuthBackend(AuthenticationBackend):
     templates = None
 
     async def login(self, request: Request) -> bool | Response:
+        # Форму читаем ДО проверки паузы: от проверки до записи промаха не
+        # должно быть ни одного await. Иначе цикл отдаёт ход на чтении тела,
+        # и залп параллельных запросов весь проходит проверку раньше, чем
+        # хоть один запишет промах, — сотня паролей вместо шести
+        form = await request.form()
         wait = login_guard.locked_for(login_guard.ADMIN, request)
         if wait:
             return await self._locked(request, wait)
-        form = await request.form()
         # Сравниваем БАЙТЫ, как и на проверке сезонов: compare_digest на
         # строках с кириллицей бросает TypeError — вход с русской раскладкой
         # отвечал пятисоткой, а кириллический пароль не подошёл бы никогда
@@ -1245,8 +1250,8 @@ class UserAdmin(ModelView, model=User):
         User.profile_filled_at: "Заполнил анкету",
         User.companions_banned_at: "Попутчики запрещены",
     }
-    column_formatters = {User.phone: lambda row, _: _masked_phone(row.phone)}
-    column_formatters_detail = {User.phone: lambda row, _: _masked_phone(row.phone)}
+    column_formatters = {User.phone: lambda row, _: masked_phone(row.phone)}
+    column_formatters_detail = {User.phone: lambda row, _: masked_phone(row.phone)}
     can_create = False
     can_edit = False
     # Выгрузка идёт мимо форматтеров: /admin/user/export/csv отдавала
@@ -1458,14 +1463,6 @@ class TgMessageAdmin(ModelView, model=TgMessage):
     # Чужая переписка: срок жизни и стирание по /leave не догонят копию,
     # унесённую выгрузкой
     can_export = False
-
-
-def _masked_phone(phone: str | None) -> str:
-    """+998 90 ***-**-67 — узнать своего человека хватает, а читать
-    список телефонов в админке незачем."""
-    if not phone or len(phone) < 6:
-        return phone or ""
-    return f"{phone[:7]} ***-**-{phone[-2:]}"
 
 
 def mount_admin(app: FastAPI) -> Admin:

@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import logging
 from contextlib import asynccontextmanager
 
 import psycopg
@@ -15,6 +16,8 @@ from .api import (auth, intents, events, landing, legal, me, places, regions, re
 from .config import AVATARS_DIR, GPX_DIR, PHOTOS_DIR, SERVER_DIR, THUMBS_DIR, settings
 from .db import engine
 from .stats import StatsMiddleware, rotate_forever
+
+log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -40,7 +43,16 @@ async def bad_input(request, error):
     """Мусор во входе, который база не принимает: NUL-байт в строке
     (/api/v1/places/a%00b), число за пределами колонки. Раньше это была
     пятисотка — ошибка сервера там, где ошибся запрос. Проверки по ручкам
-    ловят такое раньше; это страховка для тех мест, где проверки нет"""
+    ловят такое раньше; это страховка для тех мест, где проверки нет.
+
+    DataError — весь класс 22 в Postgres, и под ним же прячется настоящая
+    ошибка сервера: деление на ноль в подсчёте, слишком длинное значение,
+    которое сервер вычислил сам. Раньше её было видно пятисоткой с трассой
+    в журнале — теперь только этой строкой, поэтому она обязательна.
+    Значений не пишем: там чужой ввод. Путь — через repr, NUL из него
+    превратил бы строку журнала в двоичный мусор"""
+    cause = getattr(error, "orig", None) or error
+    log.warning("мусор во входе: %s %r — %s", request.method, request.url.path, type(cause).__name__)
     return JSONResponse({"detail": "bad_input"}, status_code=422)
 
 
@@ -126,7 +138,13 @@ app.include_router(seasons.router)
 app.include_router(seasons_review.router)
 # Лендинг последним: его "/" не должен перехватывать ничего выше
 app.include_router(landing.router)
-mount_admin(app)
+admin = mount_admin(app)
+# У админки своё приложение Starlette со своим перехватом ошибок: DataError
+# из её поиска (?search=a%00b) до bad_input выше не доходил — sqladmin уже
+# ответил пятисоткой, и внешний обработчик падал на «ответ уже начат»,
+# оставляя в журнале RuntimeError вместо понятной строки
+admin.admin.add_exception_handler(exc.DataError, bad_input)
+admin.admin.add_exception_handler(psycopg.DataError, bad_input)
 
 
 @app.get("/healthz", tags=["meta"])

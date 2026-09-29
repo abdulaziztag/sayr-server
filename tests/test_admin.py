@@ -5,6 +5,7 @@
 в test_rooms.py: там всё, чтобы завести ему комнаты.
 """
 
+import asyncio
 import base64
 import json
 from contextlib import asynccontextmanager
@@ -31,14 +32,12 @@ def clock(monkeypatch):
     """Свои часы для счётчика — чтобы не ждать паузу по-настоящему.
 
     Подменяем модуль time только внутри login_guard: общий time.monotonic
-    трогать нельзя, на нём живёт цикл событий. Счётчик живёт в памяти
-    процесса и переживал бы тест — чистим до и после
+    трогать нельзя, на нём живёт цикл событий. Сам счётчик чистит
+    conftest.forget_login_failures — перед каждым тестом всего набора
     """
     now = [1_000.0]
     monkeypatch.setattr(login_guard, "time", SimpleNamespace(monotonic=lambda: now[0]))
-    login_guard._FAILS.clear()
-    yield now
-    login_guard._FAILS.clear()
+    return now
 
 
 @asynccontextmanager
@@ -96,6 +95,24 @@ async def test_промахи_запирают_вход_с_адреса_и_па�
         assert (await _admin_login(c, "мимо")).status_code == 400
 
 
+@pytest.mark.parametrize(
+    ("url", "wrong"), [("/admin/login", 400), ("/seasons/review/login", 401)]
+)
+async def test_залп_попыток_разом_упирается_в_ту_же_паузу(url, wrong):
+    """В /admin/login между проверкой паузы и записью промаха читалась
+    форма — await, на котором цикл отдаёт ход. Залп параллельных запросов
+    весь проходил проверку раньше, чем хоть один успевал записать промах:
+    сотня попыток разом — сотня проверенных паролей вместо шести"""
+    async with from_ip("203.0.113.40") as c:
+        answers = await asyncio.gather(*(
+            c.post(url, data={"username": settings.admin_username, "password": "мимо"})
+            for _ in range(login_guard.FREE_FAILURES * 5)
+        ))
+    codes = [a.status_code for a in answers]
+    assert codes.count(wrong) == login_guard.FREE_FAILURES + 1, codes
+    assert codes.count(429) == len(codes) - login_guard.FREE_FAILURES - 1
+
+
 def test_пауза_растёт_вдвое_до_потолка(clock):
     who = _request("192.0.2.1")
     for _ in range(login_guard.FREE_FAILURES):
@@ -113,6 +130,33 @@ def test_пауза_растёт_вдвое_до_потолка(clock):
     clock[0] += login_guard.FORGET_SEC + 1
     login_guard.locked_for(login_guard.ADMIN, who)
     assert login_guard._FAILS == {}
+
+
+def test_счётчик_помнит_не_больше_предела_и_забывает_давних(clock, monkeypatch):
+    """У кого своя /48, тот заводит по новой /64 на каждую попытку: словарь
+    рос бы без края, а каждая попытка входа перебирала бы его целиком.
+    Вытесняется и забывается тот, кто промахивался давнее всех"""
+    monkeypatch.setattr(login_guard, "MAX_SLOTS", 3)
+    net = [_request(f"2001:db8:0:{n}::1") for n in range(4)]
+
+    def kept():
+        return [n for n, who in enumerate(net)
+                if login_guard._slot(login_guard.ADMIN, who) in login_guard._FAILS]
+
+    for who in net[:3]:
+        login_guard.failed(login_guard.ADMIN, who)
+        clock[0] += 1
+    # Повторный промах поднимает сеть к свежим — вытеснят не её
+    login_guard.failed(login_guard.ADMIN, net[0])
+    login_guard.failed(login_guard.ADMIN, net[3])
+    assert kept() == [0, 2, 3]
+
+    # Сутки спустя забыты все, кто молчал, а промахнувшийся под конец — нет
+    clock[0] += login_guard.FORGET_SEC - 10
+    login_guard.failed(login_guard.ADMIN, net[2])
+    clock[0] += 20
+    login_guard.locked_for(login_guard.ADMIN, net[1])
+    assert kept() == [2]
 
 
 def test_ipv6_считается_сетью_64():

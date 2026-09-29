@@ -1,5 +1,7 @@
 """Обвязка вокруг ручек: документация API, защитные заголовки, мусор во входе."""
 
+import logging
+
 import pytest
 
 
@@ -40,6 +42,26 @@ async def test_nul_в_адресе_это_ошибка_запроса_а_не_с
     resp = await client.get("/r/a%00b")
     assert resp.status_code == 422
     assert resp.json() == {"detail": "bad_input"}
+
+
+async def test_мусор_во_входе_виден_в_журнале(client, caplog):
+    """Под DataError прячется и настоящая ошибка сервера. Раньше она была
+    пятисоткой с трассой в журнале, а после страховки стала тихим 422 —
+    владелец не узнал бы о ней вовсе"""
+    with caplog.at_level(logging.WARNING, logger="app.main"):
+        await client.get("/r/a%00b")
+    lines = [r.getMessage() for r in caplog.records if r.name == "app.main"]
+    assert lines == ["мусор во входе: GET '/r/a\\x00b' — DataError"]
+
+
+async def test_мусор_в_поиске_админки_не_пятисотка(admin_client, caplog):
+    """У админки своё приложение со своим перехватом ошибок: страховка
+    внешнего до неё не доставала, и в журнале вместо DataError оставался
+    RuntimeError «ответ уже начат»"""
+    with caplog.at_level(logging.WARNING, logger="app.main"):
+        resp = await admin_client.get("/admin/place/list", params={"search": "a\x00b"})
+    assert resp.status_code == 422
+    assert any("/admin/place/list" in r.getMessage() for r in caplog.records)
 
 
 @pytest.mark.parametrize(

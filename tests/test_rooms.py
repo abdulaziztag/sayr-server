@@ -30,6 +30,7 @@ from app.models import (
     UserBlock,
     UserSession,
     avatar_storage,
+    masked_phone,
 )
 from app.push import SendResult
 from app.push.outbox import render, send_outbox
@@ -767,3 +768,29 @@ async def test_комнаты_и_жалобы_открываются_в_адми
     assert (await admin_client.get("/admin/room/list")).status_code == 200
     reports = await admin_client.get("/admin/room-report/list")
     assert reports.status_code == 200 and "spam" in reports.text
+
+
+async def test_жалоба_в_админке_не_показывает_номер_целиком(client, admin_client):
+    """В жалобе человек виден строкой — именем, а без имени номером. Имя
+    он стирает в анкете сам, и номер выходил целиком, хотя в списке людей
+    и в карточке человека он под маской"""
+    org, org_id = await person()
+    room = await open_room(client, org)
+    madina, _ = await person(name="Мадина")
+    await client.post(
+        "/api/v1/reports",
+        json={"user_id": org_id, "room": room["code"], "reason": "spam"},
+        headers=madina,
+    )
+    async with SessionLocal() as session:
+        target = await session.get(User, org_id)
+        target.first_name = ""
+        phone = target.phone
+        report_id = (await session.execute(select(RoomReport.id))).scalar_one()
+        await session.commit()
+
+    for url in ("/admin/room-report/list", f"/admin/room-report/details/{report_id}"):
+        page = await admin_client.get(url)
+        assert page.status_code == 200
+        assert phone not in page.text, url
+        assert masked_phone(phone) in page.text, url

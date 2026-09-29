@@ -31,9 +31,15 @@ services:
     ports:
       # Только на локальный интерфейс — наружу отдаёт reverse proxy с TLS
       - "127.0.0.1:8000:8000"
+    # --forwarded-allow-ips: Caddy приходит в контейнер с адреса шлюза docker,
+    # а не с 127.0.0.1, и без флага uvicorn не верит его X-Forwarded-For —
+    # все клиенты для счётчиков попыток (вход по номеру, форма обращений,
+    # пароль админки) сливаются в один адрес. Доверять всем здесь можно:
+    # порт открыт только на 127.0.0.1 хоста, а Caddy заменяет присланный
+    # клиентом X-Forwarded-For своим
     command: >
       sh -c "alembic upgrade head &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --forwarded-allow-ips='*'"
     restart: unless-stopped
 
 volumes:
