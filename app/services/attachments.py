@@ -24,12 +24,11 @@
 """
 
 import hashlib
-import io
+import os
 from pathlib import Path
 
-from PIL import Image, ImageOps, UnidentifiedImageError
-
 from ..config import REPORTS_DIR
+from .images import NotAnImage, TooManyPixels, open_upload, shrink
 
 #: Сколько файлов принимаем к одной заявке и по сколько байт каждый.
 #:
@@ -59,6 +58,11 @@ GPX = ("gpx", "application/gpx+xml")
 _HEIF_BRANDS = {b"heic", b"heix", b"hevc", b"hevx", b"mif1", b"msf1", b"heim", b"heis"}
 
 IMAGE_TYPES = {JPEG[1], PNG[1], WEBP[1], HEIC[1]}
+
+#: Какие из них мы раскрываем сами, чтобы сделать превью, — и под каким
+#: именем формата их открывать. Ровно тем, что показали первые байты:
+#: файл с подписью PNG Pillow не станет разбирать как что-то ещё
+_DECODED = {JPEG[1]: "JPEG", PNG[1]: "PNG", WEBP[1]: "WEBP"}
 
 
 class Rejected(Exception):
@@ -107,7 +111,12 @@ def save(data: bytes, original_name: str) -> tuple[str, str, int, bool]:
     содержимого, поэтому один и тот же кадр в двух заявках — один файл,
     и уборка за неудавшейся отправкой не должна его унести.
 
-    Поднимает `Rejected`, если файл пуст, толще предела или не того типа.
+    Поднимает `Rejected`, если файл пуст, толще предела, не того типа или
+    картинка в нём больше settings.image_max_pixels. Всё это проверяется
+    до записи: отказ после неё оставлял бы на диске файл, о котором
+    не знает ни одна строка в базе, — и лежал бы он там вечно.
+
+    Картинку раскрывает, чтобы сделать превью, — звать через off_loop.
     """
     if not data:
         raise Rejected("empty", original_name)
@@ -118,29 +127,61 @@ def save(data: bytes, original_name: str) -> tuple[str, str, int, bool]:
         raise Rejected("bad_type", original_name)
 
     ext, mime = kind
+    decoded = _DECODED.get(mime)
+    if decoded:
+        _check_image(data, decoded, original_name)
     name = f"{hashlib.sha1(data).hexdigest()[:16]}.{ext}"
     path = REPORTS_DIR / name
     fresh = not path.exists()
     path.write_bytes(data)
-    if mime in IMAGE_TYPES:
-        _make_thumb(data, name)
+    if decoded:
+        _make_thumb(data, name, decoded)
     return name, mime, len(data), fresh
 
 
-def _make_thumb(data: bytes, name: str) -> None:
-    """Превью 720 px рядом с оригиналом. Не вышло — и ладно.
+def _check_image(data: bytes, decoded: str, original_name: str) -> None:
+    """Картинка открывается и не больше предела по пикселям.
 
-    HEIC Pillow без отдельного плагина не открывает, а тащить его в
-    зависимости ради превью незачем: сам файл сохранён и открывается,
-    в списке вместо картинки будет ссылка.
+    Читается один заголовок, сами пиксели не трогаем. PNG в несколько
+    сотен килобайт с размером 13000×13000 до этой проверки разворачивался
+    на превью в полтора гигабайта памяти — с формы, открытой всем без входа.
     """
     try:
-        with Image.open(io.BytesIO(data)) as im:
-            im = ImageOps.exif_transpose(im).convert("RGB")
-            im.thumbnail((THUMB_SIDE, THUMB_SIDE), Image.Resampling.LANCZOS)
-            im.save(REPORTS_DIR / thumb_name(name), "JPEG", quality=80)
-    except (UnidentifiedImageError, OSError, ValueError):
+        with open_upload(data, (decoded,)):
+            pass
+    except TooManyPixels:
+        raise Rejected("too_large", original_name) from None
+    except NotAnImage:
+        raise Rejected("bad_type", original_name) from None
+
+
+def _make_thumb(data: bytes, name: str, decoded: str) -> None:
+    """Превью 720 px рядом с оригиналом. Не вышло — и ладно.
+
+    HEIC сюда не попадает вовсе: Pillow без отдельного плагина его
+    не открывает, а тащить плагин в зависимости ради превью незачем.
+    Сам файл сохранён и открывается, в списке вместо картинки будет ссылка.
+
+    Ловим любое исключение, а не только «не картинка». Заголовок уже
+    проверен, но пиксели за ним бывают битыми, и Pillow отвечает на это
+    кто чем — OSError, SyntaxError, struct.error. Файл в этот момент уже
+    на диске, и пятисотая вместо «спасибо» оставила бы его сиротой.
+    """
+    try:
+        with open_upload(data, (decoded,)) as im:
+            shrink(im, THUMB_SIDE).save(REPORTS_DIR / thumb_name(name), "JPEG", quality=80)
+    except Exception:  # noqa: BLE001 — превью необязательно, заявка важнее
         return
+
+
+def stored_bytes() -> int:
+    """Сколько места уже занимают файлы заявок вместе с превью."""
+    total = 0
+    with os.scandir(REPORTS_DIR) as entries:
+        for entry in entries:
+            if entry.is_file(follow_symlinks=False):
+                total += entry.stat(follow_symlinks=False).st_size
+    return total
 
 
 def drop(name: str) -> None:

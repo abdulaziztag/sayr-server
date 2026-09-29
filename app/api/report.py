@@ -14,20 +14,24 @@
 """
 
 import time
+from datetime import datetime, timedelta, timezone
 from html import escape
 
 from fastapi import (APIRouter, Depends, File, Form, Header, HTTPException,
                      Query, Request, UploadFile)
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..client_ip import limit_key
+from ..config import settings
 from ..db import get_session
 from ..models import Place, PlaceReport, PlaceReportFile
 from ..reports import CATEGORY, TOPIC_CODES, TOPICS, normalize_contact
 from ..schemas import Lang, pick
 from ..services import attachments
+from ..services.images import off_loop
 from ..typography import fold_apostrophes, uz_display
 
 router = APIRouter(tags=["report"])
@@ -64,6 +68,9 @@ RU = {
     "too_big": "«{name}» тяжелее 8 МБ. Пришлите кадр поменьше — читаемости хватит.",
     "too_heavy": "Вместе файлы тяжелее 16 МБ. Пришлите самое важное.",
     "bad_type": "«{name}» не открылось. Подойдут фото (JPEG, PNG, HEIC, WebP), PDF и GPX.",
+    "too_large": "«{name}» слишком большой в пикселях. Уменьшите кадр — читаемости хватит.",
+    "no_room": "Файлы сейчас не принимаем: их пришло больше, чем мы успеваем разобрать. "
+               "Отправьте заявку без них, а файлы пришлите на почту.",
     "submit": "Отправить",
     "sending": "Отправляем…",
     "empty": "Отметьте тему или напишите, что не так.",
@@ -111,6 +118,9 @@ UZ = {
     "too_big": "«{name}» 8 MB dan ogʻir. Kichikroq surat yuboring — oʻqishga yetadi.",
     "too_heavy": "Fayllar birgalikda 16 MB dan ogʻir. Eng kerakligini yuboring.",
     "bad_type": "«{name}» ochilmadi. Surat (JPEG, PNG, HEIC, WebP), PDF va GPX boʻladi.",
+    "too_large": "«{name}» piksellari juda koʻp. Suratni kichraytiring — oʻqishga yetadi.",
+    "no_room": "Hozir fayllar qabul qilinmayapti: koʻrib chiqishga ulgurganimizdan koʻp keldi. "
+               "Arizani ularsiz yuboring, fayllarni esa pochtaga joʻnating.",
     "submit": "Yuborish",
     "sending": "Yuborilmoqda…",
     "empty": "Mavzuni belgilang yoki nima notoʻgʻriligini yozing.",
@@ -529,9 +539,16 @@ def _key(text: str) -> str:
 #: тут и не нужна: от настойчивого спамера это не защита, а от скрипта,
 #: который дёргает форму в цикле, — вполне.
 #:
+#: В базу счётчик не переезжает намеренно: для этого заявке пришлось бы
+#: хранить адрес отправителя, а на /privacy обещано, что от неё остаются
+#: место, темы, текст, контакт и файлы — и больше ничего. Диск от того,
+#: кто обходит этот предел, держит другой, общий для всех воркеров, —
+#: суточный объём файлов по базе (_room).
+#:
 #: Тридцать, а не пять: сотовые операторы держат за одним адресом пол-города,
 #: и низкий порог молча съедал бы живые заявки. Упёршемуся отвечаем словами,
-#: а не тишиной, — иначе человек будет думать, что письмо ушло
+#: а не тишиной, — иначе человек будет думать, что письмо ушло.
+#: IPv6 считаем сетью /64 (client_ip.limit_key)
 _LIMIT, _WINDOW = 30, 3600
 _RECENT: dict[str, list[float]] = {}
 
@@ -598,7 +615,9 @@ async def _form(lang: Lang, place: str, session: AsyncSession) -> str:
     return _render(_T[lang], rows, prefill)
 
 
-async def _attached(files: list[UploadFile], t: dict) -> list[PlaceReportFile]:
+async def _attached(
+    files: list[UploadFile], t: dict, session: AsyncSession
+) -> list[PlaceReportFile]:
     """Присланные файлы — на диск, строками к заявке.
 
     Отказ объясняем словами и с именем файла: человек приложил четыре
@@ -611,6 +630,9 @@ async def _attached(files: list[UploadFile], t: dict) -> list[PlaceReportFile]:
     """
     if len(files) > attachments.MAX_FILES:
         raise HTTPException(422, uz_display(t["too_many"]))
+    if not files:
+        return []
+    room = await _room(session)
 
     rows: list[PlaceReportFile] = []
     written: list[str] = []
@@ -626,7 +648,9 @@ async def _attached(files: list[UploadFile], t: dict) -> list[PlaceReportFile]:
             total += len(data)
             if total > attachments.MAX_TOTAL:
                 raise HTTPException(422, uz_display(t["too_heavy"]))
-            name, mime, size, fresh = attachments.save(data, named)
+            if total > room:
+                raise HTTPException(429, uz_display(t["no_room"]))
+            name, mime, size, fresh = await off_loop(attachments.save, data, named)
             if fresh:
                 written.append(name)
             rows.append(
@@ -649,6 +673,32 @@ async def _attached(files: list[UploadFile], t: dict) -> list[PlaceReportFile]:
         _forget(written)
         raise
     return rows
+
+
+async def _room(session: AsyncSession) -> int:
+    """Сколько байт файлов форма ещё примет — меньший из двух остатков.
+
+    Суточный считаем по строкам в базе, а не счётчиком в памяти: воркеров
+    два, и у каждого был бы свой. Файл, пришедший дважды, на диске один,
+    а здесь посчитан дважды — предел от этого только строже. Отправки,
+    пришедшие одновременно, видят один и тот же остаток и могут вместе
+    перелезть через него, каждая не больше чем на шестнадцать мегабайт:
+    предел держит порядок величины, а не байт.
+
+    Каталог — по самому диску, с превью вместе: он растёт, пока очередь
+    не разбирают, и сутки тут ни при чём.
+    """
+    since = datetime.now(timezone.utc) - timedelta(days=1)
+    today = (
+        await session.execute(
+            select(func.coalesce(func.sum(PlaceReportFile.size), 0))
+            .where(PlaceReportFile.created_at >= since)
+        )
+    ).scalar_one()
+    return min(
+        settings.report_files_daily_bytes - today,
+        settings.reports_dir_max_bytes - attachments.stored_bytes(),
+    )
 
 
 def _forget(names: list[str]) -> None:
@@ -695,7 +745,7 @@ async def report_submit(
     # Приманка отвечает боту как всем: разный ответ подсказал бы ему,
     # что поле-ловушку надо оставить пустым
     if not website:
-        if _too_often(request.client.host if request.client else "?"):
+        if _too_often(limit_key(request)):
             raise HTTPException(429, uz_display(t["too_often"]))
         rows = await _catalog(session, lang)
         typed = place.strip()[:200]
@@ -710,7 +760,7 @@ async def report_submit(
                 comment=comment,
                 contact=normalize_contact(contact)[:120] or None,
                 lang=lang,
-                files=await _attached(sent, t),
+                files=await _attached(sent, t, session),
             )
         )
         await session.commit()

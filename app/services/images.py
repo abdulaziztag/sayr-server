@@ -2,11 +2,21 @@
 
 import hashlib
 import io
+from collections.abc import Callable
 from pathlib import Path
 
+from anyio import CapacityLimiter, to_thread
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
-from ..config import AVATARS_DIR, DELETED_PHOTOS_DIR, PHOTOS_DIR, THUMBS_DIR
+from ..config import AVATARS_DIR, DELETED_PHOTOS_DIR, PHOTOS_DIR, THUMBS_DIR, settings
+
+# Свой предел Pillow держит на 89 мегапикселях: выше предупреждает, выше
+# вдвое — отказывает. Опускаем его до нашего, чтобы и то, что открывается
+# мимо open_upload, не раскрывалось больше чем вдвое против него. Снимки
+# каталога из админки это тоже касается: кадр больше восьмидесяти
+# мегапикселей там пропустится, как любой, что не открылся, — остальные
+# и так ужимаются до 2560 px
+Image.MAX_IMAGE_PIXELS = settings.image_max_pixels
 
 THUMB_SIZE = (640, 400)
 
@@ -70,6 +80,80 @@ def store_upload(data: bytes, slug: str) -> str:
     return name
 
 
+#: Что соглашаемся открывать из присланного чужими людьми. Сам Pillow
+#: пробует подряд все свои форматы, от TIFF до файлов древних сканеров,
+#: и каждый — лишний разборщик на пути чужих байтов; нам нужны три
+UPLOAD_FORMATS = ("JPEG", "PNG", "WEBP")
+
+
+class NotAnImage(Exception):
+    """Присланное не открылось как картинка разрешённого формата."""
+
+
+class TooManyPixels(Exception):
+    """В кадре больше settings.image_max_pixels — раскрывать его не стали."""
+
+
+def open_upload(data: bytes, formats: tuple[str, ...] = UPLOAD_FORMATS) -> Image.Image:
+    """Открывает присланную картинку, ещё не распаковывая её.
+
+    Image.open читает один заголовок: размер уже известен, а пиксели
+    по-прежнему сжаты. Отказ по размеру даём здесь, до распаковки, —
+    после неё гигабайт памяти уже занят. Отказ самого Pillow
+    (DecompressionBombError) — тот же отказ: он наследует голый Exception
+    и мимо узкого except долетал бы до человека пятисотой.
+    """
+    try:
+        im = Image.open(io.BytesIO(data), formats=formats)
+    except Image.DecompressionBombError as no:
+        raise TooManyPixels from no
+    except Exception as no:
+        raise NotAnImage from no
+    width, height = im.size
+    if width * height > settings.image_max_pixels:
+        im.close()
+        raise TooManyPixels
+    return im
+
+
+def shrink(im: Image.Image, side: int) -> Image.Image:
+    """Открытая картинка — в RGB не больше `side` по длинной стороне.
+
+    Сначала уменьшаем, потом поворачиваем по EXIF: наоборот поворот
+    и перевод в RGB шли бы по полному кадру, по копии на шаг. JPEG
+    при таком порядке и вовсе распаковывается сразу в уменьшенном виде
+    (thumbnail просит у него draft). Рамка квадратная, поэтому поворот
+    после уменьшения даёт тот же размер, что и до.
+
+    Палитру, однобитные и прочие режимы переводим в RGB заранее: их
+    Pillow уменьшает по ближайшему пикселю, без сглаживания, и скриншот
+    рассыпается.
+    """
+    if im.mode not in ("RGB", "L"):
+        im = im.convert("RGB")
+    im.thumbnail((side, side), Image.Resampling.LANCZOS)
+    return ImageOps.exif_transpose(im).convert("RGB")
+
+
+#: Сколько картинок процесс раскрывает разом. Остальные ждут очереди:
+#: кадр на сорок мегапикселей занимает при раскрытии за двести мегабайт,
+#: и десять одновременных отправок не должны раскрыть десять кадров сразу
+#: на сервере, который мы делим с чужими сайтами. По одному на воркер —
+#: живым отправкам хватает: фото анкеты оба приложения присылают уже
+#: ужатым квадратом (squareJPEG / squareJpeg)
+_DECODING = CapacityLimiter(1)
+
+
+async def off_loop[T](func: Callable[..., T], *args) -> T:
+    """Работа с присланной картинкой — в отдельном потоке.
+
+    Распаковка кадра на десятки мегапикселей — это секунды процессора.
+    В самой корутине они останавливали бы весь воркер: ни ленте, ни админке,
+    ни соседней форме он в это время не отвечает.
+    """
+    return await to_thread.run_sync(func, *args, limiter=_DECODING)
+
+
 #: Фото из анкеты. 512 пикселей хватает и кружку в профиле, и карточке
 #: попутчика: крупнее оно нигде не показывается, а место и трафик экономит
 AVATAR_SIDE = 512
@@ -84,14 +168,22 @@ def store_avatar(data: bytes, user_id: int) -> str:
     HEIC сюда не доезжает — Pillow его не открывает без отдельной
     библиотеки, поэтому в JPEG кадр перекодирует само приложение
     (обе платформы умеют это одной строкой).
+
+    Поднимает ValueError (файл тяжелее предела), NotAnImage и TooManyPixels.
+    Раскрывает кадр целиком — звать через off_loop.
     """
     if len(data) > MAX_AVATAR_BYTES:
         raise ValueError("файл больше допустимого")
     name = f"u{user_id}-{hashlib.sha1(data).hexdigest()[:8]}.jpg"
-    with Image.open(io.BytesIO(data)) as im:
-        im = ImageOps.exif_transpose(im).convert("RGB")
-        im.thumbnail((AVATAR_SIDE, AVATAR_SIDE), Image.Resampling.LANCZOS)
-        im.save(AVATARS_DIR / name, "JPEG", quality=85)
+    with open_upload(data) as im:
+        try:
+            small = shrink(im, AVATAR_SIDE)
+        except Exception as no:
+            # Заголовок прочитался, а пиксели нет: обрезанный файл, битый
+            # поток сжатия. Pillow отвечает на это кто чем — OSError,
+            # SyntaxError, struct.error, — а для человека это одно: не картинка
+            raise NotAnImage from no
+    small.save(AVATARS_DIR / name, "JPEG", quality=85)
     return name
 
 
