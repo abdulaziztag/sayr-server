@@ -864,7 +864,8 @@ async def test_блок_с_организатором_общих_комнат_н
     room = await open_room(client, org, is_open=False)
     invite = room["invite_url"].rsplit("/", 1)[1]
     friend, friend_id = await person(name="Друг")
-    await client.post(f"/api/v1/invites/{invite}/join", headers=friend)
+    joined = await client.post(f"/api/v1/invites/{invite}/join", headers=friend)
+    assert joined.status_code == 200 and joined.json()["my_role"] == "joined"
     who, whom = (org, friend_id) if organizer_blocks else (friend, org_id)
 
     resp = await client.post("/api/v1/blocks", json={"user_id": whom}, headers=who)
@@ -880,9 +881,11 @@ async def test_заявка_в_общую_комнату_не_считается
     room = await open_room(client, org)
     invite = room["invite_url"].rsplit("/", 1)[1]
     lola, lola_id = await person(name="Лола")
-    await client.post(f"/api/v1/invites/{invite}/join", headers=lola)
+    joined = await client.post(f"/api/v1/invites/{invite}/join", headers=lola)
+    assert joined.status_code == 200 and joined.json()["my_role"] == "joined"
     timur, timur_id = await person(name="Тимур")
-    await client.post(f"/api/v1/rooms/{room['code']}/requests", json={}, headers=timur)
+    req = await client.post(f"/api/v1/rooms/{room['code']}/requests", json={}, headers=timur)
+    assert req.status_code == 200 and req.json()["my_role"] == "requested"
 
     # В обе стороны: блокирует и вступившая, и просящийся
     for who, whom in ((lola, timur_id), (timur, lola_id)):
