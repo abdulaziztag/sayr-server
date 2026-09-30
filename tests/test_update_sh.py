@@ -190,7 +190,7 @@ def server(tmp_path, bin_dir):
 
         def run(self, **extra: str) -> subprocess.CompletedProcess:
             args, full = self.command(**extra)
-            return subprocess.run(args, env=full, capture_output=True, text=True, timeout=60)
+            return subprocess.run(args, env=full, capture_output=True, text=True, timeout=WAIT_LIMIT)
 
         def head(self) -> str:
             return _git("rev-parse", "HEAD", cwd=app, env=env)
@@ -276,6 +276,11 @@ def test_молчащий_healthz_по_прежнему_откатывает_к�
     assert server.calls("systemctl restart sayr") == ["systemctl restart sayr"] * 2
 
 
+# Потолок, а не пауза: без нагрузки метки появляются за доли секунды, но
+# рядом с параллельными сборками iOS и Android минуты не хватало
+WAIT_LIMIT = 180
+
+
 def _wait_for_sync(
     server, commit: str, fail: str = "до uv sync не дошло", drain: int | None = None
 ) -> None:
@@ -283,7 +288,7 @@ def _wait_for_sync(
 
     drain — pty, из которого по пути вычитывается вывод: буфер терминала
     невелик, и переполненный он остановил бы скрипт раньше sync."""
-    deadline = time.monotonic() + 60
+    deadline = time.monotonic() + WAIT_LIMIT
     while not server.sync_started(commit):
         assert time.monotonic() < deadline, fail
         if drain is not None and select.select([drain], [], [], 0.05)[0]:
@@ -309,7 +314,7 @@ def test_оборванный_деплой_тоже_возвращает_кат�
     _wait_for_sync(server, server.c2)
     proc.send_signal(signal.SIGTERM)
     server.release()
-    proc.communicate(timeout=60)
+    proc.communicate(timeout=WAIT_LIMIT)
     _assert_back_on_c1(server, proc.returncode)
 
 
@@ -328,7 +333,7 @@ def test_второй_ctrl_c_не_обрывает_возврат(server):
     _wait_for_sync(server, server.c1, "возврат не начался")
     os.killpg(proc.pid, signal.SIGINT)
     server.release()
-    proc.communicate(timeout=60)
+    proc.communicate(timeout=WAIT_LIMIT)
 
     _assert_back_on_c1(server, proc.returncode)
     assert server.calls("synced") == [f"synced @ {server.c1}"], "uv sync возврата оборван"
@@ -346,7 +351,7 @@ def test_оборванный_ssh_без_терминала_возвращает
     proc.stdout.close()
     proc.stderr.close()
     server.release()
-    proc.wait(timeout=60)
+    proc.wait(timeout=WAIT_LIMIT)
     _assert_back_on_c1(server, proc.returncode)
 
 
@@ -371,5 +376,5 @@ def test_оборванный_ssh_с_терминалом_возвращает_�
     finally:
         os.close(master)
     server.release()
-    proc.wait(timeout=60)
+    proc.wait(timeout=WAIT_LIMIT)
     _assert_back_on_c1(server, proc.returncode)
