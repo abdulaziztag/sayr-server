@@ -141,7 +141,6 @@ async def test_флаг_виден_приложениям(client):
     "profile, detail",
     [
         (dict(name=""), "name_required"),
-        (dict(photo=False), "photo_required"),
         (dict(birth_year=None), "birth_year_required"),
         # Спорный год — в пользу отказа: «текущий − 18» ещё нельзя
         (dict(birth_year=TODAY.year - 18), "adult_only"),
@@ -158,11 +157,47 @@ async def test_для_незнакомых_нужна_анкета_и_18(client,
     assert resp.json()["detail"] == detail
 
 
-async def test_для_своих_хватает_имени(client):
-    h, _ = await person(photo=False, birth_year=None)
+async def test_фото_не_нужно_и_для_незнакомых(client):
+    h, _ = await person(photo=False)
+    room = await open_room(client, h)
+    assert room["is_open"] is True and room["organizer"]["avatar_url"] is None
+
+
+@pytest.mark.parametrize(
+    "profile, detail",
+    [(dict(name=""), "name_required"), (dict(birth_year=None), "birth_year_required")],
+)
+async def test_для_своих_нужны_имя_и_год(client, profile, detail):
+    h, _ = await person(**profile)
+    resp = await client.post(
+        "/api/v1/rooms",
+        json={"place": "test-peak", "day": DAY.isoformat(), "is_open": False},
+        headers=h,
+    )
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == detail
+
+
+async def test_для_своих_без_фото_и_без_18(client):
+    h, _ = await person(photo=False, birth_year=TODAY.year - 15)
     room = await open_room(client, h, is_open=False)
     assert room["my_role"] == "organizer"
     assert room["invite_url"].startswith("https://sayr.info/r/")
+
+
+async def test_открыть_для_незнакомых_потом_без_года_нельзя(client):
+    h, uid = await person(photo=False)
+    room = await open_room(client, h, is_open=False)
+    async with SessionLocal() as session:
+        (await session.get(User, uid)).birth_year = None
+        await session.commit()
+    resp = await client.patch(f"/api/v1/rooms/{room['code']}", json={"is_open": True}, headers=h)
+    assert resp.status_code == 403 and resp.json()["detail"] == "birth_year_required"
+    async with SessionLocal() as session:
+        (await session.get(User, uid)).birth_year = ADULT
+        await session.commit()
+    ok = await client.patch(f"/api/v1/rooms/{room['code']}", json={"is_open": True}, headers=h)
+    assert ok.status_code == 200 and ok.json()["is_open"] is True
 
 
 async def test_ровно_19_лет_по_году_пускают(client):
@@ -506,12 +541,76 @@ async def test_отказ_и_повторная_заявка(client):
     assert again.status_code == 409 and again.json()["detail"] == "declined"
 
 
-async def test_попроситься_без_анкеты_нельзя(client):
+@pytest.mark.parametrize(
+    "profile, detail",
+    [
+        (dict(name=""), "name_required"),
+        (dict(birth_year=None), "birth_year_required"),
+        (dict(birth_year=TODAY.year - 15), "adult_only"),
+    ],
+)
+async def test_попроситься_без_анкеты_нельзя(client, profile, detail):
     org, _ = await person()
     room = await open_room(client, org)
-    kid, _ = await person(name="Школьник", birth_year=TODAY.year - 15)
+    kid, _ = await person(**({"name": "Школьник"} | profile))
     resp = await client.post(f"/api/v1/rooms/{room['code']}/requests", json={}, headers=kid)
-    assert resp.status_code == 403 and resp.json()["detail"] == "adult_only"
+    assert resp.status_code == 403 and resp.json()["detail"] == detail
+
+
+async def test_попроситься_можно_без_фото(client):
+    org, _ = await person()
+    room = await open_room(client, org)
+    madina, _ = await person(name="Мадина", photo=False)
+    resp = await client.post(f"/api/v1/rooms/{room['code']}/requests", json={}, headers=madina)
+    assert resp.status_code == 200 and resp.json()["my_role"] == "requested"
+
+
+@pytest.mark.parametrize(
+    "profile, detail",
+    [(dict(name=""), "name_required"), (dict(birth_year=None), "birth_year_required")],
+)
+async def test_по_ссылке_без_имени_и_года_не_пускают(client, profile, detail):
+    org, org_id = await person()
+    room = await open_room(client, org, is_open=False)
+    friend, _ = await person(**({"name": "Друг"} | profile))
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    resp = await client.post(f"/api/v1/invites/{invite}/join", headers=friend)
+    assert resp.status_code == 403 and resp.json()["detail"] == detail
+    assert await pushes(org_id) == []
+
+
+async def test_по_ссылке_пускают_без_фото_и_без_18(client):
+    org, _ = await person()
+    room = await open_room(client, org, is_open=False)
+    kid, _ = await person(name="Школьник", photo=False, birth_year=TODAY.year - 15)
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    joined = await client.post(f"/api/v1/invites/{invite}/join", headers=kid)
+    assert joined.status_code == 200 and joined.json()["my_role"] == "joined"
+
+
+@pytest.mark.parametrize(
+    "change", [dict(birth_year=None), dict(birth_year=TODAY.year - 15), dict(first_name="")]
+)
+async def test_одобрение_перепроверяет_анкету_просящегося(client, change):
+    org, _ = await person()
+    room = await open_room(client, org)
+    madina, madina_id = await person(name="Мадина")
+    await client.post(f"/api/v1/rooms/{room['code']}/requests", json={}, headers=madina)
+    member_id = (await client.get(f"/api/v1/rooms/{room['code']}", headers=org)).json()[
+        "requests"
+    ][0]["member_id"]
+    async with SessionLocal() as session:
+        user = await session.get(User, madina_id)
+        for k, v in change.items():
+            setattr(user, k, v)
+        await session.commit()
+    approve = f"/api/v1/rooms/{room['code']}/members/{member_id}/approve"
+    resp = await client.post(approve, headers=org)
+    # 409 про просящегося, не 403: иначе приложение повело бы в анкету организатора
+    assert resp.status_code == 409 and resp.json()["detail"] == "member_profile"
+    assert await pushes(madina_id) == []
+    mine = (await client.get(f"/api/v1/rooms/{room['code']}", headers=org)).json()
+    assert mine["people"] == 1 and len(mine["requests"]) == 1
 
 
 async def test_удалённого_убирают_из_группы_и_по_ссылке_не_пускают(client):

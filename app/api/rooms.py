@@ -10,7 +10,10 @@
   своих» и свою личную ссылку в группу;
 - номер телефона — никто и никогда.
 
-Требования и блокировки проверяются здесь, а не только в приложении.
+Требования и блокировки проверяются здесь, а не только в приложении:
+в любую комнату — с именем и годом рождения, в открытую ещё и с 18 лет.
+Фото не требуется (решение владельца 30.09): приложение только советует
+его — с фото охотнее берут в компанию.
 Всё за флагом `SAYR_ROOMS_OPEN`: выключен — ручки отвечают 404.
 """
 
@@ -144,7 +147,7 @@ class RoomOut(BaseModel):
     requests: list[CardOut] = []
     invite_url: str | None = None
     #: Ссылка для незнакомых sayr.info/j/{код}: по ней не вступают, а просятся,
-    #: и берёт организатор. «Позвать своих» пускает сразу и без анкеты — такую
+    #: и берёт организатор. «Позвать своих» пускает сразу и без 18+ — такую
     #: в большую группу не выложишь. Видна всем, кто видит комнату: код и так
     #: виден в поиске. Пусто, если к комнате попроситься нельзя
     request_url: str | None = None
@@ -347,19 +350,33 @@ def _brief(room: Room, viewer: User | None, lang: Lang) -> RoomBrief:
 # MARK: - Проверки
 
 
-def _require_name(user: User) -> None:
+def _profile_missing(user: User) -> str | None:
+    """Чего не хватает анкете для любой комнаты — имени или года рождения.
+    Год — и для своих: анкета после входа теперь спрашивает его у всех,
+    а старым аккаунтам без года приложение предложит дописать только его.
+    Фото больше не нужно нигде. Коды прежние: вышедшие сборки знают их
+    и ведут в анкету, а `photo_required` просто перестаёт приходить"""
     if not user.first_name.strip():
-        raise HTTPException(status_code=403, detail="name_required")
+        return "name_required"
+    if not user.birth_year:
+        return "birth_year_required"
+    return None
+
+
+def _require_profile(user: User) -> None:
+    """Для своих: имя и год рождения."""
+    if missing := _profile_missing(user):
+        raise HTTPException(status_code=403, detail=missing)
+
+
+def _adult(user: User) -> bool:
+    return user.birth_year is not None and user.birth_year <= today().year - ADULT_YEARS
 
 
 def _require_open_profile(user: User) -> None:
-    """Для незнакомых: имя, фото, год рождения и 18+."""
-    _require_name(user)
-    if not user.avatar:
-        raise HTTPException(status_code=403, detail="photo_required")
-    if not user.birth_year:
-        raise HTTPException(status_code=403, detail="birth_year_required")
-    if user.birth_year > today().year - ADULT_YEARS:
+    """Для незнакомых: имя, год рождения и 18+."""
+    _require_profile(user)
+    if not _adult(user):
         raise HTTPException(status_code=403, detail="adult_only")
 
 
@@ -671,7 +688,7 @@ async def open_room(
     session: AsyncSession = Depends(get_session),
 ) -> RoomOut:
     _require_not_banned(user)
-    (_require_open_profile if body.is_open else _require_name)(user)
+    (_require_open_profile if body.is_open else _require_profile)(user)
     _require_clean(body.note)
     if body.day < today():
         raise HTTPException(status_code=422, detail="day_past")
@@ -842,7 +859,7 @@ async def invite_join(
         # аккаунта Sayr Admin, а организатору — пуш «вступил»
         raise HTTPException(status_code=429, detail="too_often")
     _require_not_banned(user)
-    _require_name(user)
+    _require_profile(user)
     _require_clean(body.note)
     if await _busy(session, user.id, room.day, room.days, skip_room=room.id):
         raise HTTPException(status_code=409, detail="busy_day")
@@ -947,6 +964,12 @@ async def member_approve(
         raise HTTPException(status_code=409, detail="not_requested")
     if member.user.companions_banned_at is not None:
         raise HTTPException(status_code=409, detail="member_banned")
+    # Анкету просящегося проверила заявка, но пока та ждала, год могли стереть
+    # или сменить на детский. Отказ — 409 про него, как member_banned: 403 с
+    # его кодом приложение организатора приняло бы на свой счёт и повело бы
+    # в анкету самого организатора
+    if _profile_missing(member.user) or not _adult(member.user):
+        raise HTTPException(status_code=409, detail="member_profile")
     # Пока заявка ждала, в комнату мог вступить тот, с кем у просящегося
     # блокировка: вместе их не сводим
     if _blocked(room, await blocked_ids(session, member.user_id)):

@@ -702,8 +702,13 @@ async def test_привязка_telegram_заняли_параллельно(cli
 
 async def test_комната_сразу_знает_аккаунт_telegram(client, net, monkeypatch):
     monkeypatch.setattr(settings, "rooms_open", True)
-    organizer, organizer_id = await _user(phone="+998935550001", first_name="Азиз", telegram_id=501)
-    friend, friend_id = await _user(apple_sub="apple-2", first_name="Ali", telegram_id=502)
+    # Год рождения — без него в комнату теперь не пускают и своих
+    organizer, organizer_id = await _user(
+        phone="+998935550001", first_name="Азиз", birth_year=1995, telegram_id=501
+    )
+    friend, friend_id = await _user(
+        apple_sub="apple-2", first_name="Ali", birth_year=1996, telegram_id=502
+    )
     day = (datetime.now(timezone.utc) + timedelta(days=5)).date().isoformat()
     room = await client.post(
         "/api/v1/rooms", json={"place": "test-peak", "day": day, "is_open": False}, headers=organizer
