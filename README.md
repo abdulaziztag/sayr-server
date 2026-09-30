@@ -231,6 +231,23 @@ systemctl daemon-reload && systemctl enable --now sayr-push.timer
 journalctl -u sayr-push.service -n 20     # что ушло на последнем тике
 ```
 
+## Вход через Telegram и Apple
+
+`POST /api/v1/auth/telegram` (ID-токен из библиотеки Telegram или код с PKCE),
+`POST /api/v1/auth/apple`, привязка `POST /api/v1/me/telegram`. Спека:
+`docs/superpowers/specs/2026-09-30-telegram-apple-login-design.md`.
+
+Настройки — в `.env` (см. `.env.example`): `SAYR_TG_LOGIN_BOT_ID` (пусто —
+вход через Telegram выключен), `SAYR_TG_LOGIN_CLIENT_SECRET` (только для обмена
+кода), `SAYR_APPLE_KEY_ID` + `SAYR_APPLE_KEY_PATH` (ключ Sign in with Apple
+для отзыва доступа при удалении аккаунта; без него вход с Apple работает,
+а отзывать нечем). «Войти по номеру» в приложениях — `SAYR_PHONE_LOGIN`.
+
+Refresh-токен Apple лежит в базе зашифрованным ключом из `SAYR_SECRET_KEY`:
+сменили ключ — старые токены не расшифруются, и отзывать их станет нечем.
+Отзыв, не прошедший сразу после удаления, повторяется раз в час (цикл ротации
+в `app/stats.py`) и через 30 дней бросается с ошибкой в журнале.
+
 ## Бэкапы
 
 Каждую ночь в 03:30 по Ташкенту `sayr-backup.timer` запускает

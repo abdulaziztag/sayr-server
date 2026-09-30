@@ -382,19 +382,7 @@ async def verify_code(
             user = (
                 await session.execute(select(User).where(User.phone == row.phone))
             ).scalar_one()
-        user.last_login_at = now
-        await _adopt_intents(session, user, row.device_id)
-        token, digest = new_token()
-        session.add(
-            UserSession(
-                user_id=user.id,
-                token_hash=digest,
-                device_id=row.device_id,
-                platform=_device(request)[1],
-            )
-        )
-        await session.commit()
-        return VerifyOut(token=token, user=UserOut.of(user))
+        return await open_session(session, request, user, row.device_id)
 
     if status == CODE_INVALID:
         row.attempts += 1
@@ -415,6 +403,26 @@ async def verify_code(
     # Канал ответил незнакомым: попытку не сжигаем, человек не виноват
     log.warning("вход: канал ответил непонятным статусом для заявки %s", row.id)
     raise HTTPException(status_code=502, detail="channel_failed")
+
+
+async def open_session(
+    session: AsyncSession, request: Request, user: User, device_id: str | None
+) -> VerifyOut:
+    """Вход состоялся — токен этому устройству. Одно на все способы входа:
+    номер, Telegram, Apple отвечают одинаково. Коммитит"""
+    user.last_login_at = datetime.now(timezone.utc)
+    await _adopt_intents(session, user, device_id)
+    token, digest = new_token()
+    session.add(
+        UserSession(
+            user_id=user.id,
+            token_hash=digest,
+            device_id=device_id,
+            platform=_device(request)[1],
+        )
+    )
+    await session.commit()
+    return VerifyOut(token=token, user=UserOut.of(user))
 
 
 async def _adopt_intents(session: AsyncSession, user: User, device_id: str | None) -> None:

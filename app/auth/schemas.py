@@ -11,7 +11,9 @@ from ..models import Gender, User
 class UserOut(BaseModel):
     id: int
     #: Свой номер человек и так знает — показываем как есть, целиком.
-    #: Попутчикам он не уедет никогда: у них своя, урезанная карточка
+    #: Попутчикам он не уедет никогда: у них своя, урезанная карточка.
+    #: Нет номера (вошёл с Apple или Telegram его не отдал) — пустая строка,
+    #: а не null: приложения до 1.8.0 разбирают поле как обязательную строку
     phone: str
     first_name: str = ""
     last_name: str = ""
@@ -23,13 +25,16 @@ class UserOut(BaseModel):
     #: карточка в Профиле, а не экран поверх всего
     profile_filled: bool = False
     created_at: datetime | None = None
+    #: Чем можно войти: telegram, apple, phone — только привязанные.
+    #: Для «Способов входа» в Профиле и «Для комнат нужен Telegram»
+    login_methods: list[str] = []
 
     @classmethod
     def of(cls, user: User) -> "UserOut":
         name = Path(user.avatar.name).name if user.avatar else None
         return cls(
             id=user.id,
-            phone=user.phone,
+            phone=user.phone or "",
             first_name=user.first_name or "",
             last_name=user.last_name or "",
             gender=user.gender,
@@ -39,4 +44,5 @@ class UserOut(BaseModel):
             avatar_url=f"/media/avatars/{name}" if name else None,
             profile_filled=user.profile_filled_at is not None,
             created_at=user.created_at,
+            login_methods=user.login_methods,
         )

@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -236,6 +236,32 @@ def _organizer(room: Room) -> RoomMember | None:
 
 def _mine(room: Room, user: User) -> RoomMember | None:
     return next((m for m in room.members if m.user_id == user.id), None)
+
+
+def _known_account(member: RoomMember, user: User) -> None:
+    """Аккаунт Telegram человека известен со входа — строке участия сразу:
+    Sayr Admin уберёт его из группы и узнает его сообщения, не дожидаясь
+    входа по личной ссылке. Уже связанный по ссылке не трогаем — вход
+    по ссылке остаётся запасным путём для тех, кто вошёл по номеру"""
+    if member.tg_user_id is None and user.telegram_id is not None:
+        member.tg_user_id = user.telegram_id
+
+
+async def remember_telegram(
+    session: AsyncSession, user_id: int, telegram_id: int, old: int | None = None
+) -> None:
+    """Telegram только что привязан к аккаунту — его строкам участия тоже.
+    Сменил Telegram на другой — меняем и тот, что был записан со входа
+    (без ключа доступа), а связанный по ссылке оставляем: им человек
+    в группу и вошёл"""
+    unknown = RoomMember.tg_user_id.is_(None)
+    if old is not None:
+        unknown = unknown | ((RoomMember.tg_user_id == old) & RoomMember.tg_user_hash.is_(None))
+    await session.execute(
+        update(RoomMember)
+        .where(RoomMember.user_id == user_id, unknown)
+        .values(tg_user_id=telegram_id)
+    )
 
 
 def _role(member: RoomMember | None) -> str:
@@ -676,18 +702,18 @@ async def open_room(
     )
     session.add(room)
     await session.flush()
-    session.add(
-        RoomMember(
-            room_id=room.id,
-            user_id=user.id,
-            role="organizer",
-            status="joined",
-            source="organizer",
-            transport=body.transport,
-            seats=_check_transport(body.transport, body.seats),
-            note=body.note.strip(),
-        )
+    organizer = RoomMember(
+        room_id=room.id,
+        user_id=user.id,
+        role="organizer",
+        status="joined",
+        source="organizer",
+        transport=body.transport,
+        seats=_check_transport(body.transport, body.seats),
+        note=body.note.strip(),
     )
+    _known_account(organizer, user)
+    session.add(organizer)
     await session.commit()
     return await _reply(session, await _load(session, id=room.id), user, lang)
 
@@ -832,6 +858,7 @@ async def invite_join(
         mine = RoomMember(room_id=room.id, user_id=user.id, role="member", source="link")
         session.add(mine)
         room.members.append(mine)
+    _known_account(mine, user)
     mine.status = "joined"
     mine.source = "link"
     mine.decided_at = now
@@ -883,6 +910,7 @@ async def room_request(
     if mine is None:
         mine = RoomMember(room_id=room.id, user_id=user.id, role="member")
         session.add(mine)
+    _known_account(mine, user)
     mine.status = "requested"
     mine.source = "request"
     mine.transport = body.transport

@@ -129,12 +129,12 @@ async def test_без_флага_комнат_нет(client, monkeypatch):
     )
     assert resp.status_code == 404
     upd = await client.get("/api/v1/app/update", params={"platform": "ios", "version": "1.9.0"})
-    assert upd.json()["features"] == {"rooms": False}
+    assert upd.json()["features"]["rooms"] is False
 
 
 async def test_флаг_виден_приложениям(client):
     upd = await client.get("/api/v1/app/update", params={"platform": "android", "version": "1.9.0"})
-    assert upd.json()["features"] == {"rooms": True}
+    assert upd.json()["features"]["rooms"] is True
 
 
 @pytest.mark.parametrize(

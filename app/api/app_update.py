@@ -59,7 +59,9 @@ async def app_update(
     session: AsyncSession = Depends(get_session),
 ) -> AppUpdateOut:
     store = settings.app_store_url if platform == "ios" else settings.play_store_url
-    features = {"rooms": settings.rooms_open}
+    # phone_login — показывать ли «Войти по номеру»: пока в Fragment нет
+    # денег, ссылка скрыта, чтобы не было сломанного входа
+    features = {"rooms": settings.rooms_open, "phone_login": settings.phone_login}
     row = await session.get(AppUpdate, platform)
     if row is None:
         return AppUpdateOut(force=False, store_url=store or None, features=features)

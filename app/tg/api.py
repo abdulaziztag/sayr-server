@@ -54,6 +54,8 @@ class TgApi(Protocol):
     async def export_link(self, chat: Chat, title: str, expire: datetime) -> str: ...
     async def revoke_link(self, chat: Chat, link: str) -> None: ...
     async def link_importers(self, chat: Chat, link: str) -> list[tuple[int, int]]: ...
+    #: user_hash 0 — ключа нет (аккаунт известен со входа через Telegram):
+    #: реализация находит его сама среди участников группы
     async def promote(self, chat: Chat, user_id: int, user_hash: int) -> None: ...
     async def kick(self, chat: Chat, user_id: int, user_hash: int) -> None: ...
     async def leave(self, chat: Chat) -> None: ...
@@ -181,10 +183,36 @@ class TelethonApi:
         hashes = {u.id: u.access_hash for u in result.users}
         return [(i.user_id, hashes.get(i.user_id, 0)) for i in result.importers]
 
+    async def _member_hash(self, chat: Chat, user_id: int) -> int:
+        """Ключ доступа к участнику группы, которого служба знает только
+        по номеру аккаунта: он пришёл со входа через Telegram, а не из
+        события входа по ссылке. Ключ Telegram отдаёт вместе со списком
+        участников — группа комнаты маленькая, это одна страница. Нет его
+        в группе — NotParticipant: выгонять и повышать некого"""
+        from telethon.tl.functions.channels import GetParticipantsRequest
+        from telethon.tl.types import ChannelParticipantsSearch
+
+        offset = 0
+        while True:
+            result = await self._call(
+                GetParticipantsRequest(
+                    self._channel(chat), ChannelParticipantsSearch(""), offset, 200, 0
+                )
+            )
+            for user in getattr(result, "users", []):
+                if user.id == user_id and user.access_hash:
+                    return user.access_hash
+            got = len(getattr(result, "participants", []))
+            if got < 200:
+                raise NotParticipant("нет в группе")
+            offset += got
+
     async def promote(self, chat: Chat, user_id: int, user_hash: int) -> None:
         from telethon.tl.functions.channels import EditAdminRequest
         from telethon.tl.types import ChatAdminRights, InputUser
 
+        if not user_hash:
+            user_hash = await self._member_hash(chat, user_id)
         rights = ChatAdminRights(
             change_info=True,
             delete_messages=True,
@@ -208,6 +236,8 @@ class TelethonApi:
         from telethon.tl.functions.channels import EditBannedRequest
         from telethon.tl.types import ChatBannedRights, InputPeerUser
 
+        if not user_hash:
+            user_hash = await self._member_hash(chat, user_id)
         peer = InputPeerUser(user_id, user_hash)
         await self._call(
             EditBannedRequest(

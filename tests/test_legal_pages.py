@@ -22,3 +22,26 @@ async def test_удаление_аккаунта_по_узбекски(client):
     assert "mailto:" in r.text
     assert 'href="/delete-account"' in r.text
     assert "Kirish so‘rovlari ham raqamsiz qoladi" in r.text
+
+
+async def test_политика_про_вход_через_telegram_и_apple_и_попутчиков(client):
+    r = await client.get("/privacy")
+    assert r.status_code == 200
+    text = r.text
+    # Устаревшее «анкету пока не видит никто» ушло вместе с выходом попутчиков
+    assert "Сейчас — никто" not in text
+    assert "<b>Вход через Telegram.</b>" in text
+    assert "<b>Вход с Apple.</b>" in text
+    assert "отозвать доступ Sayr к вашему Apple ID" in text
+    assert "<h2>Попутчики</h2>" in text
+    assert "Sayr Admin" in text and "Храним полгода" in text and "/leave" in text
+    assert "Обновлено 30 сентября 2026" in text
+
+
+async def test_удаление_аккаунта_про_apple(client):
+    ru = (await client.get("/delete-account")).text
+    assert "Telegram, Apple или номер телефона" in ru
+    assert "доступ Sayr к вашему Apple ID отзывается" in ru
+    uz = (await client.get("/uz/delete-account")).text
+    assert "Telegram, Apple yoki telefon raqami" in uz
+    assert "Apple ID‘ingizga kirish huquqi" in uz

@@ -11,8 +11,9 @@ from sqlalchemy import exc, text
 from starlette.staticfiles import StaticFiles
 
 from .admin import mount_admin
-from .api import (auth, intents, events, landing, legal, me, places, regions, report,
-                  seasons, seasons_review, share, sync, drive_times, push, app_update, rooms, room_page)
+from .api import (auth, auth_providers, intents, events, landing, legal, me, places, regions,
+                  report, seasons, seasons_review, share, sync, drive_times, push, app_update,
+                  rooms, room_page)
 from .config import AVATARS_DIR, GPX_DIR, PHOTOS_DIR, SERVER_DIR, THUMBS_DIR, settings
 from .db import engine
 from .stats import StatsMiddleware, rotate_forever
@@ -129,6 +130,8 @@ app.include_router(push.router)
 app.include_router(app_update.router)
 app.include_router(events.router)
 app.include_router(auth.router)
+app.include_router(auth_providers.router)
+app.include_router(auth_providers.me_router)
 app.include_router(me.router)
 app.include_router(sync.router)
 app.include_router(rooms.router)

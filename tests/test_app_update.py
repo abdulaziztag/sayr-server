@@ -69,11 +69,25 @@ async def test_threshold_without_flag_is_silent(client):
         "force": False,
         "min_version": "9.9.9",
         "store_url": None,
-        # Флаги включённых фич едут с тем же ответом; попутчики по умолчанию выключены
-        "features": {"rooms": False},
+        # Флаги включённых фич едут с тем же ответом; попутчики и вход
+        # по номеру по умолчанию выключены
+        "features": {"rooms": False, "phone_login": False},
     }
 
 
 async def test_unknown_platform_is_rejected(client):
     resp = await client.get("/api/v1/app/update", params={"platform": "windows", "version": "1.0.0"})
     assert resp.status_code == 422
+
+
+async def test_вход_по_номеру_включается_настройкой(client, monkeypatch):
+    """«Войти по номеру» приложения показывают по features.phone_login:
+    пока в Fragment нет денег, ссылки нет, на время проверки Play — есть"""
+    from app.config import settings
+
+    for platform in ("ios", "android"):
+        resp = await client.get("/api/v1/app/update", params={"platform": platform, "version": "1.8.0"})
+        assert resp.json()["features"]["phone_login"] is False
+    monkeypatch.setattr(settings, "phone_login", True)
+    resp = await client.get("/api/v1/app/update", params={"platform": "android", "version": "1.8.0"})
+    assert resp.json()["features"]["phone_login"] is True

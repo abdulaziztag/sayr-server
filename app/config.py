@@ -127,6 +127,32 @@ class Settings(BaseSettings):
     #: в .env и сообщается только в анкетах App Store и Play
     login_test_phone: str = ""
     login_test_code: str = ""
+    #: Показывать ли в приложениях «Войти по номеру» (features.phone_login
+    #: в /app/update). Выключено, пока в Fragment нет денег: ссылка на вход,
+    #: который не пришлёт код, хуже её отсутствия. На время проверки
+    #: Google Play включается — номер проверяющего работает без шлюза
+    phone_login: bool = False
+
+    # Вход через Telegram — официальный OpenID Connect
+    # (спека docs/superpowers/specs/2026-09-30-telegram-apple-login-design.md).
+    # ID бота из @BotFather: он же `aud` в ID-токене. Пусто — вход через
+    # Telegram выключен и ручка честно отвечает «недоступно»
+    tg_login_bot_id: str = ""
+    #: Client ID для обмена кода на /token. По документации Telegram он
+    #: совпадает с ID бота — пусто значит «тот же»
+    tg_login_client_id: str = ""
+    #: Client Secret из @BotFather. Нужен только если приложение пришлёт код,
+    #: а не готовый ID-токен: обе библиотеки Telegram отдают токен сами
+    tg_login_client_secret: str = ""
+
+    # Вход с Apple. bundle id — `aud` в identity token; Team ID, Key ID
+    # и ключ Sign in with Apple (.p8) — для обмена кода на refresh-токен
+    # и его отзыва при удалении аккаунта (требование App Store). Без ключа
+    # вход работает, но отзывать будет нечем — это видно в журнале
+    apple_bundle_id: str = "uz.sayr.ios"
+    apple_team_id: str = "Z39Z5TJZCG"
+    apple_key_id: str = ""
+    apple_key_path: Path | None = None
 
     # Пуши. Пустой путь — платформа не настроена: планировщик пропустит её
     # устройства и запишет это в last_error объявления, а не упадёт целиком.

@@ -619,6 +619,17 @@ async def rotate_forever() -> None:
             raise
         except Exception:  # noqa: BLE001 — приложение важнее ротации
             log.warning("ротация статистики не прошла", exc_info=True)
+        # Отзывы Apple, не прошедшие сразу после удаления аккаунта, — тем же
+        # часом, но своей транзакцией: сбой ротации не должен их держать
+        try:
+            from .auth.apple import revoke_due
+
+            async with SessionLocal() as session:
+                await revoke_due(session)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 — приложение важнее отзыва
+            log.warning("повтор отзывов Apple не прошёл", exc_info=True)
 
 
 # MARK: - Числа для дашборда

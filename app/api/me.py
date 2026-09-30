@@ -9,15 +9,17 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from fastapi_storages import StorageFile
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import case, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth.apple import queue_revoke, revoke_due
+from ..auth.names import clean_name
 from ..auth.schemas import UserOut
 from ..auth.tokens import current_user
-from ..db import get_session
+from ..db import SessionLocal, get_session
 from ..models import Gender, LoginRequest, User, avatar_storage
 from ..moderation import is_clean
 from ..services.images import (NotAnImage, TooManyPixels, drop_avatar, off_loop,
@@ -75,6 +77,15 @@ async def update_me(
         year = datetime.now(timezone.utc).year
         if not MIN_BIRTH_YEAR <= body.birth_year <= year:
             raise HTTPException(status_code=422, detail="birth_year_invalid")
+    # То же правило, что у имени из Telegram: иначе символы вместо имени
+    # вписали бы руками. Приложение показывает «Только буквы»
+    for field in ("first_name", "last_name"):
+        value = getattr(body, field)
+        if value is not None:
+            cleaned = clean_name(value)
+            if cleaned is None:
+                raise HTTPException(status_code=422, detail="name_letters_only")
+            setattr(body, field, cleaned)
     # Имя видят попутчики: мат в нём — то же, что мат в заметке комнаты
     if not is_clean(body.first_name) or not is_clean(body.last_name):
         raise HTTPException(status_code=422, detail="bad_text")
@@ -157,25 +168,31 @@ async def forget_account(session: AsyncSession, user: User) -> str | None:
     # дожил бы до месячной уборки — а /privacy обещает стереть его сразу.
     # Стираем номер и заявку у шлюза, а сами строки оставляем: по ним
     # считаются лимиты адреса, устройства и суточный потолок кодов, и цикл
-    # «вошёл — удалился» иначе обнулял бы их и выбирал счёт шлюза
-    await session.execute(
-        update(LoginRequest)
-        .where(LoginRequest.phone == user.phone)
-        .values(
-            phone="",
-            gateway_request_id=None,
-            status=case(
-                (LoginRequest.status.in_(("sending", "sent")), "expired"),
-                else_=LoginRequest.status,
-            ),
+    # «вошёл — удалился» иначе обнулял бы их и выбирал счёт шлюза.
+    # Без номера (вошёл через Apple или Telegram его не отдал) заявок нет
+    if user.phone:
+        await session.execute(
+            update(LoginRequest)
+            .where(LoginRequest.phone == user.phone)
+            .values(
+                phone="",
+                gateway_request_id=None,
+                status=case(
+                    (LoginRequest.status.in_(("sending", "sent")), "expired"),
+                    else_=LoginRequest.status,
+                ),
+            )
         )
-    )
+    # Вошедшему с Apple — отзыв доступа к Apple ID (требование App Store).
+    # Ставится той же транзакцией, а делается после: Apple не держит удаление
+    queue_revoke(session, user)
     await session.delete(user)
     return avatar
 
 
 @router.delete("", status_code=204)
 async def delete_me(
+    background: BackgroundTasks,
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ) -> None:
@@ -186,9 +203,23 @@ async def delete_me(
     события статистики не трогаем — номера телефона в них нет и связать
     их с человеком нечем. Из заявок на вход стирается номер, а время,
     устройство и адрес доживают до месячной уборки: по ним считаются лимиты.
+    Доступ Sayr к Apple ID отзывается уже после ответа: не ответил Apple —
+    повтор раз в час (app/auth/apple.py), удаление от этого не зависит.
     """
+    sealed = user.apple_refresh
     avatar = await forget_account(session, user)
     await session.commit()
     if avatar:
         drop_avatar(avatar)
+    if sealed:
+        background.add_task(_revoke_apple, sealed)
     log.info("аккаунт удалён по просьбе из приложения")
+
+
+async def _revoke_apple(sealed: str) -> None:
+    """Своей сессией: сессия запроса к этому времени уже закрыта"""
+    try:
+        async with SessionLocal() as session:
+            await revoke_due(session, only=sealed)
+    except Exception:  # noqa: BLE001 — повторит ежечасный проход
+        log.warning("отзыв Apple сразу после удаления не прошёл", exc_info=True)

@@ -1260,7 +1260,12 @@ class UserAdmin(ModelView, model=User):
         User.last_login_at: "Последний вход",
         User.profile_filled_at: "Заполнил анкету",
         User.companions_banned_at: "Попутчики запрещены",
+        User.telegram_id: "Аккаунт Telegram",
+        User.apple_sub: "Apple ID",
     }
+    # Токен Apple — только для отзыва при удалении: в админке ему не место,
+    # даже зашифрованному
+    column_details_exclude_list = [User.apple_refresh]
     column_formatters = {User.phone: lambda row, _: masked_phone(row.phone)}
     column_formatters_detail = {User.phone: lambda row, _: masked_phone(row.phone)}
     can_create = False
@@ -1278,13 +1283,22 @@ class UserAdmin(ModelView, model=User):
         человека в базе с уже отменёнными походами.
         """
         from .api.me import forget_account
+        from .auth.apple import revoke_due
 
         async with SessionLocal() as session:
             user = await session.get(User, int(pk))
             if user is None:
                 return
+            sealed = user.apple_refresh
             avatar = await forget_account(session, user)
             await session.commit()
+            if sealed:
+                # Удаление уже закоммичено: не ответил Apple — повторит
+                # ежечасный проход
+                try:
+                    await revoke_due(session, only=sealed)
+                except Exception:  # noqa: BLE001
+                    log.warning("отзыв Apple после удаления из админки не прошёл", exc_info=True)
         if avatar:
             drop_avatar(avatar)
         log.info("аккаунт %s удалён из админки", pk)

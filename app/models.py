@@ -977,18 +977,36 @@ def masked_phone(phone: str | None) -> str:
 
 
 class User(Base):
-    """Человек. Заводится первым успешным входом по номеру телефона.
+    """Человек. Заводится первым входом — через Telegram, Apple или по номеру.
 
-    Номер — единственное, что обязательно: пароля нет, почты нет, анкета
-    необязательная и до попутчиков не видна никому, кроме самого человека
-    (спека docs/superpowers/specs/2026-09-23-account-login-design.md).
+    Пароля нет, почты нет. Способов входа у аккаунта может быть несколько
+    (Telegram, Apple, номер), и любой из них находит тот же аккаунт; хотя бы
+    один есть всегда. Анкета необязательная (спеки
+    docs/superpowers/specs/2026-09-23-account-login-design.md и
+    2026-09-30-telegram-apple-login-design.md).
     """
 
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    #: E.164 без пробелов: +998901234567
-    phone: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    #: E.164 без пробелов: +998901234567. Пусто у вошедших через Apple и через
+    #: Telegram, не отдавший номер. Уникальность — среди непустых: так её
+    #: и держит Postgres, NULL с NULL не совпадают
+    phone: Mapped[str | None] = mapped_column(String(20), unique=True, index=True, nullable=True)
+    #: Аккаунт Telegram (утверждение `id` ID-токена) — по нему вход через
+    #: Telegram находит человека, а Sayr Admin узнаёт его в группах комнат
+    telegram_id: Mapped[int | None] = mapped_column(
+        BigInteger, unique=True, index=True, nullable=True
+    )
+    #: Постоянный идентификатор Apple (`sub` identity token) для нашего
+    #: приложения
+    apple_sub: Mapped[str | None] = mapped_column(
+        String(128), unique=True, index=True, nullable=True
+    )
+    #: Refresh-токен Apple — только чтобы отозвать доступ при удалении
+    #: аккаунта. Зашифрован (app/auth/sealed.py) и наружу не уходит никогда:
+    #: ни в ответах API, ни в админке
+    apple_refresh: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -1025,8 +1043,21 @@ class User(Base):
     def __str__(self) -> str:
         # Строкой человек виден в админке всюду, где на него ссылаются:
         # жалобы, комнаты. Имя он может стереть сам, и тогда жалоба
-        # показывала номер целиком — мимо маски из списка людей
-        return self.first_name or masked_phone(self.phone)
+        # показывала номер целиком — мимо маски из списка людей. Без имени
+        # и без номера (вошёл с Apple) — хотя бы номер аккаунта
+        return self.first_name or masked_phone(self.phone) or f"№{self.id}"
+
+    @property
+    def login_methods(self) -> list[str]:
+        """Чем можно войти в этот аккаунт — для «Способов входа» в Профиле"""
+        methods = []
+        if self.telegram_id is not None:
+            methods.append("telegram")
+        if self.apple_sub:
+            methods.append("apple")
+        if self.phone:
+            methods.append("phone")
+        return methods
 
 
 class UserSession(Base):
@@ -1299,10 +1330,13 @@ class RoomMember(Base):
     decided_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    #: Аккаунт Telegram — узнаём, когда человек входит в группу по своей
+    #: Аккаунт Telegram — сразу из users.telegram_id, если человек вошёл
+    #: через Telegram, иначе узнаём, когда он входит в группу по своей
     #: личной одноразовой ссылке
     tg_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    #: Ключ доступа к аккаунту — чтобы сделать админом или убрать из группы
+    #: Ключ доступа к аккаунту — чтобы сделать админом или убрать из группы.
+    #: Приходит со входом по ссылке; без него служба ищет ключ среди
+    #: участников группы (tg/api.py)
     tg_user_hash: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     tg_link: Mapped[str | None] = mapped_column(String(64), nullable=True)
     tg_link_used: Mapped[bool] = mapped_column(
@@ -1356,6 +1390,29 @@ class UserBlock(Base):
     blocked_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class AppleRevoke(Base):
+    """Отзыв доступа Sayr к Apple ID удалённого человека — ещё не сделанный.
+
+    Удаление аккаунта не ждёт Apple: строка ставится в той же транзакции,
+    что и удаление, отзыв пробуется сразу после ответа и потом раз в час,
+    пока Apple не ответит «да» (app/auth/apple.py). Токен — тот же шифр,
+    что лежал у человека; строка уходит, как только отзыв прошёл
+    """
+
+    __tablename__ = "apple_revokes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token: Mapped[str] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    run_after: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
