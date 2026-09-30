@@ -219,7 +219,9 @@ async def telegram_sign_in(
             if fresh:
                 _prefill(user, who)
                 await remember_telegram(session, user.id, who.id)
-            avatar = fresh and _wants_avatar(user)
+            # И у прежнего аккаунта (например, заведённого по номеру), если
+            # анкету ещё не заполняли и фото нет: это не чужой выбор «без фото»
+            avatar = _wants_avatar(user)
             out = await open_session(session, request, user, device)
             break
         except IntegrityError:

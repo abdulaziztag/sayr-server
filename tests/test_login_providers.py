@@ -48,6 +48,10 @@ BOT = "777000123"
 TG_ID = 987654321
 PHONE = "+998901234567"
 PICTURE = "https://cdn4.telesco.pe/file/avatar.jpg"
+#: Так фото приходит в токене: t.me отвечает 302 на сервер картинок
+USERPIC = "https://t.me/i/userpic/320/avatar.jpg"
+USERPIC_ELSEWHERE = "https://t.me/i/userpic/320/elsewhere.jpg"
+USERPIC_LOOP = "https://t.me/i/userpic/320/loop.jpg"
 TG_ISS = "https://oauth.telegram.org"
 TG_JWKS = "https://oauth.telegram.org/.well-known/jwks.json"
 TG_TOKEN = "https://oauth.telegram.org/token"
@@ -159,6 +163,12 @@ class Net:
             if not self.tg_code_ok:
                 return httpx.Response(400, json={"error": "invalid_grant"})
             return httpx.Response(200, json={"id_token": tg_token(), "expires_in": 3600})
+        if url == USERPIC:
+            return httpx.Response(302, headers={"location": PICTURE})
+        if url == USERPIC_ELSEWHERE:
+            return httpx.Response(302, headers={"location": "https://evil.example/a.jpg"})
+        if url == USERPIC_LOOP:
+            return httpx.Response(302, headers={"location": "/i/userpic/320/loop.jpg"})
         if url == PICTURE:
             if self.picture is None:
                 return httpx.Response(404)
@@ -385,6 +395,39 @@ async def test_telegram_без_номера_и_номер_приходит_по�
 async def test_telegram_имя_символами_не_переносим(client, net, name, first, last):
     user = (await _tg(client, tg_token(name=name))).json()["user"]
     assert (user["first_name"], user["last_name"]) == (first, last)
+
+
+async def test_telegram_фото_через_перенаправление_t_me(client, net):
+    resp = await _tg(client, tg_token(picture=USERPIC))
+    assert resp.status_code == 200
+    assert resp.json()["user"]["avatar_url"]
+    assert net.requested.count(PICTURE) == 1
+
+
+async def test_telegram_перенаправление_не_к_telegram_не_качаем(client, net):
+    resp = await _tg(client, tg_token(picture=USERPIC_ELSEWHERE))
+    assert resp.status_code == 200
+    assert resp.json()["user"]["avatar_url"] is None
+    assert "https://evil.example/a.jpg" not in net.requested
+
+
+async def test_telegram_петля_перенаправлений_кончается(client, net):
+    resp = await _tg(client, tg_token(picture=USERPIC_LOOP))
+    assert resp.status_code == 200
+    assert resp.json()["user"]["avatar_url"] is None
+    assert net.requested.count(USERPIC_LOOP) <= 4
+
+
+async def test_telegram_фото_и_у_прежнего_аккаунта_без_анкеты(client, net):
+    """Аккаунт уже был (вошёл раньше, фото не пришло), анкету не заполнял —
+    следующий вход через Telegram ставит фото"""
+    net.picture = None
+    first = (await _tg(client)).json()["user"]
+    assert first["avatar_url"] is None
+    net.picture = _jpeg()
+    again = (await _tg(client)).json()["user"]
+    assert again["id"] == first["id"]
+    assert again["avatar_url"]
 
 
 async def test_telegram_фото_не_скачалось_вход_всё_равно_есть(client, net):

@@ -43,6 +43,9 @@ TOKEN_URL = "https://oauth.telegram.org/token"
 ALGORITHMS = frozenset({"RS256", "ES256", "EdDSA", "ES256K"})
 #: Фото из Telegram — не повод держать вход дольше пары секунд
 PICTURE_TIMEOUT = httpx.Timeout(5.0)
+#: Сколько перенаправлений пройти за фото: t.me/i/userpic отвечает 302
+#: на cdn*.telesco.pe, больше одного-двух не бывает
+PICTURE_HOPS = 3
 #: Сколько секунд после выдачи ID-токен ещё годится для входа. Окно Telegram
 #: отдаёт его приложению сразу, а с запасом на медленную сеть и повтор хватает
 #: десяти минут — не часа, на который токен выписан
@@ -200,30 +203,39 @@ class TelegramLogin:
 
         Не вышло — не ошибка входа: человек просто останется без фото.
         Качаем не больше предела фото анкеты — дальше его всё равно
-        не примет store_avatar. Только с адресов Telegram и без переходов
-        по перенаправлениям: они увели бы запрос с проверенного домена"""
-        if not url or not _telegram_picture(url):
-            if url:
-                log.info("фото из Telegram: адрес не Telegram, не качаем")
-            return None
-        try:
-            async with self._http.stream(
-                "GET", url, timeout=PICTURE_TIMEOUT, follow_redirects=False
-            ) as response:
-                if response.status_code != 200:
-                    return None
-                declared = response.headers.get("content-length")
-                if declared and declared.isdigit() and int(declared) > MAX_AVATAR_BYTES:
-                    return None
-                data = bytearray()
-                async for chunk in response.aiter_bytes():
-                    data += chunk
-                    if len(data) > MAX_AVATAR_BYTES:
+        не примет store_avatar. Адрес из токена — `t.me/i/userpic/…`, и он
+        отвечает перенаправлением на сервер картинок Telegram: переходы
+        проходим сами, и каждый адрес по дороге — только Telegram, иначе
+        перенаправление увело бы запрос с проверенного домена"""
+        for _ in range(PICTURE_HOPS + 1):
+            if not url or not _telegram_picture(url):
+                if url:
+                    log.info("фото из Telegram: адрес не Telegram, не качаем")
+                return None
+            try:
+                async with self._http.stream(
+                    "GET", url, timeout=PICTURE_TIMEOUT, follow_redirects=False
+                ) as response:
+                    if response.is_redirect:
+                        location = response.headers.get("location")
+                        url = str(response.url.join(location)) if location else None
+                        continue
+                    if response.status_code != 200:
                         return None
-                return bytes(data)
-        except httpx.HTTPError as exc:
-            log.info("фото из Telegram не скачалось: %s", type(exc).__name__)
-            return None
+                    declared = response.headers.get("content-length")
+                    if declared and declared.isdigit() and int(declared) > MAX_AVATAR_BYTES:
+                        return None
+                    data = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        data += chunk
+                        if len(data) > MAX_AVATAR_BYTES:
+                            return None
+                    return bytes(data)
+            except (httpx.HTTPError, httpx.InvalidURL) as exc:
+                log.info("фото из Telegram не скачалось: %s", type(exc).__name__)
+                return None
+        log.info("фото из Telegram: слишком много перенаправлений")
+        return None
 
 
 _login: TelegramLogin | None = None
