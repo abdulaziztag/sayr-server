@@ -11,6 +11,7 @@ Telegram), иначе новый аккаунт. Других склеек не�
 """
 
 import logging
+from dataclasses import replace
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -28,10 +29,11 @@ from ..auth.schemas import UserOut
 from ..auth.sealed import seal
 from ..auth.telegram_login import TelegramLogin, TelegramUser, get_telegram_login
 from ..auth.tokens import current_user
+from ..config import settings
 from ..db import get_session
 from ..models import User, avatar_storage
 from ..services.images import drop_avatar, off_loop, store_avatar
-from .auth import VerifyOut, _device, open_session
+from .auth import VerifyOut, _device, normalize_phone, open_session
 from .rooms import remember_telegram
 
 log = logging.getLogger(__name__)
@@ -56,12 +58,27 @@ class AppleIn(BaseModel):
     #: Apple отдаёт имя только при самом первом входе — дальше их нет
     first_name: str | None = Field(default=None, max_length=120)
     last_name: str | None = Field(default=None, max_length=120)
-    #: Исходный nonce, хеш которого приложение отдало Apple. Необязателен:
-    #: пришёл — сверяем с токеном
-    nonce: str | None = Field(default=None, max_length=256)
+    #: Исходная случайная строка приложения — не хеш. Apple приложение
+    #: отдало её SHA-256 (hex), он и стоит в токене. Обязательна: без неё
+    #: утёкший identity token открывал бы аккаунт (app/auth/apple.py)
+    nonce: str = Field(min_length=1, max_length=256)
 
 
-async def _who(body: TelegramIn, login: TelegramLogin | None) -> TelegramUser:
+def _reviewer_phone(phone: str) -> bool:
+    """Номер проверяющих App Store и Google Play (SAYR_LOGIN_TEST_PHONE).
+    Код к нему роздан магазинам, поэтому номер из Telegram, совпавший с ним,
+    не ищет аккаунт и не записывается: иначе владелец этого номера в Telegram
+    попал бы в аккаунт проверяющих, а проверяющие с тем же кодом — в его"""
+    return bool(settings.login_test_phone) and phone == normalize_phone(
+        settings.login_test_phone
+    )
+
+
+async def _who(
+    body: TelegramIn, login: TelegramLogin | None, invalid_status: int = 401
+) -> TelegramUser:
+    """Проверенный человек Telegram. `invalid_status` — чем отвечать на
+    непринятый токен: вход — 401, привязка — нет (см. link_telegram)"""
     if login is None:
         raise HTTPException(status_code=503, detail="telegram_login_off")
     try:
@@ -73,13 +90,17 @@ async def _who(body: TelegramIn, login: TelegramLogin | None) -> TelegramUser:
                 # Без секрета бота код не обменять — вход по коду не настроен
                 raise HTTPException(status_code=503, detail="telegram_login_off")
             token = await login.exchange(body.code, body.code_verifier, body.redirect_uri)
-        return await login.verify(token)
+        who = await login.verify(token)
     except TokenInvalid as exc:
         log.info("вход через Telegram: токен не принят (%s)", exc)
-        raise HTTPException(status_code=401, detail="telegram_token_invalid") from None
+        raise HTTPException(status_code=invalid_status, detail="telegram_token_invalid") from None
     except ProviderUnavailable as exc:
         log.warning("вход через Telegram: Telegram не ответил (%s)", exc)
         raise HTTPException(status_code=502, detail="telegram_unavailable") from None
+    if who.phone and _reviewer_phone(who.phone):
+        log.info("вход через Telegram: номер проверяющих магазина — без номера")
+        who = replace(who, phone=None)
+    return who
 
 
 async def _one(session: AsyncSession, *where, lock: bool = False) -> User | None:
@@ -213,6 +234,11 @@ async def telegram_sign_in(
     return out
 
 
+def _constraint(exc: IntegrityError) -> str | None:
+    """Имя уникального индекса, о который споткнулась запись"""
+    return getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+
+
 @me_router.post("/telegram", response_model=UserOut)
 async def link_telegram(
     body: TelegramIn,
@@ -221,25 +247,48 @@ async def link_telegram(
     session: AsyncSession = Depends(get_session),
 ) -> UserOut:
     """«Привязать Telegram» в Профиле: тот же вход Telegram, но результат
-    ложится к текущему аккаунту. Telegram уже у другого аккаунта — 409,
-    без склейки"""
-    who = await _who(body, login)
-    owner = await _one(session, User.telegram_id == who.id)
-    if owner is not None and owner.id != user.id:
-        raise HTTPException(status_code=409, detail="telegram_taken")
-    if user.telegram_id == who.id:
-        return UserOut.of(user)
-    old = user.telegram_id
-    user.telegram_id = who.id
-    await _take_phone(session, user, who.phone)
-    _prefill(user, who)
-    await remember_telegram(session, user.id, who.id, old)
-    avatar = _wants_avatar(user)
-    try:
-        await session.commit()
-    except IntegrityError:
-        await session.rollback()
-        raise HTTPException(status_code=409, detail="telegram_taken") from None
+    ложится к текущему аккаунту. Telegram уже у другого аккаунта — 409
+    telegram_taken, без склейки.
+
+    К аккаунту уже привязан другой Telegram — 409 telegram_already_linked,
+    молча не меняем: иначе украденный ключ сессии навсегда превращался бы
+    в вход через Telegram злоумышленника, а свой Telegram владельца открывал
+    бы новый пустой аккаунт. Сменить Telegram — отдельным шагом, когда он
+    понадобится.
+
+    Токен не принят — 400, а не 401, как у входа: 401 на запрос с ключом
+    сессии приложения понимают как «сессия Sayr кончилась» и выходят
+    из аккаунта. Неудачная привязка — не повод выкидывать человека."""
+    who = await _who(body, login, invalid_status=400)
+    phone = who.phone
+    for attempt in (1, 2):
+        owner = await _one(session, User.telegram_id == who.id)
+        if owner is not None and owner.id != user.id:
+            raise HTTPException(status_code=409, detail="telegram_taken")
+        if user.telegram_id == who.id:
+            return UserOut.of(user)
+        if user.telegram_id is not None:
+            raise HTTPException(status_code=409, detail="telegram_already_linked")
+        # Всё изменение — внутри try: запросы ниже сбрасывают его в базу
+        # раньше коммита (autoflush), и параллельный вход, успевший занять
+        # тот же Telegram или номер, должен дать 409, а не 500
+        try:
+            user.telegram_id = who.id
+            await _take_phone(session, user, phone)
+            _prefill(user, who)
+            await remember_telegram(session, user.id, who.id)
+            avatar = _wants_avatar(user)
+            await session.commit()
+            break
+        except IntegrityError as exc:
+            await session.rollback()
+            if _constraint(exc) == "ix_users_phone" and attempt == 1:
+                # Номер из Telegram заняли, пока мы убеждались, что он ничей:
+                # Telegram привязываем всё равно, номер — нет
+                await session.refresh(user)
+                phone = None
+                continue
+            raise HTTPException(status_code=409, detail="telegram_taken") from None
     if avatar:
         await _avatar_from_telegram(session, login, user, who.picture)
     return UserOut.of(user)

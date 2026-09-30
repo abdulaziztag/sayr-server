@@ -11,7 +11,9 @@ docs/superpowers/specs/2026-09-30-telegram-apple-login-design.md,
 1. NFKC — декоративные «шрифты» (𝓐𝓵𝓲, 𝐀𝐳𝐢𝐳) становятся обычными
    буквами, и такие имена не теряются.
 2. Только буквы латиницы и кириллицы (с узбекскими o‘ g‘ — апостроф
-   бывает и ‘ U+2018, и ʻ U+02BB), пробел, дефис и апостроф.
+   бывает и ‘ U+2018, и ʻ U+02BB), пробел, дефис и апостроф. Обратный
+   апостроф ` и знак ´, которыми o‘ g‘ набирают на клавиатурах без ‘,
+   заменяем на ‘ — так, как узбекские буквы показывают приложения.
 3. Букв не меньше двух, длина до 30 символов.
 """
 
@@ -26,6 +28,10 @@ MIN_LETTERS = 2
 APOSTROPHES = frozenset("'‘’ʻʼ")
 #: Дефисы: NFKC неразрывный дефис превращает в U+2010, приводим к обычному
 _HYPHENS = str.maketrans({"‐": "-", "‑": "-"})
+#: «O`tkir», «G´ulnora» — так o‘ g‘ набирают без узбекской раскладки.
+#: Меняем до NFKC: ´ он разбирает на пробел и надстрочный знак, а ｀
+#: (широкий) сводит к `, который и попадёт сюда
+_BACKTICKS = str.maketrans({"`": "‘", "´": "‘", "｀": "‘"})
 _SPACES = re.compile(r"\s+")
 
 
@@ -47,7 +53,7 @@ def clean_name(raw: str | None) -> str | None:
     """
     if raw is None:
         return None
-    text = unicodedata.normalize("NFKC", raw).translate(_HYPHENS)
+    text = unicodedata.normalize("NFKC", raw.translate(_BACKTICKS)).translate(_HYPHENS)
     text = _SPACES.sub(" ", text).strip()
     if not text:
         return ""

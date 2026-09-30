@@ -59,6 +59,10 @@ BUNDLE = "uz.sayr.ios"
 TEAM = "TEAM123456"
 KEY_ID = "KEY1234567"
 REDIRECT = "https://app777000123-login.tg.dev/tglogin"
+#: Случайная строка приложения для входа с Apple: Apple получает её SHA-256,
+#: сервер — её саму
+APPLE_NONCE = "raw-nonce-123"
+APPLE_NONCE_HASH = hashlib.sha256(APPLE_NONCE.encode()).hexdigest()
 H = {"X-Device-Id": "dev-login-1", "X-Sayr-App": "ios/1.8.0"}
 
 # Ключи — один раз на файл: RSA генерируется заметное время
@@ -114,6 +118,7 @@ def apple_token(key=APPLE_KEY, kid="ap-1", **over) -> str:
         "iat": now,
         "exp": now + 600,
         "email": "abc@privaterelay.appleid.com",
+        "nonce": APPLE_NONCE_HASH,
     } | over
     claims = {k: v for k, v in claims.items() if v is not None}
     return jwt.encode(claims, key, algorithm="RS256", headers={"kid": kid})
@@ -134,11 +139,14 @@ class Net:
         self.apple_token_status = 200
         self.revokes: list[dict] = []
         self.revoke_status = 200
+        #: Все адреса, куда сервер пытался сходить, и удачно, и нет
+        self.requested: list[str] = []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        self.requested.append(url)
         if self.down:
             raise httpx.ConnectError("нет сети", request=request)
-        url = str(request.url)
         form = {k: v[0] for k, v in parse_qs(request.content.decode()).items()}
         if url == TG_JWKS:
             self.jwks_hits["tg"] += 1
@@ -236,6 +244,10 @@ async def _tg(client, token: str | None = None, **body):
         ("Анна-Мария", "Анна-Мария"),
         ("O'Brien", "O'Brien"),
         ("José", "José"),
+        # Без узбекской раскладки o‘ g‘ набирают через ` и ´ — к виду приложений
+        ("O`tkir", "O‘tkir"),
+        ("G´ulnora", "G‘ulnora"),
+        ("Qo`chqorov", "Qo‘chqorov"),
         ("", ""),
         # Символы вместо имени — не имя
         ("✨Ali✨", None),
@@ -461,6 +473,80 @@ async def test_telegram_не_ответил_это_не_плохой_токен(
     assert resp.json() == {"detail": "telegram_unavailable"}
 
 
+async def test_telegram_лежит_ключи_не_перечитываем_чаще_минуты(client, net, monkeypatch):
+    """Неудачная попытка тоже считается: иначе при лежащем Telegram каждый
+    вход с выдуманным kid ждал бы свой таймаут, стоя за замком"""
+    net.down = True
+    for n in range(4):
+        resp = await _tg(client, tg_token(kid=f"garbage-{n}"))
+        assert resp.status_code == 502
+    assert net.requested.count(TG_JWKS) == 1
+    # Telegram ожил, но минута не прошла — всё ещё «нет связи», а не «плохой токен»
+    net.down = False
+    assert (await _tg(client)).status_code == 502
+    assert net.requested.count(TG_JWKS) == 1
+    monkeypatch.setattr(jwks_mod, "REFETCH_EVERY_SEC", 0)
+    assert (await _tg(client)).status_code == 200
+    assert net.requested.count(TG_JWKS) == 2
+
+
+async def test_telegram_лежит_а_ключ_знакомый_пускаем_по_старому_списку(
+    client, net, monkeypatch
+):
+    assert (await _tg(client)).status_code == 200
+    # Список устарел, а Telegram как раз лежит: знакомый ключ всё равно годится,
+    # и за списком ходим один раз в минуту, а не на каждый вход
+    monkeypatch.setattr(jwks_mod, "KEYS_TTL_SEC", 0)
+    net.tg.jwks._tried_at -= 120  # с прошлого чтения прошло две минуты
+    net.down = True
+    assert (await _tg(client)).status_code == 200
+    assert (await _tg(client)).status_code == 200
+    assert net.requested.count(TG_JWKS) == 2
+
+
+async def test_telegram_старый_токен_не_пускает(client, net):
+    """ID-токен выписан на час, а nonce библиотеки Telegram не передают:
+    принимаем только свежий — утёкший не открывает аккаунт весь этот час"""
+    now = int(time.time())
+    assert (await _tg(client, tg_token(iat=now - 9 * 60))).status_code == 200
+    for token in (tg_token(iat=now - 12 * 60), tg_token(iat=None)):
+        resp = await _tg(client, token)
+        assert resp.status_code == 401
+        assert resp.json() == {"detail": "telegram_token_invalid"}
+
+
+@pytest.mark.parametrize(
+    "picture",
+    [
+        "https://10.0.0.5:8443/admin",
+        "https://127.0.0.1/avatar.jpg",
+        "https://evil.example/avatar.jpg",
+        "https://cdn4.telesco.pe.evil.example/avatar.jpg",
+        "https://cdn4.telesco.pe:8443/file/avatar.jpg",
+        "http://cdn4.telesco.pe/file/avatar.jpg",
+    ],
+)
+async def test_telegram_фото_только_с_адресов_telegram(client, net, picture):
+    resp = await _tg(client, tg_token(picture=picture))
+    assert resp.status_code == 200
+    assert resp.json()["user"]["avatar_url"] is None
+    assert picture not in net.requested
+
+
+async def test_telegram_номер_проверяющих_не_ищет_и_не_записывается(client, net, monkeypatch):
+    """Код к номеру проверяющих роздан магазинам: совпавший с ним номер
+    из Telegram не открывает их аккаунт и не записывается никому"""
+    monkeypatch.setattr(settings, "login_test_phone", "+998 90 123-45-67")
+    first = (await _tg(client)).json()["user"]
+    assert first["phone"] == ""
+    assert first["login_methods"] == ["telegram"]
+    _, reviewer_id = await _user(phone=PHONE, first_name="Review")
+    other = await _tg(client, tg_token(id=TG_ID + 1))
+    assert other.status_code == 200
+    assert other.json()["user"]["id"] not in (reviewer_id, first["id"])
+    assert (await _get(reviewer_id)).telegram_id is None
+
+
 async def test_telegram_выключен_без_id_бота(client):
     app.dependency_overrides[get_telegram_login] = lambda: None
     try:
@@ -547,13 +633,68 @@ async def test_привязка_без_входа(client, net):
     assert resp.status_code == 401
 
 
-async def test_привязка_с_плохим_токеном(client, net):
+async def test_привязка_с_плохим_токеном_не_выкидывает_из_аккаунта(client, net):
+    """401 на запрос с ключом сессии приложения понимают как «сессия
+    кончилась» и выходят из аккаунта — неудачная привязка отвечает 400"""
     h, _ = await _user(apple_sub="apple-1")
-    resp = await client.post(
-        "/api/v1/me/telegram", json={"id_token": tg_token(key=STRANGER)}, headers=h
-    )
-    assert resp.status_code == 401
-    assert resp.json() == {"detail": "telegram_token_invalid"}
+    for token in (tg_token(key=STRANGER), tg_token(iat=int(time.time()) - 3000)):
+        resp = await client.post("/api/v1/me/telegram", json={"id_token": token}, headers=h)
+        assert resp.status_code == 400
+        assert resp.json() == {"detail": "telegram_token_invalid"}
+    # Сессия жива
+    assert (await client.get("/api/v1/me", headers=h)).status_code == 200
+
+
+async def test_привязать_второй_telegram_нельзя(client, net):
+    """Уже привязанный Telegram молча не меняется: иначе украденный ключ
+    сессии становился бы постоянным входом через чужой Telegram"""
+    h, user_id = await _user(apple_sub="apple-3", telegram_id=111)
+    resp = await client.post("/api/v1/me/telegram", json={"id_token": tg_token()}, headers=h)
+    assert resp.status_code == 409
+    assert resp.json() == {"detail": "telegram_already_linked"}
+    assert (await _get(user_id)).telegram_id == 111
+
+
+async def test_привязка_номер_заняли_параллельно(client, net, monkeypatch):
+    """Пока проверяли, что номер из Telegram ничей, его занял параллельный
+    вход: Telegram всё равно привязан, номер — нет, и не 500"""
+    from app.api import auth_providers
+
+    await _user(phone=PHONE)
+    h, user_id = await _user(apple_sub="apple-race")
+
+    async def racy(session, user, phone):
+        # Проверка «ничей» прошла раньше, чем номер заняли
+        if phone:
+            user.phone = phone
+
+    monkeypatch.setattr(auth_providers, "_take_phone", racy)
+    resp = await client.post("/api/v1/me/telegram", json={"id_token": tg_token()}, headers=h)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["phone"] == ""
+    assert resp.json()["login_methods"] == ["telegram", "apple"]
+    assert (await _get(user_id)).telegram_id == TG_ID
+
+
+async def test_привязка_telegram_заняли_параллельно(client, net, monkeypatch):
+    """Тот же Telegram привязал себе параллельный вход между проверкой
+    и записью — 409, а не 500"""
+    from app.api import auth_providers
+
+    await _user(telegram_id=TG_ID)
+    h, user_id = await _user(apple_sub="apple-race-2")
+    real, calls = auth_providers._one, []
+
+    async def blind_first(session, *where, **kw):
+        calls.append(where)
+        # Первый поиск владельца «не видит» уже записанного
+        return None if len(calls) == 1 else await real(session, *where, **kw)
+
+    monkeypatch.setattr(auth_providers, "_one", blind_first)
+    resp = await client.post("/api/v1/me/telegram", json={"id_token": tg_token()}, headers=h)
+    assert resp.status_code == 409
+    assert resp.json() == {"detail": "telegram_taken"}
+    assert (await _get(user_id)).telegram_id is None
 
 
 # --- Комнаты знают аккаунт Telegram ----------------------------------------
@@ -661,7 +802,11 @@ async def test_служба_находит_ключ_участника_по_но
 
 
 async def _apple(client, token: str | None = None, **body):
-    payload = {"identity_token": token or apple_token(), "authorization_code": "code-1"} | body
+    payload = {
+        "identity_token": token or apple_token(),
+        "authorization_code": "code-1",
+        "nonce": APPLE_NONCE,
+    } | body
     return await client.post("/api/v1/auth/apple", json=payload, headers=H)
 
 
@@ -709,13 +854,34 @@ async def test_apple_имя_символами_не_переносим(client, n
 
 
 async def test_apple_nonce(client, net):
-    raw = "raw-nonce-123"
-    hashed = hashlib.sha256(raw.encode()).hexdigest()
-    ok = await _apple(client, apple_token(nonce=hashed), nonce=raw)
+    ok = await _apple(client)
     assert ok.status_code == 200
-    bad = await _apple(client, apple_token(nonce=hashed), nonce="another")
-    assert bad.status_code == 401
-    assert bad.json() == {"detail": "apple_token_invalid"}
+    for token, nonce in [
+        # Не та строка
+        (apple_token(), "another"),
+        # Хеш из самого токена: он виден любому, у кого есть токен
+        (apple_token(), APPLE_NONCE_HASH),
+        # Nonce в токене нет вовсе — токен выпрошен не нашим приложением
+        (apple_token(nonce=None), APPLE_NONCE),
+        # Приложение отдало Apple строку как есть, без хеша
+        (apple_token(nonce=APPLE_NONCE), APPLE_NONCE),
+    ]:
+        bad = await _apple(client, token, nonce=nonce)
+        assert bad.status_code == 401, nonce
+        assert bad.json() == {"detail": "apple_token_invalid"}
+
+
+async def test_apple_без_nonce_не_пускает(client, net):
+    """Без исходной строки утёкший identity token открывал бы аккаунт"""
+    resp = await client.post(
+        "/api/v1/auth/apple",
+        json={"identity_token": apple_token(), "authorization_code": "code-1"},
+        headers=H,
+    )
+    assert resp.status_code == 422
+    assert (await _apple(client, nonce="")).status_code == 422
+    async with SessionLocal() as session:
+        assert (await session.execute(select(User))).first() is None
 
 
 @pytest.mark.parametrize(
@@ -840,6 +1006,25 @@ async def test_анкета_принимает_настоящие_имена(cli
     resp = await client.patch("/api/v1/me", json={"first_name": name}, headers=h)
     assert resp.status_code == 200, resp.text
     assert resp.json()["first_name"] == stored
+
+
+async def test_анкета_со_старым_именем_сохраняется(client):
+    """Приложения шлют анкету целиком: имя, заведённое до правила, не мешает
+    поменять год рождения. Правило — только для меняемого имени"""
+    h, user_id = await _user(phone="+998935550006", first_name="Aziz.", last_name="Ali2")
+    resp = await client.patch(
+        "/api/v1/me",
+        json={"first_name": "Aziz.", "last_name": "Ali2", "birth_year": 1990},
+        headers=h,
+    )
+    assert resp.status_code == 200, resp.text
+    assert (resp.json()["first_name"], resp.json()["last_name"]) == ("Aziz.", "Ali2")
+    assert (await _get(user_id)).birth_year == 1990
+    resp = await client.patch("/api/v1/me", json={"first_name": "Aziz.."}, headers=h)
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "name_letters_only"}
+    resp = await client.patch("/api/v1/me", json={"first_name": "O`tkir"}, headers=h)
+    assert resp.json()["first_name"] == "O‘tkir"
 
 
 async def test_способы_входа_у_аккаунта_по_номеру(client):

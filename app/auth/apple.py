@@ -5,8 +5,11 @@ App Store (правило 4.8) требует рядом со входом че�
 authorization code и — только при самом первом входе — имя.
 
 - Токен проверяем ключами https://appleid.apple.com/auth/keys: издатель
-  https://appleid.apple.com, получатель — bundle id приложения, срок,
-  и `nonce`, если приложение его прислало.
+  https://appleid.apple.com, получатель — bundle id приложения, срок
+  и `nonce`. Nonce обязателен: приложение придумывает случайную строку,
+  отдаёт Apple её SHA-256 (hex) — он и оказывается в токене, — а нам
+  присылает саму строку. Хеш в токене виден любому, строка — только
+  приложению, поэтому утёкший токен без неё не открывает аккаунт.
 - Код меняем на refresh-токен Apple (/auth/token). Он нужен ровно для
   одного: при удалении аккаунта отозвать доступ Sayr к Apple ID (/auth/revoke) —
   тоже требование App Store. Клиентский секрет для обоих вызовов — JWT ES256,
@@ -17,6 +20,7 @@ authorization code и — только при самом первом входе
 """
 
 import hashlib
+import hmac
 import logging
 import time
 from dataclasses import dataclass
@@ -95,7 +99,10 @@ class AppleSignIn:
             headers={"kid": self.key_id},
         )
 
-    async def verify(self, identity_token: str, nonce: str | None = None) -> AppleUser:
+    async def verify(self, identity_token: str, nonce: str) -> AppleUser:
+        """`nonce` — исходная строка приложения, не хеш. Сам хеш из токена
+        не годится: он лежит в токене открыто, и принять его значило бы
+        пустить любого, у кого есть только токен"""
         claims = await verify(
             identity_token,
             self.jwks,
@@ -103,12 +110,10 @@ class AppleSignIn:
             audience=self.bundle_id,
             algorithms=ALGORITHMS,
         )
-        if nonce:
-            # Приложение отдаёт Apple хеш своего nonce, а нам — сам nonce;
-            # некоторые шлют Apple его как есть. Годится и то и другое
-            hashed = hashlib.sha256(nonce.encode()).hexdigest()
-            if claims.get("nonce") not in (hashed, nonce):
-                raise TokenInvalid("nonce не совпал")
+        claim = claims.get("nonce")
+        hashed = hashlib.sha256(nonce.encode()).hexdigest()
+        if not nonce or not isinstance(claim, str) or not hmac.compare_digest(claim, hashed):
+            raise TokenInvalid("nonce не совпал")
         sub = claims.get("sub")
         if not isinstance(sub, str) or not 0 < len(sub) <= 128:
             raise TokenInvalid("sub не годится")

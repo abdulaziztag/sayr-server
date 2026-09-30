@@ -5,7 +5,9 @@
 за ними на каждый вход незачем, а поставщик меняет их редко. Незнакомый
 `kid` — повод перечитать список (поставщик выкатил новый ключ), но не чаще
 раза в минуту: иначе поток токенов с выдуманными `kid` превращал бы нас
-в прокси запросов к Telegram и Apple.
+в прокси запросов к Telegram и Apple. Минута считается от любой попытки,
+и неудачной тоже: пока поставщик лежит, каждый вход иначе ждал бы свой
+таймаут в очереди за замком.
 """
 
 import asyncio
@@ -24,6 +26,10 @@ KEYS_TTL_SEC = 6 * 3600
 REFETCH_EVERY_SEC = 60
 #: Допуск по часам: у телефона и у нас они расходятся на секунды
 LEEWAY_SEC = 60
+#: Сколько ждём список ключей. Меньше общего таймаута клиента: за замком
+#: стоят все входы этого поставщика, и лежащий поставщик не должен
+#: держать их по десять секунд
+FETCH_TIMEOUT = httpx.Timeout(5.0)
 
 
 class TokenInvalid(Exception):
@@ -39,12 +45,17 @@ class Jwks:
         self.url = url
         self._http = http
         self._keys: dict[str, jwt.PyJWK] = {}
+        #: Когда список последний раз прочитан удачно — от этого срок жизни
         self._fetched_at = float("-inf")
+        #: Когда последний раз пробовали, удачно или нет — от этого «раз в минуту»
+        self._tried_at = float("-inf")
+        #: Последняя попытка не удалась: поставщик, видимо, лежит
+        self._failed = False
         self._lock = asyncio.Lock()
 
     async def _fetch(self) -> None:
         try:
-            response = await self._http.get(self.url)
+            response = await self._http.get(self.url, timeout=FETCH_TIMEOUT)
             response.raise_for_status()
             data = response.json()
         except (httpx.HTTPError, ValueError) as exc:
@@ -65,19 +76,28 @@ class Jwks:
 
     async def key(self, kid: str) -> jwt.PyJWK:
         async with self._lock:
-            age = time.monotonic() - self._fetched_at
+            now = time.monotonic()
             known = self._keys.get(kid)
-            if known is not None and age < KEYS_TTL_SEC:
+            if known is not None and now - self._fetched_at < KEYS_TTL_SEC:
                 return known
-            if known is None and age < REFETCH_EVERY_SEC:
+            if now - self._tried_at < REFETCH_EVERY_SEC:
+                # В эту минуту уже ходили — второй раз не идём, даже если
+                # тогда не вышло. Старый список лучше никакого: ключи живут
+                # месяцами
+                if known is not None:
+                    return known
+                if self._failed:
+                    raise ProviderUnavailable(f"{self.url}: недавно не ответил")
                 raise TokenInvalid("незнакомый kid")
+            self._tried_at = now
             try:
                 await self._fetch()
             except ProviderUnavailable:
+                self._failed = True
                 if known is not None:
-                    # Старый список лучше никакого: ключи живут месяцами
                     return known
                 raise
+            self._failed = False
             fresh = self._keys.get(kid)
             if fresh is None:
                 raise TokenInvalid("незнакомый kid")
@@ -91,12 +111,17 @@ async def verify(
     issuer: str,
     audience: str,
     algorithms: frozenset[str],
+    max_age: int | None = None,
 ) -> dict[str, Any]:
     """Проверенные утверждения токена или TokenInvalid.
 
     `aud` сверяем сами, строкой: у Telegram это ID бота, и число в токене
     вместо строки не должно стоить человеку входа. Подпись, `iss` и `exp`
     (с допуском по часам) — средствами PyJWT.
+
+    `max_age` — сколько секунд с выдачи (`iat`) токен ещё принимаем. Для
+    токенов, которые приложение отдаёт сразу после окна входа, а nonce
+    сверить нечем: утёкший токен тогда годится минуты, а не весь свой срок.
     """
     if not token or len(token) > 8192:
         raise TokenInvalid("пустой или слишком длинный")
@@ -108,6 +133,7 @@ async def verify(
     if alg not in algorithms or not isinstance(kid, str):
         raise TokenInvalid(f"алгоритм {alg!r} или kid не годятся")
     key = await jwks.key(kid)
+    required = ["exp", "iss", "aud", "sub"] + (["iat"] if max_age is not None else [])
     try:
         claims = jwt.decode(
             token,
@@ -115,10 +141,15 @@ async def verify(
             algorithms=[alg],
             issuer=issuer,
             leeway=LEEWAY_SEC,
-            options={"verify_aud": False, "require": ["exp", "iss", "aud", "sub"]},
+            options={"verify_aud": False, "require": required},
         )
-    except jwt.PyJWTError as exc:
+    except (jwt.PyJWTError, TypeError, ValueError) as exc:
+        # TypeError — PyJWT так падает на iat-списке вместо числа
         raise TokenInvalid(type(exc).__name__) from exc
+    if max_age is not None:
+        # Что iat — число и не из будущего, PyJWT уже проверил
+        if time.time() - int(claims["iat"]) > max_age + LEEWAY_SEC:
+            raise TokenInvalid("выдан слишком давно")
     aud = claims.get("aud")
     audiences = aud if isinstance(aud, list) else [aud]
     if audience not in {str(a) for a in audiences}:

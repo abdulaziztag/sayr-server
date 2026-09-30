@@ -247,19 +247,12 @@ def _known_account(member: RoomMember, user: User) -> None:
         member.tg_user_id = user.telegram_id
 
 
-async def remember_telegram(
-    session: AsyncSession, user_id: int, telegram_id: int, old: int | None = None
-) -> None:
+async def remember_telegram(session: AsyncSession, user_id: int, telegram_id: int) -> None:
     """Telegram только что привязан к аккаунту — его строкам участия тоже.
-    Сменил Telegram на другой — меняем и тот, что был записан со входа
-    (без ключа доступа), а связанный по ссылке оставляем: им человек
-    в группу и вошёл"""
-    unknown = RoomMember.tg_user_id.is_(None)
-    if old is not None:
-        unknown = unknown | ((RoomMember.tg_user_id == old) & RoomMember.tg_user_hash.is_(None))
+    Уже связанные по личной ссылке не трогаем: им человек в группу и вошёл"""
     await session.execute(
         update(RoomMember)
-        .where(RoomMember.user_id == user_id, unknown)
+        .where(RoomMember.user_id == user_id, RoomMember.tg_user_id.is_(None))
         .values(tg_user_id=telegram_id)
     )
 

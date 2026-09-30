@@ -78,14 +78,22 @@ async def update_me(
         if not MIN_BIRTH_YEAR <= body.birth_year <= year:
             raise HTTPException(status_code=422, detail="birth_year_invalid")
     # То же правило, что у имени из Telegram: иначе символы вместо имени
-    # вписали бы руками. Приложение показывает «Только буквы»
+    # вписали бы руками. Приложение показывает «Только буквы».
+    # Проверяем только меняемое: приложения шлют всю анкету целиком,
+    # и человек со старым именем вроде «Aziz.» иначе не смог бы поменять
+    # даже год рождения, а сборки 1.7 не знают, что ошибка — в имени
     for field in ("first_name", "last_name"):
         value = getattr(body, field)
-        if value is not None:
-            cleaned = clean_name(value)
-            if cleaned is None:
-                raise HTTPException(status_code=422, detail="name_letters_only")
-            setattr(body, field, cleaned)
+        if value is None:
+            continue
+        stored = getattr(user, field) or ""
+        if value.strip() == stored.strip():
+            setattr(body, field, stored)
+            continue
+        cleaned = clean_name(value)
+        if cleaned is None:
+            raise HTTPException(status_code=422, detail="name_letters_only")
+        setattr(body, field, cleaned)
     # Имя видят попутчики: мат в нём — то же, что мат в заметке комнаты
     if not is_clean(body.first_name) or not is_clean(body.last_name):
         raise HTTPException(status_code=422, detail="bad_text")

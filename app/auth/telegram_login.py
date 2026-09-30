@@ -17,8 +17,13 @@ https://oauth.telegram.org/.well-known/jwks.json, издателя, получа
 - `name`, `preferred_username`, `picture` — для анкеты нового аккаунта;
 - `phone_number` — только при `phone_number_verified`: по нему вход через
   Telegram и вход по номеру попадают в один аккаунт.
+
+Библиотеки Telegram nonce не принимают, а ID-токен живёт час. Чтобы утёкший
+токен не открывал аккаунт весь этот час, принимаем только свежевыданные
+(`iat` не старше MAX_TOKEN_AGE_SEC): приложение шлёт токен сразу после окна.
 """
 
+import ipaddress
 import logging
 import re
 from dataclasses import dataclass
@@ -38,6 +43,14 @@ TOKEN_URL = "https://oauth.telegram.org/token"
 ALGORITHMS = frozenset({"RS256", "ES256", "EdDSA", "ES256K"})
 #: Фото из Telegram — не повод держать вход дольше пары секунд
 PICTURE_TIMEOUT = httpx.Timeout(5.0)
+#: Сколько секунд после выдачи ID-токен ещё годится для входа. Окно Telegram
+#: отдаёт его приложению сразу, а с запасом на медленную сеть и повтор хватает
+#: десяти минут — не часа, на который токен выписан
+MAX_TOKEN_AGE_SEC = 10 * 60
+#: Откуда качаем фото профиля. Адрес подписан Telegram, но сервер всё равно
+#: ходит только к Telegram: сторонний или внутренний адрес в токене не должен
+#: превращать вход в запрос от имени сервера куда угодно
+PICTURE_HOSTS = ("telesco.pe", "telegram.org", "t.me", "cdn-telegram.org")
 
 _PHONE = re.compile(r"^\+\d{8,15}$")
 _NICK = re.compile(r"^[A-Za-z0-9_]{4,40}$")
@@ -88,6 +101,24 @@ def _name(claims: dict) -> str:
     return name or ""
 
 
+def _telegram_picture(url: str) -> bool:
+    """Адрес фото ведёт к Telegram: https, обычный порт, домен из списка.
+    Голый IP не годится, даже если он чей-то из Telegram"""
+    try:
+        parsed = httpx.URL(url)
+    except (httpx.InvalidURL, TypeError, ValueError):
+        return False
+    host = (parsed.host or "").lower().rstrip(".")
+    if parsed.scheme != "https" or parsed.port not in (None, 443) or parsed.userinfo:
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return False
+    except ValueError:
+        pass
+    return any(host == d or host.endswith(f".{d}") for d in PICTURE_HOSTS)
+
+
 def _username(claims: dict) -> str | None:
     nick = claims.get("preferred_username")
     if isinstance(nick, str):
@@ -118,7 +149,12 @@ class TelegramLogin:
     async def verify(self, id_token: str) -> TelegramUser:
         """Проверенный человек или TokenInvalid / ProviderUnavailable"""
         claims = await verify(
-            id_token, self.jwks, issuer=ISSUER, audience=self.bot_id, algorithms=ALGORITHMS
+            id_token,
+            self.jwks,
+            issuer=ISSUER,
+            audience=self.bot_id,
+            algorithms=ALGORITHMS,
+            max_age=MAX_TOKEN_AGE_SEC,
         )
         picture = claims.get("picture")
         return TelegramUser(
@@ -164,11 +200,16 @@ class TelegramLogin:
 
         Не вышло — не ошибка входа: человек просто останется без фото.
         Качаем не больше предела фото анкеты — дальше его всё равно
-        не примет store_avatar"""
-        if not url or not url.startswith("https://"):
+        не примет store_avatar. Только с адресов Telegram и без переходов
+        по перенаправлениям: они увели бы запрос с проверенного домена"""
+        if not url or not _telegram_picture(url):
+            if url:
+                log.info("фото из Telegram: адрес не Telegram, не качаем")
             return None
         try:
-            async with self._http.stream("GET", url, timeout=PICTURE_TIMEOUT) as response:
+            async with self._http.stream(
+                "GET", url, timeout=PICTURE_TIMEOUT, follow_redirects=False
+            ) as response:
                 if response.status_code != 200:
                     return None
                 declared = response.headers.get("content-length")

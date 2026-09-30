@@ -92,6 +92,12 @@ def _status(uri: str) -> str:
         # адреса на каждый запрос
         ("/api/v1/auth/request", {"sayr_auth", "sayr_auth_all"}),
         ("/api/v1/auth/verify", {"sayr_auth"}),
+        # Вход через Telegram и Apple и привязка Telegram: каждый запрос может
+        # сходить к Telegram или Apple от нашего имени
+        ("/api/v1/auth/telegram", {"sayr_auth"}),
+        ("/api/v1/auth/apple", {"sayr_auth"}),
+        ("/api/v1/me/telegram", {"sayr_auth"}),
+        ("/api/v1/me", set()),
         # Отчёты шлюза идут с адресов Telegram на всех сразу
         ("/api/v1/auth/callback/telegram", set()),
         # Пароли — от перебора; сама админка после входа без лимита

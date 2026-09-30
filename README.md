@@ -237,6 +237,17 @@ journalctl -u sayr-push.service -n 20     # что ушло на последн�
 `POST /api/v1/auth/apple`, привязка `POST /api/v1/me/telegram`. Спека:
 `docs/superpowers/specs/2026-09-30-telegram-apple-login-design.md`.
 
+Что важно приложениям:
+- Вход с Apple требует `nonce` в теле — исходную случайную строку.
+  Apple приложение отдаёт её SHA-256 (hex, `request.nonce`), сервер сверяет
+  хеш с токеном. Без `nonce` — 422, не тот — 401 `apple_token_invalid`.
+- ID-токен Telegram принимается, только пока ему меньше 10 минут: слать
+  сразу после окна Telegram, не хранить.
+- Привязка отвечает на непринятый токен Telegram **400**
+  `telegram_token_invalid`, а не 401: 401 значит «сессия Sayr кончилась».
+  Telegram у другого аккаунта — 409 `telegram_taken`; к аккаунту уже
+  привязан другой Telegram — 409 `telegram_already_linked`.
+
 Настройки — в `.env` (см. `.env.example`): `SAYR_TG_LOGIN_BOT_ID` (пусто —
 вход через Telegram выключен), `SAYR_TG_LOGIN_CLIENT_SECRET` (только для обмена
 кода), `SAYR_APPLE_KEY_ID` + `SAYR_APPLE_KEY_PATH` (ключ Sign in with Apple
