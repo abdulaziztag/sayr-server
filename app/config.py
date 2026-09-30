@@ -144,6 +144,11 @@ class Settings(BaseSettings):
     #: Client Secret из @BotFather. Нужен только если приложение пришлёт код,
     #: а не готовый ID-токен: обе библиотеки Telegram отдают токен сами
     tg_login_client_secret: str = ""
+    #: Токен того же бота для Bot API. Входу он не нужен (подпись токенов
+    #: проверяется открытыми ключами Telegram), лежит заранее под будущие
+    #: личные сообщения от бота — SOS, напоминания (разрешение
+    #: telegram:bot_access человек даёт уже при входе). Нигде не выводится
+    tg_bot_token: str = ""
 
     # Вход с Apple. bundle id — `aud` в identity token; Team ID, Key ID
     # и ключ Sign in with Apple (.p8) — для обмена кода на refresh-токен
