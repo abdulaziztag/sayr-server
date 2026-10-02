@@ -3,7 +3,7 @@
 Логика (`service.py`) знает только этот набор действий, поэтому проверяется
 на подменном клиенте, без сети и без настоящего аккаунта. Ошибки Telethon
 переводятся в свои: подождать, аккаунт ограничен, группы больше нет,
-человека в группе нет.
+человека в группе нет, своё сообщение уже не тронуть.
 
 Всё проверено по документации Telegram API и Telethon 1.45 (спека
 попутчиков, «Проверено по Telegram API»): группу может создать только
@@ -45,11 +45,20 @@ class NotParticipant(TgError):
     Gone, иначе один вышедший «закрывал» бы службе всю группу"""
 
 
+class MessageGone(TgError):
+    """Своё сообщение не поправить и не удалить: его уже удалили или прав
+    не хватает. С группой всё в порядке — это не Gone, а повтор ничего
+    не изменит"""
+
+
 class TgApi(Protocol):
     async def create_group(self, title: str, about: str) -> Chat: ...
     async def set_photo(self, chat: Chat, path: Path) -> None: ...
     async def show_history(self, chat: Chat) -> None: ...
+    #: Текст уходит как есть, без разметки: в заметках службы — имена людей
     async def send(self, chat: Chat, text: str) -> int: ...
+    async def edit(self, chat: Chat, message_id: int, text: str) -> None: ...
+    async def delete(self, chat: Chat, message_id: int) -> None: ...
     async def pin(self, chat: Chat, message_id: int) -> None: ...
     async def export_link(self, chat: Chat, title: str, expire: datetime) -> str: ...
     async def revoke_link(self, chat: Chat, link: str) -> None: ...
@@ -117,15 +126,57 @@ class TelethonApi:
             pass  # уже видна: повтор сборки после сбоя
 
     async def send(self, chat: Chat, text: str) -> int:
+        """Без разметки: по умолчанию Telethon читает текст как Markdown,
+        и имя «[Жми](ссылка)» в заметке стало бы ссылкой от Sayr Admin"""
         from telethon import errors
 
         try:
-            message = await self.client.send_message(self._peer(chat), text, link_preview=False)
+            message = await self.client.send_message(
+                self._peer(chat), text, link_preview=False, parse_mode=None
+            )
         except errors.FloodWaitError as e:
             raise FloodWait(e.seconds) from e
         except (errors.ChannelPrivateError, errors.ChannelInvalidError) as e:
             raise Gone(type(e).__name__) from e
         return message.id
+
+    async def edit(self, chat: Chat, message_id: int, text: str) -> None:
+        """Поправить своё сообщение. Уже такое же — не ошибка: так отвечает
+        повтор после сбоя. Сообщения нет или срок правки вышел — MessageGone"""
+        from telethon import errors
+        from telethon.tl.functions.messages import EditMessageRequest
+
+        try:
+            await self._call(
+                EditMessageRequest(
+                    peer=self._peer(chat), id=message_id, message=text, no_webpage=True
+                )
+            )
+        except errors.MessageNotModifiedError:
+            pass
+        except (
+            errors.MessageIdInvalidError,
+            errors.MessageEditTimeExpiredError,
+            errors.MessageAuthorRequiredError,
+            errors.ChatAdminRequiredError,
+            errors.ChatWriteForbiddenError,
+        ) as e:
+            raise MessageGone(type(e).__name__) from e
+
+    async def delete(self, chat: Chat, message_id: int) -> None:
+        """Удалить своё сообщение у всех. Уже удалённое Telegram удаляет
+        молча — повтор после сбоя не ошибка"""
+        from telethon import errors
+        from telethon.tl.functions.channels import DeleteMessagesRequest
+
+        try:
+            await self._call(DeleteMessagesRequest(self._channel(chat), [message_id]))
+        except (
+            errors.MessageIdInvalidError,
+            errors.MessageDeleteForbiddenError,
+            errors.ChatAdminRequiredError,
+        ) as e:
+            raise MessageGone(type(e).__name__) from e
 
     async def pin(self, chat: Chat, message_id: int) -> None:
         from telethon import errors

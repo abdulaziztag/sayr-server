@@ -26,7 +26,7 @@ from app.models import (
     UserSession,
 )
 from app.tg import service
-from app.tg.api import FloodWait, Gone, NotParticipant, Restricted, TelethonApi
+from app.tg.api import FloodWait, Gone, MessageGone, NotParticipant, Restricted, TelethonApi
 
 NOW = datetime.now(timezone.utc)
 DAY = rooms_api.today() + timedelta(days=5)
@@ -40,6 +40,8 @@ class FakeApi:
         self.importers: dict[str, list[tuple[int, int]]] = {}
         self.fail: Exception | None = None
         self.links = 0
+        #: Номер следующего сообщения: первое в группе — 42
+        self.message_id = 42
 
     async def _step(self, *call):
         self.calls.append(call)
@@ -58,7 +60,14 @@ class FakeApi:
 
     async def send(self, chat, text):
         await self._step("send", chat, text)
-        return 42
+        self.message_id += 1
+        return self.message_id - 1
+
+    async def edit(self, chat, message_id, text):
+        await self._step("edit", chat, message_id, text)
+
+    async def delete(self, chat, message_id):
+        await self._step("delete", chat, message_id)
 
     async def pin(self, chat, message_id):
         await self._step("pin", chat, message_id)
@@ -701,6 +710,47 @@ async def test_вышедший_человек_не_то_же_что_пропа�
     for error in (errors.ChannelPrivateError, errors.ChannelInvalidError):
         with pytest.raises(Gone):
             await TelethonApi(Client(error)).promote((1, 2), 3, 4)
+
+
+async def test_своё_сообщение_не_тронуть_не_то_же_что_пропавшая_группа():
+    """Заметку удалил организатор или у Sayr Admin отобрали права — это про
+    сообщение, а не про группу. Уже поправленное — не ошибка вовсе"""
+    from telethon import errors
+
+    class Client:
+        def __init__(self, error):
+            self.error = error
+
+        async def __call__(self, request):
+            raise self.error(request=request)
+
+    await TelethonApi(Client(errors.MessageNotModifiedError)).edit((1, 2), 3, "текст")
+    for error in (
+        errors.MessageIdInvalidError,
+        errors.MessageEditTimeExpiredError,
+        errors.ChatAdminRequiredError,
+    ):
+        with pytest.raises(MessageGone):
+            await TelethonApi(Client(error)).edit((1, 2), 3, "текст")
+    for error in (errors.MessageDeleteForbiddenError, errors.ChatAdminRequiredError):
+        with pytest.raises(MessageGone):
+            await TelethonApi(Client(error)).delete((1, 2), 3)
+    for error in (errors.ChannelPrivateError, errors.ChannelInvalidError):
+        with pytest.raises(Gone):
+            await TelethonApi(Client(error)).delete((1, 2), 3)
+
+
+async def test_сообщения_уходят_без_разметки():
+    """Имя «[Жми](ссылка)» в заметке не становится ссылкой от Sayr Admin"""
+
+    class Client:
+        async def send_message(self, peer, text, **kw):
+            self.kw = kw
+            return type("Message", (), {"id": 7})()
+
+    client = Client()
+    assert await TelethonApi(client).send((1, 2), "[Жми](https://example.com)") == 7
+    assert client.kw["parse_mode"] is None
 
 
 # --- /leave -----------------------------------------------------------------
