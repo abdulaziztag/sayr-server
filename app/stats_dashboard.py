@@ -1110,7 +1110,11 @@ def _accounts(counts: Counts) -> dict:
         "funnel": charts.funnel(steps),
         "steps": steps,
         "rooms": rooms,
-        "has_rooms": any(rooms.values()),
+        # Строки приложения справа («Пойду» не дошло и др.) — не про комнаты
+        # сервера: карточка видна, если есть хоть что-то из двух
+        "has_rooms": any(rooms.values()) or any(
+            counts.total(kind) for kind in ("room_open", "room_share", "calendar_month", "go_fail")
+        ),
         "extras": {
             "room_open": counts.total("room_open"),
             "share_open": tried(counts.get("room_share", "open")),
