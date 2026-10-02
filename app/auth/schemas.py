@@ -26,7 +26,8 @@ class UserOut(BaseModel):
     profile_filled: bool = False
     created_at: datetime | None = None
     #: Чем можно войти: telegram, apple, phone — только привязанные.
-    #: Для «Способов входа» в Профиле и «Для комнат нужен Telegram»
+    #: Для «Способов входа» в Профиле. Комнатам Telegram не нужен (02.10):
+    #: в группу каждый попадает по своей ссылке-приглашению
     login_methods: list[str] = []
 
     @classmethod
