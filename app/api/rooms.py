@@ -15,6 +15,11 @@
 Фото не требуется (решение владельца 30.09): приложение только советует
 его — с фото охотнее берут в компанию.
 Всё за флагом `SAYR_ROOMS_OPEN`: выключен — ручки отвечают 404.
+
+Статистика (`Tally`, спека 2026-09-19-analytics-design): что с комнатой
+вышло на деле — открыли, попросились, взяли, отказали, вступили по ссылке,
+вышли, отменили, пожаловались, заблокировали. Ключ — вид комнаты или
+кто вывел; ни кода комнаты, ни места, ни людей.
 """
 
 import secrets
@@ -48,6 +53,7 @@ from ..models import (
 )
 from ..push import outbox
 from ..schemas import DEFAULT_LANG, Lang, pick
+from ..stats import Tally
 from ..tg import texts
 
 router = APIRouter(prefix="/api/v1", tags=["rooms"])
@@ -718,6 +724,7 @@ async def open_room(
     lang: Lang = Query(DEFAULT_LANG),
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    tally: Tally = Depends(),
 ) -> RoomOut:
     _require_not_banned(user)
     (_require_open_profile if body.is_open else _require_profile)(user)
@@ -757,6 +764,7 @@ async def open_room(
     _known_account(organizer, user)
     session.add(organizer)
     await session.commit()
+    tally("room_create", "open" if body.is_open else "own")
     return await _reply(session, await _load(session, id=room.id), user, lang)
 
 
@@ -815,6 +823,7 @@ async def room_cancel(
     code: str,
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    tally: Tally = Depends(),
 ) -> None:
     room = await _room_for(session, code)
     _require_organizer(room, user)
@@ -822,6 +831,7 @@ async def room_cancel(
         return
     cancel(session, room)
     await session.commit()
+    tally("room_cancel")
 
 
 @router.post("/rooms/{code}/invite/reset", response_model=RoomOut, dependencies=[Depends(rooms_on)])
@@ -869,6 +879,7 @@ async def invite_join(
     lang: Lang = Query(DEFAULT_LANG),
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    tally: Tally = Depends(),
 ) -> RoomOut:
     """Своих — без одобрения: ссылку им дал организатор или участник"""
     body = body or JoinIn()
@@ -917,6 +928,8 @@ async def invite_join(
         request_note(session, room, mine)
     _hide_notes(session, room, await blocked_ids(session, user.id))
     await session.commit()
+    # Только настоящее вступление: уже бывший в комнате вернулся выше
+    tally("room_join")
     return await _reply(session, await _load(session, id=room.id), user, lang)
 
 
@@ -927,6 +940,7 @@ async def room_request(
     lang: Lang = Query(DEFAULT_LANG),
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    tally: Tally = Depends(),
 ) -> RoomOut:
     # Замок — до чтения комнаты: второй такой же запрос увидит уже записанное
     await _lock_user(session, user.id)
@@ -967,6 +981,7 @@ async def room_request(
     await session.flush()  # новой строке — номер, заданию — на неё ссылку
     request_note(session, room, mine)
     await session.commit()
+    tally("room_ask")
     return await _reply(session, await _load(session, id=room.id), user, lang)
 
 
@@ -988,6 +1003,7 @@ async def member_approve(
     lang: Lang = Query(DEFAULT_LANG),
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    tally: Tally = Depends(),
 ) -> RoomOut:
     room = await _room_for(session, code)
     _require_organizer(room, user)
@@ -1022,6 +1038,8 @@ async def member_approve(
     request_note(session, room, member)
     _hide_notes(session, room, hidden)
     await session.commit()
+    # Номер устройства здесь — организатора: одобряет он
+    tally("room_approve")
     return await _reply(session, await _load(session, id=room.id), user, lang)
 
 
@@ -1036,6 +1054,7 @@ async def member_decline(
     lang: Lang = Query(DEFAULT_LANG),
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    tally: Tally = Depends(),
 ) -> RoomOut:
     room = await _room_for(session, code)
     _require_organizer(room, user)
@@ -1047,6 +1066,7 @@ async def member_decline(
     notify(session, room, member.user_id, "room_declined")
     request_note(session, room, member)
     await session.commit()
+    tally("room_decline")
     return await _reply(session, await _load(session, id=room.id), user, lang)
 
 
@@ -1059,6 +1079,7 @@ async def member_remove(
     lang: Lang = Query(DEFAULT_LANG),
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    tally: Tally = Depends(),
 ) -> RoomOut:
     room = await _room_for(session, code)
     _require_organizer(room, user)
@@ -1074,6 +1095,10 @@ async def member_remove(
     else:
         request_note(session, room, member)
     await session.commit()
+    if was_joined:
+        # Уход — только из комнаты, где был: заявки приложения разбирают
+        # отказом (member_decline), а не этой ручкой
+        tally("room_leave", "removed")
     return await _reply(session, await _load(session, id=room.id), user, lang)
 
 
@@ -1082,6 +1107,7 @@ async def room_leave(
     code: str,
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    tally: Tally = Depends(),
 ) -> None:
     room = await _room_for(session, code)
     mine = _mine(room, user)
@@ -1099,6 +1125,9 @@ async def room_leave(
     else:
         request_note(session, room, mine)  # отозвал заявку
     await session.commit()
+    if role == "joined":
+        # Отозванная заявка — не уход: в комнате человек ещё не был
+        tally("room_leave", "self")
 
 
 @router.post("/rooms/{code}/group-link", status_code=202, dependencies=[Depends(rooms_on)])
@@ -1187,6 +1216,7 @@ async def report(
     body: ReportIn,
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    tally: Tally = Depends(),
 ) -> None:
     """Жалобы разбирает владелец руками, поэтому очередь бережём: одна
     неразобранная жалоба на ту же цель от того же человека и не больше
@@ -1239,6 +1269,9 @@ async def report(
         )
     )
     await session.commit()
+    # Только легшая в очередь: повтор неразобранной выше молча ничего
+    # не добавил. Причина в ключ не идёт — перечень жалоб смотрят в админке
+    tally("room_report")
 
 
 class BlockIn(BaseModel):
@@ -1263,6 +1296,7 @@ async def block(
     lang: Lang = Query(DEFAULT_LANG),
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    tally: Tally = Depends(),
 ) -> BlockOut:
     """Заблокировать. Если уже в одной комнате: организатор убирает его,
     а если организатор — он, сам человек из комнаты выходит. Двое простых
@@ -1277,8 +1311,11 @@ async def block(
         raise HTTPException(status_code=422, detail="self_block")
     if await session.get(User, body.user_id) is None:
         raise HTTPException(status_code=404, detail="user_not_found")
-    if await session.get(UserBlock, (user.id, body.user_id)) is None:
+    fresh = await session.get(UserBlock, (user.id, body.user_id)) is None
+    if fresh:
         session.add(UserBlock(blocker_id=user.id, blocked_id=body.user_id))
+    # Уходы из комнат из-за блока — для статистики: сам или убрал организатор
+    left: list[str] = []
 
     now = datetime.now(timezone.utc)
     rooms = (
@@ -1307,6 +1344,7 @@ async def block(
             them.status, them.decided_at = "removed", now
             if joined:
                 kick(session, room, them, "removed")
+                left.append("removed")
             else:
                 request_note(session, room, them)
         elif _role(them) == "organizer" and me.status in LIVE:
@@ -1314,6 +1352,7 @@ async def block(
             me.status, me.decided_at = "left", now
             if joined:
                 kick(session, room, me, "left")
+                left.append("self")
             else:
                 request_note(session, room, me)
         elif _role(me) == _role(them) == "joined":
@@ -1334,6 +1373,13 @@ async def block(
         ]
     )
     await session.commit()
+    # Повторный блок нового не добавляет. Уходы из-за блока — те же уходы:
+    # организатор убрал заблокированного или человек ушёл от того, кого
+    # заблокировал сам
+    if fresh:
+        tally("room_block")
+    for key in left:
+        tally("room_leave", key)
     return out
 
 

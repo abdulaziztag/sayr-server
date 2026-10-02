@@ -18,6 +18,7 @@ from app.auth.tokens import new_token
 from app.config import AVATARS_DIR, settings
 from app.db import SessionLocal, engine
 from app.models import (
+    ApiEvent,
     Gender,
     LoginRequest,
     Place,
@@ -1754,3 +1755,153 @@ async def test_жалоба_в_админке_не_показывает_номе
         assert page.status_code == 200
         assert phone not in page.text, url
         assert masked_phone(phone) in page.text, url
+
+
+# --- Статистика (02.10.2026) -----------------------------------------------
+
+#: Настоящий номер устройства (UUID): только такой сервер пишет в событие
+DEVICE = "8d2c4e6a-1b3f-4a5c-9e7d-0f2a4c6e8b1d"
+ROOM_KINDS = (
+    "room_create", "room_ask", "room_approve", "room_decline", "room_join",
+    "room_leave", "room_cancel", "room_report", "room_block",
+)
+
+
+async def forget_events() -> None:
+    async with SessionLocal() as session:
+        await session.execute(delete(ApiEvent))
+        await session.commit()
+
+
+async def counted(*kinds: str) -> list[tuple[str, str | None]]:
+    """(вид, ключ) событий комнат — в порядке записи"""
+    async with SessionLocal() as session:
+        rows = await session.execute(
+            select(ApiEvent.kind, ApiEvent.slug)
+            .where(ApiEvent.kind.in_(kinds or ROOM_KINDS))
+            .order_by(ApiEvent.id)
+        )
+        return [tuple(r) for r in rows.all()]
+
+
+async def test_статистика_комната_для_всех_и_для_своих(client):
+    await forget_events()
+    org, _ = await person(device=DEVICE)
+    await open_room(client, org)
+    friend, _ = await person(name="Друг")
+    await open_room(client, friend, is_open=False)
+    async with SessionLocal() as session:
+        rows = (
+            await session.execute(
+                select(ApiEvent.slug, ApiEvent.device)
+                .where(ApiEvent.kind == "room_create")
+                .order_by(ApiEvent.id)
+            )
+        ).all()
+    # Ключ — вид комнаты; ни кода, ни места. Номер устройства — из запроса,
+    # «dev-…» не UUID и не пишется
+    assert [tuple(r) for r in rows] == [("open", DEVICE), ("own", None)]
+
+
+async def test_статистика_заявка_одобрение_отказ(client):
+    await forget_events()
+    org, _ = await person()
+    room = await open_room(client, org)
+    kid, _ = await person(name="Школьник", birth_year=TODAY.year - 15)
+    denied = await client.post(f"/api/v1/rooms/{room['code']}/requests", json={}, headers=kid)
+    assert denied.status_code == 403
+    for name in ("Мадина", "Диля"):
+        h, _ = await person(name=name)
+        resp = await client.post(f"/api/v1/rooms/{room['code']}/requests", json={}, headers=h)
+        assert resp.status_code == 200
+    asks = (await client.get(f"/api/v1/rooms/{room['code']}", headers=org)).json()["requests"]
+    members = f"/api/v1/rooms/{room['code']}/members"
+    assert (await client.post(f"{members}/{asks[0]['member_id']}/approve", headers=org)).status_code == 200
+    assert (await client.post(f"{members}/{asks[1]['member_id']}/decline", headers=org)).status_code == 200
+    # Решённая заявка второй раз не решается — и не считается
+    again = await client.post(f"{members}/{asks[0]['member_id']}/approve", headers=org)
+    assert again.status_code == 409
+    assert await counted() == [
+        ("room_create", "open"),
+        ("room_ask", None),
+        ("room_ask", None),
+        ("room_approve", None),
+        ("room_decline", None),
+    ]
+
+
+async def test_статистика_вступление_по_ссылке_своих(client):
+    await forget_events()
+    org, _ = await person()
+    room = await open_room(client, org, is_open=False)
+    friend, _ = await person(name="Друг")
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    # Второй раз он уже в комнате — это не вступление
+    for _ in range(2):
+        resp = await client.post(f"/api/v1/invites/{invite}/join", headers=friend)
+        assert resp.status_code == 200
+    assert await counted("room_join") == [("room_join", None)]
+
+
+async def test_статистика_уходы_сам_и_убрал_организатор(client):
+    """Отозванная заявка — не уход: в комнате человека ещё не было"""
+    await forget_events()
+    org, _ = await person()
+    room = await open_room(client, org)
+    code, invite = room["code"], room["invite_url"].rsplit("/", 1)[1]
+    alisher, _ = await person(name="Алишер")
+    bobur, _ = await person(name="Бобур")
+    madina, _ = await person(name="Мадина")
+    for h in (alisher, bobur):
+        await client.post(f"/api/v1/invites/{invite}/join", headers=h)
+    await client.post(f"/api/v1/rooms/{code}/requests", json={}, headers=madina)
+    assert (await client.post(f"/api/v1/rooms/{code}/leave", headers=madina)).status_code == 204
+    assert (await client.post(f"/api/v1/rooms/{code}/leave", headers=alisher)).status_code == 204
+    # Повторный выход — уже не в комнате
+    assert (await client.post(f"/api/v1/rooms/{code}/leave", headers=alisher)).status_code == 204
+    members = (await client.get(f"/api/v1/rooms/{code}", headers=org)).json()["members"]
+    bobur_id = next(m["member_id"] for m in members if m["first_name"] == "Бобур")
+    removed = await client.delete(f"/api/v1/rooms/{code}/members/{bobur_id}", headers=org)
+    assert removed.status_code == 200
+    assert await counted("room_leave") == [("room_leave", "self"), ("room_leave", "removed")]
+
+
+async def test_статистика_блок_и_уходы_из_за_блока(client):
+    """Организатор заблокировал участника — того убрали; участник заблокировал
+    организатора — ушёл сам. Повторный блок нового не добавляет"""
+    await forget_events()
+    org, org_id = await person()
+    room = await open_room(client, org, is_open=False)
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    alisher, alisher_id = await person(name="Алишер")
+    bobur, _ = await person(name="Бобур")
+    for h in (alisher, bobur):
+        await client.post(f"/api/v1/invites/{invite}/join", headers=h)
+    await forget_events()
+    for _ in range(2):
+        await client.post("/api/v1/blocks", json={"user_id": alisher_id}, headers=org)
+    await client.post("/api/v1/blocks", json={"user_id": org_id}, headers=bobur)
+    assert await counted() == [
+        ("room_block", None),
+        ("room_leave", "removed"),
+        ("room_block", None),
+        ("room_leave", "self"),
+    ]
+
+
+async def test_статистика_отмена_похода_и_жалоба_по_разу(client):
+    await forget_events()
+    org, org_id = await person()
+    room = await open_room(client, org)
+    madina, _ = await person(name="Мадина")
+    body = {"user_id": org_id, "room": room["code"], "reason": "spam"}
+    # Вторая такая же жалоба ждёт разбора вместе с первой — не новая
+    for _ in range(2):
+        assert (await client.post("/api/v1/reports", json=body, headers=madina)).status_code == 204
+    # Отменённый поход второй раз не отменяется
+    for _ in range(2):
+        assert (await client.delete(f"/api/v1/rooms/{room['code']}", headers=org)).status_code == 204
+    assert await counted("room_report", "room_cancel") == [
+        ("room_report", None),
+        ("room_cancel", None),
+    ]
