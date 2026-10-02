@@ -230,3 +230,65 @@ async def test_trip_day_keys_are_allowed(client):
     ])
     rows = await _rows()
     assert [(r.kind, r.slug) for r in rows] == [("tab_own", "trips"), ("reminder_open", "outcome")]
+
+
+# --- Вход и попутчики (02.10.2026) ------------------------------------------
+
+
+def test_account_and_rooms_kinds_take_their_keys():
+    """Новые клиентские виды: способ входа, откуда анкета, вид комнаты, место."""
+    good = [
+        ("auth_start", "telegram"), ("auth_start", "apple"), ("auth_start", "phone"),
+        ("auth_cancel", "telegram"), ("auth_cancel", "apple"),
+        ("auth_fail", "telegram"), ("auth_fail", "apple"), ("auth_fail", "phone"),
+        ("profile_open", "signup"), ("profile_open", "rooms"), ("profile_open", "edit"),
+        ("go_fail", "test-peak"),
+        ("calendar_month", "test-peak"),
+        ("room_share", "open"), ("room_share", "own"),
+    ]
+    for kind, key in good:
+        assert validate_key(kind, key) == (True, key), (kind, key)
+    assert validate_key("tg_link_start", None) == (True, None)
+
+
+def test_account_and_rooms_kinds_reject_anything_but_their_keys():
+    """Ни номера, ни кода комнаты, ни имени, ни даты — и пустого ключа там,
+    где он обязателен. Отмены у входа по номеру нет: чужого окна там нет."""
+    bad = [
+        ("auth_start", "google"), ("auth_start", "+998901234567"), ("auth_start", None),
+        ("auth_cancel", "phone"),
+        ("auth_fail", "telegram:401"), ("auth_fail", None),
+        ("tg_link_start", "telegram"),
+        ("profile_open", "settings"), ("profile_open", None),
+        ("go_fail", "Bad Slug!"), ("go_fail", "test-peak:2026-10-05"), ("go_fail", None),
+        ("calendar_month", "05.10.2026"), ("calendar_month", None),
+        ("room_share", "k7m2q9xa"), ("room_share", "public"), ("room_share", None),
+    ]
+    for kind, key in bad:
+        assert validate_key(kind, key)[0] is False, (kind, key)
+
+
+async def test_account_and_rooms_kinds_are_written(client):
+    await _clear()
+    await _post(client, [
+        _event("ea000001", "auth_start", "telegram"),
+        _event("ea000002", "auth_cancel", "apple"),
+        _event("ea000003", "auth_fail", "phone"),
+        _event("ea000004", "tg_link_start"),
+        _event("ea000005", "profile_open", "rooms"),
+        _event("ea000006", "go_fail", "test-peak"),
+        _event("ea000007", "calendar_month", "test-lake"),
+        _event("ea000008", "room_share", "own"),
+        _event("ea000009", "room_share", "k7m2q9xa"),  # код комнаты — не ключ
+    ])
+    rows = await _rows()
+    assert [(r.kind, r.slug) for r in rows] == [
+        ("auth_start", "telegram"),
+        ("auth_cancel", "apple"),
+        ("auth_fail", "phone"),
+        ("tg_link_start", None),
+        ("profile_open", "rooms"),
+        ("go_fail", "test-peak"),
+        ("calendar_month", "test-lake"),
+        ("room_share", "own"),
+    ]
