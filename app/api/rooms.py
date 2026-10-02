@@ -1500,9 +1500,10 @@ async def ban_companions(session: AsyncSession, user: User) -> None:
 async def on_account_deleted(session: AsyncSession, user: User) -> None:
     """Перед удалением человека: его походы отменяются (всем пуш, в группу
     сообщение), из групп — и чужих, и своих — служба его убирает, личные
-    ссылки гасит. Отменённые комнаты — тоже: их группа жива. Строки участия
-    уйдут каскадом вместе с человеком — поэтому аккаунт Telegram и ссылку
-    кладём в задание заранее: после удаления ссылку не с кем было бы связать"""
+    ссылки гасит, заметку о его заявке удаляет. Отменённые комнаты — тоже:
+    их группа жива. Строки участия уйдут каскадом вместе с человеком —
+    поэтому аккаунт Telegram, ссылку и номер заметки кладём в задание
+    заранее: после удаления их не с кем было бы связать"""
     rows = (
         await session.execute(
             select(Room)
@@ -1520,8 +1521,20 @@ async def on_account_deleted(session: AsyncSession, user: User) -> None:
             cancel(session, room)
         if mine.status == "joined":
             kick(session, room, mine, "deleted")
-        elif mine.status == "requested":
-            # Заметку о заявке — удалить; номер её уйдёт со строкой заявки
+        if mine.tg_request_message_id is not None:
+            # Заметку о заявке — удалить, что бы с заявкой ни было: номер
+            # уйдёт со строкой, а задание на неё (отказ, отзыв, одобрение)
+            # могло ещё не дойти до службы. Поправленная уже «теперь
+            # в походе» остаётся в истории группы, как и «вышел»
             request_note(session, room, mine, mine.tg_request_message_id)
+    # Имя — и из прежних его заданий на выход: заметки о нём служба уже не
+    # напишет (строки участия нет — service._kick), а хранить его незачем
+    kicks = await session.execute(
+        select(TgJob)
+        .join(RoomMember, RoomMember.id == TgJob.member_id)
+        .where(TgJob.kind == "kick", RoomMember.user_id == user.id)
+    )
+    for job in kicks.scalars():
+        job.payload = {k: v for k, v in job.payload.items() if k not in ("name", "gender")}
     # Его сообщения из групп — тоже: удаление аккаунта уносит всё его
     await session.execute(delete(TgMessage).where(TgMessage.user_id == user.id))

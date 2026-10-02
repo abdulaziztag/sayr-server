@@ -667,6 +667,25 @@ async def test_об_удалившем_аккаунт_заметки_нет():
     assert said(api) == []
 
 
+async def test_вышел_и_удалил_аккаунт_раньше_службы_заметки_нет():
+    """Вышел из комнаты, и тут же удалил аккаунт — задание на выход ещё
+    ждало службу: выгнать выгоняем, а о нём ни слова, и имени его в задании
+    больше нет"""
+    room_id, members, api = await in_group(first_name="Азиз")
+    await drop(members[1], "left")
+    async with SessionLocal() as session:
+        member = await session.get(RoomMember, members[1])
+        user = await session.get(User, member.user_id)
+        await rooms_api.on_account_deleted(session, user)
+        await session.delete(user)
+        await session.commit()
+    kick = await job_of("kick")
+    assert "name" not in kick.payload and "gender" not in kick.payload
+    await run(api)
+    assert ("kick", (777, 999), 5002, 6002) in api.calls
+    assert said(api) == []
+
+
 async def test_выгнать_можно_только_того_кто_в_группе():
     """Бан вышедшего Telegram принимает молча — служба сначала спрашивает,
     в группе ли он: заметка только о выгнанном на деле"""
@@ -885,8 +904,16 @@ async def test_отмена_похода_убирает_заметки_о_зая
     assert said(api) == [texts.TEXTS["cancelled"]]
 
 
-async def test_удалившего_аккаунт_заметку_убирают():
+@pytest.mark.parametrize(
+    "status", [None, "declined", "left", "joined"], ids=["ждёт", "отказ", "отозвал", "одобрили"]
+)
+async def test_удалившего_аккаунт_заметку_убирают(status):
+    """Что бы с заявкой ни было: задание на отказ, отзыв или одобрение могло
+    ещё не дойти до службы, а строка заявки уйдёт с аккаунтом — номер
+    заметки тогда только в задании, поставленном при удалении"""
     room_id, member_id, note, api = await noted()
+    if status:
+        await decide(member_id, status)
     async with SessionLocal() as session:
         user = await session.get(User, (await session.get(RoomMember, member_id)).user_id)
         await rooms_api.on_account_deleted(session, user)

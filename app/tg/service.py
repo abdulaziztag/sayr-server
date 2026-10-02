@@ -286,11 +286,14 @@ async def _kick(api: TgApi, session: AsyncSession, job: TgJob, room: Room) -> No
     if member is not None:
         member.tg_link = None  # погашена
     # Заметка — только выгнанному на деле: вышедший из группы сам или так и
-    # не вошедший в неё вопроса «куда он делся» не вызывает. Удалившему
-    # аккаунт её нет (rooms.kick), заданиям без причины — тоже
+    # не вошедший в неё вопроса «куда он делся» не вызывает. Заданиям без
+    # причины её нет, удалившему аккаунт — тоже, даже если из комнаты он
+    # вышел раньше: строка участия ушла вместе с аккаунтом. Иначе её не
+    # станет лишь через полгода (rooms.FORGET_AFTER), а столько задание не ждёт
     reason = job.payload.get("reason")
     if (
-        job.payload.get("removed")
+        member is not None
+        and job.payload.get("removed")
         and not job.payload.get("said")
         and reason in ("left", "removed")
         and room.tg_state == "ready"
