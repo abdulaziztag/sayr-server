@@ -24,6 +24,7 @@ from ..models import Gender, LoginRequest, User, avatar_storage
 from ..moderation import is_clean
 from ..services.images import (NotAnImage, TooManyPixels, drop_avatar, off_loop,
                                store_avatar)
+from ..stats import Tally
 from .rooms import on_account_deleted
 
 log = logging.getLogger(__name__)
@@ -75,6 +76,7 @@ async def update_me(
     body: ProfileIn,
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    tally: Tally = Depends(),
 ) -> UserOut:
     if body.birth_year is not None:
         year = datetime.now(timezone.utc).year
@@ -108,9 +110,15 @@ async def update_me(
         if value is None and name in ("first_name", "last_name"):
             value = ""
         setattr(user, name, value)
-    if fields and user.profile_filled_at is None:
+    first = user.profile_filled_at is None
+    if fields and first:
         user.profile_filled_at = datetime.now(timezone.utc)
     await session.commit()
+    # Первое сохранение — то, что заполнило анкету. Фото оно не опережает:
+    # обе формы шлют сначала анкету, потом фото (set_avatar тоже ставит
+    # profile_filled_at, но после этой ручки)
+    if fields:
+        tally("profile_save", "first" if first else "edit")
     return UserOut.of(user)
 
 

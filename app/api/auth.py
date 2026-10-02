@@ -42,7 +42,7 @@ from ..client_ip import host_key
 from ..config import settings
 from ..db import get_session
 from ..models import LoginRequest, TripIntent, User, UserSession
-from ..stats import parse_app_header
+from ..stats import Tally, parse_app_header
 from .intents import take_back_votes
 
 log = logging.getLogger(__name__)
@@ -316,6 +316,7 @@ async def verify_code(
     request: Request,
     channel: CodeChannel | None = Depends(get_channel),
     session: AsyncSession = Depends(get_session),
+    tally: Tally = Depends(),
 ) -> VerifyOut:
     if not _CODE.match(body.code):
         raise HTTPException(status_code=422, detail="code_invalid_format")
@@ -370,19 +371,26 @@ async def verify_code(
         user = (
             await session.execute(select(User).where(User.phone == row.phone))
         ).scalar_one_or_none()
+        created = None
         if user is None:
             # Две заявки на новый номер, подтверждённые разом (двойное нажатие,
             # два телефона): вторая дождётся первой и найдёт её человека,
-            # а не упадёт на уникальности номера
-            await session.execute(
-                insert(User)
-                .values(phone=row.phone)
-                .on_conflict_do_nothing(index_elements=[User.phone])
-            )
+            # а не упадёт на уникальности номера. Новым аккаунт считает
+            # только та, чья вставка прошла, — вторая вошла в уже заведённый
+            created = (
+                await session.execute(
+                    insert(User)
+                    .values(phone=row.phone)
+                    .on_conflict_do_nothing(index_elements=[User.phone])
+                    .returning(User.id)
+                )
+            ).scalar_one_or_none()
             user = (
                 await session.execute(select(User).where(User.phone == row.phone))
             ).scalar_one()
-        return await open_session(session, request, user, row.device_id)
+        out = await open_session(session, request, user, row.device_id)
+        tally("login", "phone:new" if created else "phone:back")
+        return out
 
     if status == CODE_INVALID:
         row.attempts += 1

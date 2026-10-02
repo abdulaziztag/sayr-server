@@ -33,6 +33,7 @@ from ..config import settings
 from ..db import get_session
 from ..models import User, avatar_storage
 from ..services.images import drop_avatar, off_loop, store_avatar
+from ..stats import Tally
 from .auth import VerifyOut, _device, normalize_phone, open_session
 from .rooms import remember_telegram
 
@@ -110,20 +111,24 @@ async def _one(session: AsyncSession, *where, lock: bool = False) -> User | None
     return (await session.execute(query)).scalar_one_or_none()
 
 
-async def _telegram_account(session: AsyncSession, who: TelegramUser) -> tuple[User, bool]:
-    """Аккаунт для этого Telegram и «свежий ли» он: только что заведён или
-    Telegram к нему только что привязан по номеру — тогда анкету можно
-    дополнить из Telegram"""
+async def _telegram_account(
+    session: AsyncSession, who: TelegramUser
+) -> tuple[User, bool, bool]:
+    """Аккаунт для этого Telegram, «свежий ли» он и новый ли. Свежий —
+    только что заведён или Telegram к нему только что привязан по номеру:
+    тогда анкету можно дополнить из Telegram. Новый — только заведённый:
+    найденный по номеру — прежний аккаунт человека, статистика считает
+    такой вход возвращением"""
     user = await _one(session, User.telegram_id == who.id)
     if user is not None:
-        return user, False
+        return user, False, False
     phone = who.phone
     if phone:
         # Под замком: два входа разом не должны привязать номер дважды
         owner = await _one(session, User.phone == phone, lock=True)
         if owner is not None and owner.telegram_id is None:
             owner.telegram_id = who.id
-            return owner, True
+            return owner, True, False
         if owner is not None:
             # Номер у аккаунта с другим Telegram: номер переехал на новый
             # аккаунт Telegram (старый удалён, номер отдали другому). Чужой
@@ -150,8 +155,8 @@ async def _telegram_account(session: AsyncSession, who: TelegramUser) -> tuple[U
                 )
             ).scalar_one()
         else:
-            return user, False
-    return await _one(session, User.id == new_id), True
+            return user, False, False
+    return await _one(session, User.id == new_id), True, True
 
 
 async def _take_phone(session: AsyncSession, user: User, phone: str | None) -> None:
@@ -209,12 +214,13 @@ async def telegram_sign_in(
     request: Request,
     login: TelegramLogin | None = Depends(get_telegram_login),
     session: AsyncSession = Depends(get_session),
+    tally: Tally = Depends(),
 ) -> VerifyOut:
     who = await _who(body, login)
     device = _device(request)[0]
     for attempt in (1, 2):
         try:
-            user, fresh = await _telegram_account(session, who)
+            user, fresh, created = await _telegram_account(session, who)
             await _take_phone(session, user, who.phone)
             if fresh:
                 _prefill(user, who)
@@ -230,6 +236,9 @@ async def telegram_sign_in(
             await session.rollback()
             if attempt == 2:
                 raise
+    # Второй проход после гонки находит аккаунт, заведённый параллельным
+    # входом, — и считается возвращением: новый аккаунт один
+    tally("login", "telegram:new" if created else "telegram:back")
     if avatar:
         await _avatar_from_telegram(session, login, user, who.picture)
         out.user = UserOut.of(user)
@@ -247,6 +256,7 @@ async def link_telegram(
     user: User = Depends(current_user),
     login: TelegramLogin | None = Depends(get_telegram_login),
     session: AsyncSession = Depends(get_session),
+    tally: Tally = Depends(),
 ) -> UserOut:
     """«Привязать Telegram» в Профиле: тот же вход Telegram, но результат
     ложится к текущему аккаунту. Telegram уже у другого аккаунта — 409
@@ -260,12 +270,16 @@ async def link_telegram(
 
     Токен не принят — 400, а не 401, как у входа: 401 на запрос с ключом
     сессии приложения понимают как «сессия Sayr кончилась» и выходят
-    из аккаунта. Неудачная привязка — не повод выкидывать человека."""
+    из аккаунта. Неудачная привязка — не повод выкидывать человека.
+
+    Статистика: `tg_link` ok — привязали на деле, taken — Telegram у другого
+    аккаунта. Повтор уже сделанной привязки не считается: нового не случилось"""
     who = await _who(body, login, invalid_status=400)
     phone = who.phone
     for attempt in (1, 2):
         owner = await _one(session, User.telegram_id == who.id)
         if owner is not None and owner.id != user.id:
+            await tally.now("tg_link", "taken")
             raise HTTPException(status_code=409, detail="telegram_taken")
         if user.telegram_id == who.id:
             return UserOut.of(user)
@@ -290,23 +304,31 @@ async def link_telegram(
                 await session.refresh(user)
                 phone = None
                 continue
+            await tally.now("tg_link", "taken")
             raise HTTPException(status_code=409, detail="telegram_taken") from None
+    tally("tg_link", "ok")
     if avatar:
         await _avatar_from_telegram(session, login, user, who.picture)
     return UserOut.of(user)
 
 
-async def _apple_account(session: AsyncSession, sub: str) -> User:
-    """Аккаунт этого Apple ID или новый. С другими не склеиваем: номера
-    у Apple нет, а почта бывает скрытой — совпадать не по чему"""
+async def _apple_account(session: AsyncSession, sub: str) -> tuple[User, bool]:
+    """Аккаунт этого Apple ID или новый — и новый ли. С другими не склеиваем:
+    номера у Apple нет, а почта бывает скрытой — совпадать не по чему"""
     user = await _one(session, User.apple_sub == sub)
     if user is not None:
-        return user
-    # Двойное нажатие: вторая попытка найдёт аккаунт, заведённый первой
-    await session.execute(
-        insert(User).values(apple_sub=sub).on_conflict_do_nothing(index_elements=[User.apple_sub])
-    )
-    return await _one(session, User.apple_sub == sub)
+        return user, False
+    # Двойное нажатие: вторая попытка найдёт аккаунт, заведённый первой,
+    # и новым его не посчитает — вставка прошла только у первой
+    created = (
+        await session.execute(
+            insert(User)
+            .values(apple_sub=sub)
+            .on_conflict_do_nothing(index_elements=[User.apple_sub])
+            .returning(User.id)
+        )
+    ).scalar_one_or_none()
+    return await _one(session, User.apple_sub == sub), created is not None
 
 
 @router.post("/apple", response_model=VerifyOut)
@@ -315,6 +337,7 @@ async def apple_sign_in(
     request: Request,
     apple: AppleSignIn | None = Depends(get_apple),
     session: AsyncSession = Depends(get_session),
+    tally: Tally = Depends(),
 ) -> VerifyOut:
     if apple is None:
         raise HTTPException(status_code=503, detail="apple_login_off")
@@ -330,7 +353,7 @@ async def apple_sign_in(
     # всё равно состоится, отзывать при удалении будет нечем (видно в журнале)
     refresh = await apple.exchange(body.authorization_code or "")
 
-    user = await _apple_account(session, who.sub)
+    user, created = await _apple_account(session, who.sub)
     if user.profile_filled_at is None and not user.first_name and not user.last_name:
         # Имя Apple присылает один раз — берём по тому же правилу, что из Telegram
         first = clean_name(body.first_name) or ""
@@ -338,4 +361,6 @@ async def apple_sign_in(
         user.last_name = (clean_name(body.last_name) or "") if first else ""
     if refresh:
         user.apple_refresh = seal(refresh)
-    return await open_session(session, request, user, _device(request)[0])
+    out = await open_session(session, request, user, _device(request)[0])
+    tally("login", "apple:new" if created else "apple:back")
+    return out

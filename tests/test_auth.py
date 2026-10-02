@@ -25,7 +25,7 @@ from app.auth.gateway import (
 )
 from app.db import SessionLocal, engine
 from app.main import app
-from app.models import LoginRequest, User, UserSession
+from app.models import ApiEvent, LoginRequest, User, UserSession
 
 
 class FakeChannel:
@@ -72,6 +72,7 @@ async def clean():
         await session.execute(delete(UserSession))
         await session.execute(delete(User))
         await session.execute(delete(LoginRequest))
+        await session.execute(delete(ApiEvent))
         await session.commit()
 
 
@@ -609,3 +610,43 @@ async def test_двойное_нажатие_на_новом_номере_не_�
     assert a.json()["user"]["id"] == b.json()["user"]["id"]
     async with SessionLocal() as session:
         assert len((await session.execute(select(User))).scalars().all()) == 1
+        # Новым аккаунт посчитала одна: вставка второй упёрлась в первую
+        logins = (
+            await session.execute(select(ApiEvent.slug).where(ApiEvent.kind == "login"))
+        ).scalars().all()
+    assert sorted(logins) == ["phone:back", "phone:new"]
+
+
+# --- Статистика входа (02.10.2026) ------------------------------------------
+
+DEVICE = "3c9e1a7b-5d2f-4b8e-a6c1-9f0d2e4b7a35"
+
+
+async def _logins() -> list[tuple[str | None, str | None]]:
+    async with SessionLocal() as session:
+        rows = await session.execute(
+            select(ApiEvent.slug, ApiEvent.device)
+            .where(ApiEvent.kind == "login")
+            .order_by(ApiEvent.id)
+        )
+        return [tuple(r) for r in rows.all()]
+
+
+async def test_статистика_вход_по_номеру_новый_и_вернувшийся(client, channel):
+    headers = {"X-Device-Id": DEVICE, "X-Sayr-App": "android/1.8.0 uz 15"}
+    for _ in range(2):
+        request_id = (await _request(client, device=DEVICE)).json()["request_id"]
+        resp = await client.post(
+            "/api/v1/auth/verify", json={"request_id": request_id, "code": "123456"},
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+    assert await _logins() == [("phone:new", DEVICE), ("phone:back", DEVICE)]
+
+
+async def test_статистика_неверный_код_не_вход(client, channel):
+    request_id = (await _request(client)).json()["request_id"]
+    channel.check_status = CODE_INVALID
+    resp = await client.post("/api/v1/auth/verify", json={"request_id": request_id, "code": "000000"})
+    assert resp.status_code == 400
+    assert await _logins() == []

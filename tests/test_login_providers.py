@@ -34,6 +34,7 @@ from app.config import AVATARS_DIR, settings
 from app.db import SessionLocal
 from app.main import app
 from app.models import (
+    ApiEvent,
     AppleRevoke,
     LoginRequest,
     PushOutbox,
@@ -1091,3 +1092,147 @@ async def test_админка_не_показывает_токен_apple(admin_c
     assert page.status_code == 200
     assert sealed not in page.text
     assert "apple-admin" in page.text
+
+
+# --- Статистика: вход, привязка, анкета (02.10.2026) ------------------------
+
+#: Настоящий номер устройства (UUID): только такой сервер пишет в событие
+DEVICE = "6b1f0c9e-2d4a-4e8b-9c3f-7a5d1e2b4c68"
+HD = {"X-Device-Id": DEVICE, "X-Sayr-App": "ios/1.9.5 ru 26"}
+
+
+async def _forget_events() -> None:
+    async with SessionLocal() as session:
+        await session.execute(delete(ApiEvent))
+        await session.commit()
+
+
+async def _counted(kind: str) -> list[tuple[str | None, str | None]]:
+    """(ключ, устройство) событий вида — в порядке записи"""
+    async with SessionLocal() as session:
+        rows = await session.execute(
+            select(ApiEvent.slug, ApiEvent.device)
+            .where(ApiEvent.kind == kind)
+            .order_by(ApiEvent.id)
+        )
+        return [tuple(r) for r in rows.all()]
+
+
+async def test_статистика_telegram_новый_и_вернувшийся(client, net):
+    await _forget_events()
+    for _ in range(2):
+        resp = await client.post("/api/v1/auth/telegram", json={"id_token": tg_token()}, headers=HD)
+        assert resp.status_code == 200, resp.text
+    # Номер устройства — из запроса, как у событий middleware
+    assert await _counted("login") == [("telegram:new", DEVICE), ("telegram:back", DEVICE)]
+
+
+async def test_статистика_telegram_по_номеру_прежнего_аккаунта_это_возвращение(client, net):
+    """Аккаунт по номеру уже был — Telegram к нему только привязался"""
+    await _forget_events()
+    await _user(phone=PHONE)
+    assert (await _tg(client)).status_code == 200
+    assert [k for k, _ in await _counted("login")] == ["telegram:back"]
+
+
+async def test_статистика_apple_новый_и_вернувшийся(client, net):
+    await _forget_events()
+    assert (await _apple(client, first_name="Abdulaziz")).status_code == 200
+    assert (await _apple(client)).status_code == 200
+    # Заголовок H — не UUID: такой номер сервер не пишет, событие без устройства
+    assert await _counted("login") == [("apple:new", None), ("apple:back", None)]
+
+
+async def test_статистика_двойное_нажатие_один_новый_аккаунт(client, net):
+    import asyncio
+
+    await _forget_events()
+    await asyncio.gather(_tg(client), _tg(client))
+    await asyncio.gather(_apple(client), _apple(client))
+    keys = sorted(k for k, _ in await _counted("login"))
+    assert keys == ["apple:back", "apple:new", "telegram:back", "telegram:new"]
+
+
+async def test_статистика_неудачный_вход_не_считается(client, net):
+    await _forget_events()
+    assert (await _tg(client, tg_token(key=STRANGER))).status_code == 401
+    assert (await _apple(client, apple_token(key=STRANGER))).status_code == 401
+    assert await _counted("login") == []
+
+
+async def test_статистика_отладочная_сборка_не_считается(client, net):
+    await _forget_events()
+    debug = {"X-Device-Id": DEVICE, "X-Sayr-App": "ios/1.9.5-debug ru 26"}
+    resp = await client.post("/api/v1/auth/telegram", json={"id_token": tg_token()}, headers=debug)
+    assert resp.status_code == 200
+    assert await _counted("login") == []
+
+
+async def test_статистика_сбой_записи_не_ломает_вход(client, net, monkeypatch):
+    """Событие пишется своей сессией после ответа: упала запись — вход есть"""
+    from app import stats
+
+    class Broken:
+        async def __aenter__(self):
+            raise RuntimeError("база статистики недоступна")
+
+        async def __aexit__(self, *exc):
+            return False
+
+    await _forget_events()
+    monkeypatch.setattr(stats, "SessionLocal", lambda: Broken())
+    resp = await _tg(client)
+    assert resp.status_code == 200 and resp.json()["token"]
+    monkeypatch.undo()
+    assert await _counted("login") == []
+
+
+async def test_статистика_привязки_telegram(client, net):
+    """ok — привязали на деле; повтор той же привязки нового не добавляет;
+    taken — Telegram у другого аккаунта"""
+    await _forget_events()
+    h, _ = await _user(phone="+998935550000")
+    body = {"id_token": tg_token(phone_number=None)}
+    assert (await client.post("/api/v1/me/telegram", json=body, headers=h)).status_code == 200
+    assert (await client.post("/api/v1/me/telegram", json=body, headers=h)).status_code == 200
+    other, _ = await _user(apple_sub="apple-stats")
+    taken = await client.post("/api/v1/me/telegram", json=body, headers=other)
+    assert taken.status_code == 409
+    assert [k for k, _ in await _counted("tg_link")] == ["ok", "taken"]
+
+
+async def test_статистика_привязки_занятой_параллельно(client, net, monkeypatch):
+    """Занятость, обнаруженная уникальностью при записи, — тоже taken"""
+    from app.api import auth_providers
+
+    await _forget_events()
+    await _user(telegram_id=TG_ID)
+    h, _ = await _user(apple_sub="apple-race-stats")
+    real, calls = auth_providers._one, []
+
+    async def blind_first(session, *where, **kw):
+        calls.append(where)
+        return None if len(calls) == 1 else await real(session, *where, **kw)
+
+    monkeypatch.setattr(auth_providers, "_one", blind_first)
+    resp = await client.post("/api/v1/me/telegram", json={"id_token": tg_token()}, headers=h)
+    assert resp.status_code == 409
+    assert [k for k, _ in await _counted("tg_link")] == ["taken"]
+
+
+async def test_статистика_анкеты_первое_сохранение_и_правки(client, net):
+    """first — сохранение, которое заполнило анкету; дальше — edit. Анкета,
+    дополненная из Telegram при входе, ещё не заполнена человеком"""
+    await _forget_events()
+    token = (await _tg(client)).json()["token"]
+    h = {"Authorization": f"Bearer {token}"} | HD
+    for year in (1990, 1991):
+        resp = await client.patch(
+            "/api/v1/me", json={"first_name": "Abdulaziz", "birth_year": year}, headers=h
+        )
+        assert resp.status_code == 200, resp.text
+    # Пустое тело ничего не сохраняет, отказ — тоже
+    assert (await client.patch("/api/v1/me", json={}, headers=h)).status_code == 200
+    bad = await client.patch("/api/v1/me", json={"first_name": "Ali2"}, headers=h)
+    assert bad.status_code == 422
+    assert await _counted("profile_save") == [("first", DEVICE), ("edit", DEVICE)]
