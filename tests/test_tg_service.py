@@ -26,6 +26,7 @@ from app.models import (
     TgMessage,
     TgStatus,
     User,
+    UserBlock,
     UserSession,
 )
 from app.tg import service, texts
@@ -814,6 +815,42 @@ async def test_не_больше_заметок_о_заявках_в_час(monk
     await ask(room_id, first_name="Гость3")
     await run(api)
     assert len(said(api)) == 3
+
+
+@pytest.mark.parametrize("asker_blocks", [True, False], ids=["она-его", "он-её"])
+async def test_заявку_того_с_кем_у_вступившего_блок_не_объявляют(asker_blocks):
+    """Блок с вступившим заявку не останавливает, а в приложении они друг
+    друга не видят: и в группе её имени ему не покажем — организатору пуш"""
+    room_id, members, api = await ready_room()
+    api.calls.clear()
+    asker = await ask(room_id)
+    async with SessionLocal() as session:
+        her = (await session.get(RoomMember, asker)).user_id
+        him = (await session.get(RoomMember, members[1])).user_id
+        pair = (her, him) if asker_blocks else (him, her)
+        session.add(UserBlock(blocker_id=pair[0], blocked_id=pair[1]))
+        await session.commit()
+    await run(api)
+    assert api.calls == []
+    assert (await get(RoomMember, asker)).tg_request_message_id is None
+    assert (await job_of("request_note")).status == "done"
+
+
+async def test_блок_после_заметки_убирает_её():
+    """Заметка уже висит, а тут блок с вступившим или вступил тот, с кем
+    блок: API ставит задание, служба заметку молча удаляет, заявка — как была"""
+    room_id, member_id, note, api = await noted()
+    async with SessionLocal() as session:
+        room = await service._room(session, room_id)
+        asker = next(m for m in room.members if m.id == member_id)
+        timur = next(m for m in room.members if m.status == "joined" and m.role == "member")
+        session.add(UserBlock(blocker_id=timur.user_id, blocked_id=asker.user_id))
+        rooms_api.request_note(session, room, asker)
+        await session.commit()
+    await run(api)
+    assert api.calls == [("delete", (777, 999), note)]
+    member = await get(RoomMember, member_id)
+    assert (member.status, member.tg_request_message_id) == ("requested", None)
 
 
 async def test_одобренная_заявка_правит_заметку():

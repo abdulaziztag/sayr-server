@@ -994,6 +994,49 @@ async def test_уборка_убирает_заметки_прошедших_з�
     assert [(j.member_id, j.payload) for j in expired] == [(member_id, {"expired": True})]
 
 
+async def _pending_notes() -> list[int]:
+    """На чьи заявки ждут службу задания о заметке"""
+    return [j.member_id for j in await jobs("request_note") if j.status == "pending"]
+
+
+@pytest.mark.parametrize("madina_blocks", [True, False], ids=["она-его", "он-её"])
+async def test_блок_просящейся_с_вступившим_сверяет_её_заметку(client, madina_blocks):
+    """Заявку блок с простым участником не трогает, а её заметку служба
+    сверит: имя Мадины теперь скрыто от Тимура"""
+    room, org, madina, madina_id, member_id = await _requested(client)
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    timur, timur_id = await person(name="Тимур")
+    await client.post(f"/api/v1/invites/{invite}/join", headers=timur)
+    assert await _pending_notes() == []
+    if madina_blocks:
+        await client.post("/api/v1/blocks", json={"user_id": timur_id}, headers=madina)
+    else:
+        await client.post("/api/v1/blocks", json={"user_id": madina_id}, headers=timur)
+    async with SessionLocal() as session:
+        assert (await session.get(RoomMember, member_id)).status == "requested"
+    assert await _pending_notes() == [member_id]
+
+
+@pytest.mark.parametrize("way", ["одобрили", "по-ссылке"])
+async def test_вступил_тот_с_кем_у_просящейся_блок_её_заметку_сверяют(client, way):
+    """Заметка Мадины уже в группе, а вступает Тимур, с которым у неё
+    блокировка: служба уберёт заметку раньше, чем он войдёт в группу"""
+    room, org, madina, madina_id, member_id = await _requested(client)
+    timur, timur_id = await person(name="Тимур")
+    await client.post("/api/v1/blocks", json={"user_id": madina_id}, headers=timur)
+    if way == "одобрили":
+        code = room["code"]
+        await client.post(f"/api/v1/rooms/{code}/requests", json={}, headers=timur)
+        requests = (await client.get(f"/api/v1/rooms/{code}", headers=org)).json()["requests"]
+        his = next(r for r in requests if r["user_id"] == timur_id)
+        ok = await client.post(f"/api/v1/rooms/{code}/members/{his['member_id']}/approve", headers=org)
+        assert ok.status_code == 200
+    else:
+        invite = room["invite_url"].rsplit("/", 1)[1]
+        assert (await client.post(f"/api/v1/invites/{invite}/join", headers=timur)).status_code == 200
+    assert (await _pending_notes()).count(member_id) == 1
+
+
 # --- Блокировки и жалобы -----------------------------------------------------
 
 

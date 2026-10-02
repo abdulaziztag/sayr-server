@@ -562,6 +562,15 @@ def request_note(
         )
 
 
+def _hide_notes(session: AsyncSession, room: Room, hidden: set[int]) -> None:
+    """Вступил тот, с кем у кого-то из просящихся блокировка (`hidden` —
+    его блоки): заметку о той заявке служба уберёт из группы, пока он в неё
+    не вошёл, — в приложении они друг друга не видят (service._hidden)"""
+    for m in room.members:
+        if m.status == "requested" and m.user_id in hidden:
+            request_note(session, room, m)
+
+
 def cancel(session: AsyncSession, room: Room) -> None:
     """Поход отменён: всем живым участникам пуш, в группу — сообщение"""
     now = datetime.now(timezone.utc)
@@ -906,6 +915,7 @@ async def invite_join(
     if role == "requested":
         # Просился, а вошёл по ссылке своих: заметка о заявке — «теперь в походе»
         request_note(session, room, mine)
+    _hide_notes(session, room, await blocked_ids(session, user.id))
     await session.commit()
     return await _reply(session, await _load(session, id=room.id), user, lang)
 
@@ -1000,7 +1010,8 @@ async def member_approve(
         raise HTTPException(status_code=409, detail="member_profile")
     # Пока заявка ждала, в комнату мог вступить тот, с кем у просящегося
     # блокировка: вместе их не сводим
-    if _blocked(room, await blocked_ids(session, member.user_id)):
+    hidden = await blocked_ids(session, member.user_id)
+    if _blocked(room, hidden):
         raise HTTPException(status_code=409, detail="member_blocked")
     if await _busy(session, member.user_id, room.day, room.days, skip_room=room.id):
         raise HTTPException(status_code=409, detail="member_busy")
@@ -1009,6 +1020,7 @@ async def member_approve(
     notify(session, room, member.user_id, "room_approved")
     _after_join(session, room, member)
     request_note(session, room, member)
+    _hide_notes(session, room, hidden)
     await session.commit()
     return await _reply(session, await _load(session, id=room.id), user, lang)
 
@@ -1309,6 +1321,10 @@ async def block(
             # организатор уже не одобрит (`member_blocked`) — вместе их
             # не сведёт, и выходить незачем
             shared.append(room)
+        elif {_role(me), _role(them)} == {"requested", "joined"}:
+            # Заявку блок не трогает, а её заметку в группе служба уберёт:
+            # имя просящегося теперь скрыто от вступившего (service._hidden)
+            request_note(session, room, me if me.status == "requested" else them)
     out = BlockOut(
         shared_rooms=[
             SharedRoom(

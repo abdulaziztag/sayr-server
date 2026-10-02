@@ -15,12 +15,12 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..config import PHOTOS_DIR, settings
-from ..models import Place, Room, RoomMember, TgJob, TgMessage, TgStatus, User
+from ..models import Place, Room, RoomMember, TgJob, TgMessage, TgStatus, User, UserBlock
 from ..push import outbox
 from . import texts
 from .api import Chat, FloodWait, Gone, MessageGone, NotParticipant, Restricted, TgApi
@@ -318,6 +318,25 @@ async def _notes_left(session: AsyncSession, room: Room) -> bool:
     return recent < settings.tg_request_notes_per_hour
 
 
+async def _hidden(session: AsyncSession, room: Room, member: RoomMember) -> bool:
+    """У просящегося блокировка с кем-то из вступивших — в любую сторону.
+    Заявку такой блок не останавливает (rooms.room_request), а в приложении
+    заблокированные друг друга не видят: заметка показала бы его имя тому,
+    от кого оно скрыто. Организатору — только пуш, как сверх предела"""
+    joined = [m.user_id for m in room.members if m.status == "joined"]
+    found = await session.execute(
+        select(UserBlock.blocker_id)
+        .where(
+            or_(
+                and_(UserBlock.blocker_id == member.user_id, UserBlock.blocked_id.in_(joined)),
+                and_(UserBlock.blocked_id == member.user_id, UserBlock.blocker_id.in_(joined)),
+            )
+        )
+        .limit(1)
+    )
+    return found.first() is not None
+
+
 async def _request_note(api: TgApi, session: AsyncSession, job: TgJob, room: Room) -> None:
     """Заметка о заявке — по тому, что с заявкой сейчас, а не когда ставили
     задание: живая — объявить, одобренная — поправить на «теперь в походе»,
@@ -327,8 +346,16 @@ async def _request_note(api: TgApi, session: AsyncSession, job: TgJob, room: Roo
         return  # группа ещё собирается или Sayr Admin в ней уже нет
     member = next((m for m in room.members if m.id == job.member_id), None)
     chat = _chat(room)
-    # Поход прошёл — заявку уже не одобрить (rooms.housekeeping)
-    live = member is not None and member.status == "requested" and not job.payload.get("expired")
+    # Объявлять — только заявку, которую ещё можно одобрить: поход прошёл —
+    # уже нет (rooms.housekeeping). И только ту, чьё имя никому из вступивших
+    # не скрыто блоком: висящую такую заметку служба удаляет — блок или
+    # вступление того, с кем он, ставят задание (rooms.block, rooms._hide_notes)
+    live = (
+        member is not None
+        and member.status == "requested"
+        and not job.payload.get("expired")
+        and not await _hidden(session, room, member)
+    )
     note = job.payload.get("note")
     if note is None:
         if member is None:
@@ -351,8 +378,8 @@ async def _request_note(api: TgApi, session: AsyncSession, job: TgJob, room: Roo
         if member is not None and member.status == "joined":
             await api.edit(chat, note, texts.request_approved(member.user.first_name))
         else:
-            # Отказ, отзыв, отмена, прошедший поход — молча: о том, что
-            # человека не взяли, группе знать незачем
+            # Отказ, отзыв, отмена, прошедший поход, блок — молча: о том,
+            # что человека не взяли, группе знать незачем
             await api.delete(chat, note)
     except MessageGone as e:
         # Заметку удалил организатор или у Sayr Admin отобрали права —
