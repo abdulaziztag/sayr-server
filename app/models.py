@@ -1342,6 +1342,12 @@ class RoomMember(Base):
     tg_link_used: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false"
     )
+    #: Заметка Sayr Admin в группе о заявке этого человека («просится в
+    #: поход»): по номеру служба правит её при одобрении и удаляет, когда
+    #: ждать уже нечего. Здесь, а не в задании: разбирают заявку и через
+    #: месяц, когда выполненные задания уже убраны. Пусто — заметки нет
+    #: или служба уже взялась за неё (номер тогда в её задании)
+    tg_request_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
     room: Mapped[Room] = relationship(back_populates="members")
     user: Mapped["User"] = relationship()
@@ -1428,7 +1434,7 @@ class TgJob(Base):
     __tablename__ = "tg_jobs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    #: create_group | invite_link | promote | kick | post | leave
+    #: create_group | invite_link | promote | kick | post | leave | request_note
     kind: Mapped[str] = mapped_column(String(16))
     room_id: Mapped[int | None] = mapped_column(
         ForeignKey("rooms.id", ondelete="CASCADE"), nullable=True, index=True
@@ -1437,7 +1443,7 @@ class TgJob(Base):
         ForeignKey("room_members.id", ondelete="SET NULL"), nullable=True
     )
     #: Что нужно заданию помимо комнаты: текст сообщения, аккаунт Telegram
-    #: человека, которого уже нет в базе
+    #: и имя человека, которого уже нет в базе, номер заметки о заявке
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     #: pending | running | done | failed
     status: Mapped[str] = mapped_column(

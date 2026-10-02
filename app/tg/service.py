@@ -5,7 +5,8 @@
 
 Задания ставит API (app/api/rooms.py): второй человек в комнате —
 `create_group`, вошедший в готовую группу — `invite_link`, ушедший —
-`kick`, отмена похода — `post`, архив — `leave`. Служба ставит себе сама:
+`kick`, отмена похода — `post`, архив — `leave`, любая перемена с заявкой
+в комнату — `request_note`. Служба ставит себе сама:
 `promote`, когда в группу вошёл организатор; `kick`, когда по личной ссылке
 вошёл тот, кому в группе уже не место; `leave` по /leave организатора;
 `invite_link` тем, кто при сверке остался без ссылки.
@@ -22,7 +23,7 @@ from ..config import PHOTOS_DIR, settings
 from ..models import Place, Room, RoomMember, TgJob, TgMessage, TgStatus, User
 from ..push import outbox
 from . import texts
-from .api import Chat, FloodWait, Gone, NotParticipant, Restricted, TgApi
+from .api import Chat, FloodWait, Gone, MessageGone, NotParticipant, Restricted, TgApi
 
 log = logging.getLogger("sayr.tg")
 
@@ -299,6 +300,66 @@ async def _kick(api: TgApi, session: AsyncSession, job: TgJob, room: Room) -> No
         await _step(session, job, said=True)
 
 
+async def _notes_left(session: AsyncSession, room: Room) -> bool:
+    """Предел заметок о заявках на группу за час ещё не выбран. Считаются
+    только написанные: пропущенная сверх предела его не продлевает"""
+    recent = (
+        await session.execute(
+            select(func.count())
+            .select_from(TgJob)
+            .where(
+                TgJob.kind == "request_note",
+                TgJob.room_id == room.id,
+                TgJob.payload["posted"].as_integer().is_not(None),
+                TgJob.done_at > _now() - timedelta(hours=1),
+            )
+        )
+    ).scalar_one()
+    return recent < settings.tg_request_notes_per_hour
+
+
+async def _request_note(api: TgApi, session: AsyncSession, job: TgJob, room: Room) -> None:
+    """Заметка о заявке — по тому, что с заявкой сейчас, а не когда ставили
+    задание: живая — объявить, одобренная — поправить на «теперь в походе»,
+    остальные — удалить. Так порядок заданий и паузы Telegram не важны:
+    одобрили раньше, чем служба написала, — она и не напишет"""
+    if room.tg_state != "ready":
+        return  # группа ещё собирается или Sayr Admin в ней уже нет
+    member = next((m for m in room.members if m.id == job.member_id), None)
+    chat = _chat(room)
+    # Поход прошёл — заявку уже не одобрить (rooms.housekeeping)
+    live = member is not None and member.status == "requested" and not job.payload.get("expired")
+    note = job.payload.get("note")
+    if note is None:
+        if member is None:
+            return
+        if member.tg_request_message_id is None:
+            if live and await _notes_left(session, room):
+                posted = await api.send(
+                    chat, texts.request_note(member.user.first_name, room.code)
+                )
+                member.tg_request_message_id = posted
+                await _step(session, job, posted=posted)
+            return
+        if live:
+            return  # ждёт решения — заметка висит
+        # Номер — из строки в задание, одной записью: повтор после сбоя
+        # найдёт его здесь, а уборка не возьмётся за ту же заметку снова
+        note, member.tg_request_message_id = member.tg_request_message_id, None
+        await _step(session, job, note=note)
+    try:
+        if member is not None and member.status == "joined":
+            await api.edit(chat, note, texts.request_approved(member.user.first_name))
+        else:
+            # Отказ, отзыв, отмена, прошедший поход — молча: о том, что
+            # человека не взяли, группе знать незачем
+            await api.delete(chat, note)
+    except MessageGone as e:
+        # Заметку удалил организатор или у Sayr Admin отобрали права —
+        # повтор ничего не изменит
+        log.info("заметку %s о заявке в комнате %s не тронуть: %s", note, room.code, e)
+
+
 async def _post(api: TgApi, session: AsyncSession, job: TgJob, room: Room) -> None:
     text = texts.TEXTS.get(job.payload.get("text", ""))
     if text and room.tg_state == "ready":
@@ -354,6 +415,7 @@ HANDLERS = {
     "kick": _kick,
     "post": _post,
     "leave": _leave,
+    "request_note": _request_note,
 }
 
 

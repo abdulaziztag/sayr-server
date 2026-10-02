@@ -1,19 +1,21 @@
 """Sayr Admin на подменном клиенте: создание группы, личные ссылки, вход
-по ссылке, админ-организатор, удаление из группы и заметка о нём, переписка,
-/leave, паузы Telegram и ограничение аккаунта; гашение ссылок ушедших,
-застрявшие без ссылки люди, недособранные группы и недовыполненный /leave.
+по ссылке, админ-организатор, удаление из группы и заметка о нём, заметка
+о заявке, переписка, /leave, паузы Telegram и ограничение аккаунта; гашение
+ссылок ушедших, застрявшие без ссылки люди, недособранные группы
+и недовыполненный /leave.
 
 Настоящий Telegram здесь не нужен: логика знает его только через TgApi.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 
 from app.api import rooms as rooms_api
 from app.config import settings
-from app.db import SessionLocal
+from app.db import SessionLocal, engine
 from app.models import (
     Gender,
     Place,
@@ -26,7 +28,7 @@ from app.models import (
     User,
     UserSession,
 )
-from app.tg import service
+from app.tg import service, texts
 from app.tg.api import FloodWait, Gone, MessageGone, NotParticipant, Restricted, TelethonApi
 
 NOW = datetime.now(timezone.utc)
@@ -700,6 +702,287 @@ async def test_выгнать_можно_только_того_кто_в_гру�
         assert client.requests == [
             "GetParticipantRequest", "EditBannedRequest", "EditBannedRequest",
         ]
+
+
+# --- Заявка в комнату — заметка в группе ------------------------------------
+
+_phones = iter(range(7000, 8000))
+
+
+async def ask(room_id: int, **user) -> int:
+    """Кто-то попросился в комнату — так, как это делает API"""
+    async with SessionLocal() as session:
+        fields = {"first_name": "Мадина", "telegram_username": "madina_tg"} | user
+        person = User(phone=f"+99890000{next(_phones)}", **fields)
+        session.add(person)
+        await session.flush()
+        member = RoomMember(
+            room_id=room_id, user_id=person.id, role="member", status="requested",
+            source="request",
+        )
+        session.add(member)
+        await session.flush()
+        rooms_api.request_note(session, await session.get(Room, room_id), member)
+        await session.commit()
+        return member.id
+
+
+async def decide(member_id: int, status: str) -> None:
+    """С заявкой что-то сделали — так, как это делает API"""
+    async with SessionLocal() as session:
+        member = await session.get(RoomMember, member_id)
+        member.status = status
+        rooms_api.request_note(session, await session.get(Room, member.room_id), member)
+        await session.commit()
+
+
+async def noted() -> tuple[int, int, int, FakeApi]:
+    """Готовая группа, и в ней уже висит заметка о заявке: (комната, заявка,
+    номер заметки, Telegram понарошку с чистой памятью)"""
+    room_id, _, api = await ready_room()
+    member_id = await ask(room_id)
+    await run(api)
+    note = (await get(RoomMember, member_id)).tg_request_message_id
+    assert note is not None
+    api.calls.clear()
+    return room_id, member_id, note, api
+
+
+async def note_jobs() -> list[TgJob]:
+    async with SessionLocal() as session:
+        q = select(TgJob).where(TgJob.kind == "request_note").order_by(TgJob.id)
+        return list((await session.execute(q)).scalars())
+
+
+@pytest.mark.parametrize(
+    "first_name, ru, uz",
+    [
+        ("Мадина", "Мадина", "Мадина"),
+        # Узбекские буквы — узкими знаками, как во всём, что идёт на экран
+        ("Gʻayrat", "G‘ayrat", "G‘ayrat"),
+        # Имя стёрли, пока заявка ждала службу
+        ("", "Пользователь Sayr", "Sayr foydalanuvchisi"),
+    ],
+    ids=["имя", "узбекское", "без-имени"],
+)
+async def test_заявка_объявляется_в_группе(first_name, ru, uz):
+    """Только имя, как в комнате, и ссылка на комнату: ни номера, ни ника"""
+    room_id, _, api = await ready_room()
+    api.calls.clear()
+    member_id = await ask(room_id, first_name=first_name)
+    await run(api)
+    room = await get(Room, room_id)
+    assert said(api) == [
+        f"{ru} просится в поход. Решает организатор — в Sayr.\n\n"
+        f"{uz} sayohatga qo‘shilmoqchi. Tashkilotchi Sayr ilovasida hal qiladi.\n\n"
+        f"{settings.public_url}/j/{room.code}"
+    ]
+    # Номер — у заявки: по нему заметку поправят или уберут
+    posted = api.message_id - 1
+    assert (await get(RoomMember, member_id)).tg_request_message_id == posted
+    assert (await job_of("request_note")).payload == {"posted": posted}
+
+
+@pytest.mark.parametrize("state", ["pending", "leaving", "left"])
+async def test_заметки_нет_если_sayr_admin_не_в_группе(state):
+    """Задание поставили, пока группа была готова, а к его часу Sayr Admin
+    ушёл или группу собирают заново: писать некуда"""
+    room_id, _, api = await ready_room()
+    await ask(room_id)
+    async with SessionLocal() as session:
+        (await session.get(Room, room_id)).tg_state = state
+        await session.commit()
+    api.calls.clear()
+    await run(api)
+    assert api.calls == []
+    assert (await job_of("request_note")).status == "done"
+
+
+async def test_не_больше_заметок_о_заявках_в_час(monkeypatch):
+    monkeypatch.setattr(settings, "tg_request_notes_per_hour", 2)
+    room_id, _, api = await ready_room()
+    api.calls.clear()
+    asked = [await ask(room_id, first_name=f"Гость{i}") for i in range(3)]
+    await run(api)
+    # Третья — сверх предела: организатору только пуш, как без группы
+    assert len(said(api)) == 2
+    assert (await get(RoomMember, asked[2])).tg_request_message_id is None
+    # Пропущенная предел не продлевает: через час он снова открыт
+    async with SessionLocal() as session:
+        await session.execute(update(TgJob).values(done_at=NOW - timedelta(minutes=61)))
+        await session.commit()
+    await ask(room_id, first_name="Гость3")
+    await run(api)
+    assert len(said(api)) == 3
+
+
+async def test_одобренная_заявка_правит_заметку():
+    room_id, member_id, note, api = await noted()
+    await decide(member_id, "joined")
+    await run(api)
+    assert api.calls == [
+        ("edit", (777, 999), note, "Мадина теперь в походе.\n\nМадина endi sayohatda.")
+    ]
+    # С заметкой разобрались: номер ушёл из заявки в задание
+    assert (await get(RoomMember, member_id)).tg_request_message_id is None
+    assert (await note_jobs())[-1].payload == {"note": note}
+
+
+@pytest.mark.parametrize("status", ["declined", "left", "removed"])
+async def test_неодобренная_заявка_убирает_заметку_молча(status):
+    """Отказ, отзыв, «убрать» — заметку просто удаляем: о том, что человека
+    не взяли, группе знать незачем"""
+    room_id, member_id, note, api = await noted()
+    await decide(member_id, status)
+    await run(api)
+    assert api.calls == [("delete", (777, 999), note)]
+
+
+async def test_отмена_похода_убирает_заметки_о_заявках():
+    room_id, member_id, note, api = await noted()
+    async with SessionLocal() as session:
+        rooms_api.cancel(session, await service._room(session, room_id))
+        await session.commit()
+    await run(api)
+    assert ("delete", (777, 999), note) in api.calls
+    assert said(api) == [texts.TEXTS["cancelled"]]
+
+
+async def test_удалившего_аккаунт_заметку_убирают():
+    room_id, member_id, note, api = await noted()
+    async with SessionLocal() as session:
+        user = await session.get(User, (await session.get(RoomMember, member_id)).user_id)
+        await rooms_api.on_account_deleted(session, user)
+        await session.delete(user)
+        await session.commit()
+    await run(api)
+    assert api.calls == [("delete", (777, 999), note)]
+
+
+async def test_разобранная_до_заметки_заявка_в_группу_не_попадает():
+    """Одобрили раньше, чем служба дошла до заметки (пауза Telegram): писать
+    «просится» уже незачем, править нечего"""
+    room_id, _, api = await ready_room()
+    member_id = await ask(room_id)
+    await decide(member_id, "joined")
+    api.calls.clear()
+    await run(api)
+    assert api.calls == []
+    assert [j.status for j in await note_jobs()] == ["done", "done"]
+
+
+async def test_отозвал_и_снова_попросился_заметка_одна():
+    """Отозвал и попросился снова раньше, чем служба дошла до заметки:
+    прежняя заметка снова про живую заявку — не удаляем и второй не пишем"""
+    room_id, member_id, note, api = await noted()
+    await decide(member_id, "left")
+    await decide(member_id, "requested")
+    await run(api)
+    assert api.calls == []
+    assert (await get(RoomMember, member_id)).tg_request_message_id == note
+
+
+async def test_заметку_не_тронуть_и_задание_не_повторяется(caplog):
+    """Заметку удалил организатор или у Sayr Admin отобрали права — повтор
+    ничего не изменит: задание выполнено, в журнале — запись"""
+    room_id, member_id, note, api = await noted()
+
+    async def forbidden(chat, message_id):
+        raise MessageGone("MessageDeleteForbiddenError")
+
+    api.delete = forbidden
+    await decide(member_id, "declined")
+    with caplog.at_level(logging.INFO, logger="sayr.tg"):
+        await run(api)
+    last = (await note_jobs())[-1]
+    assert (last.status, last.attempts) == ("done", 0)
+    assert "не тронуть" in caplog.text
+    assert (await get(Room, room_id)).tg_state == "ready"
+
+
+async def test_sayr_admin_без_группы_заметку_бросает():
+    """Sayr Admin выгнали из группы: заметку не тронуть, а группа для службы —
+    «вышел», как от любого задания"""
+    room_id, member_id, note, api = await noted()
+
+    async def gone(chat, message_id):
+        raise Gone("ChannelPrivateError")
+
+    api.delete = gone
+    await decide(member_id, "declined")
+    await run(api)
+    assert (await note_jobs())[-1].status == "done"
+    assert (await get(Room, room_id)).tg_state == "left"
+
+
+async def test_прошедшая_заявка_убирает_заметку():
+    room_id, member_id, note, api = await noted()
+    async with SessionLocal() as session:
+        await rooms_api.housekeeping(session, DAY + timedelta(days=1))
+        await session.commit()
+    await run(api)
+    assert api.calls == [("delete", (777, 999), note)]
+    # Заявка как была — одобрить её уже нельзя, а заметки больше нет
+    member = await get(RoomMember, member_id)
+    assert (member.status, member.tg_request_message_id) == ("requested", None)
+
+
+async def test_сбой_удаления_повторяется_но_не_вечно():
+    room_id, member_id, note, api = await noted()
+    async with SessionLocal() as session:
+        await rooms_api.housekeeping(session, DAY + timedelta(days=1))
+        await session.commit()
+    api.fail = ConnectionError("обрыв")
+    for _ in range(service.MAX_ATTEMPTS):
+        await rerun(api)
+    # Каждый повтор — та же заметка, номер её — в задании
+    assert api.calls == [("delete", (777, 999), note)] * service.MAX_ATTEMPTS
+    assert (await note_jobs())[-1].status == "failed"
+    # Сдавшееся задание уборка заново не ставит: заметки у заявки уже нет
+    async with SessionLocal() as session:
+        await rooms_api.housekeeping(session, DAY + timedelta(days=2))
+        await session.commit()
+    assert len(await note_jobs()) == 2
+
+
+async def test_миграция_0034_откатывается_и_накатывается():
+    """Номер заметки — колонкой миграции 0034: откат её убирает, накат
+    возвращает, а голова у миграций одна"""
+    import importlib.util
+    from pathlib import Path
+
+    from alembic.config import Config
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import inspect
+
+    versions = Path(__file__).parent.parent / "alembic"
+    config = Config()
+    config.set_main_option("script_location", str(versions))
+    script = ScriptDirectory.from_config(config)
+    assert len(script.get_heads()) == 1
+    assert script.get_revision("0034").down_revision == "0033"
+
+    spec = importlib.util.spec_from_file_location(
+        "migration_0034", versions / "versions" / "0034_tg_request_notes.py"
+    )
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    def columns(conn) -> set[str]:
+        return {c["name"] for c in inspect(conn).get_columns("room_members")}
+
+    def roundtrip(conn) -> None:
+        with Operations.context(MigrationContext.configure(conn)):
+            migration.downgrade()
+            assert "tg_request_message_id" not in columns(conn)
+            migration.upgrade()
+            assert "tg_request_message_id" in columns(conn)
+
+    # Одной транзакцией: схема тестовой базы остаётся как была при любом исходе
+    async with engine.begin() as conn:
+        await conn.run_sync(roundtrip)
 
 
 # --- Никто не остаётся без ссылки -------------------------------------------

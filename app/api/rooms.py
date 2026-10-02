@@ -546,6 +546,22 @@ def kick(session: AsyncSession, room: Room, member: RoomMember, reason: KickReas
         session.add(TgJob(kind="kick", room_id=room.id, member_id=member.id, payload=payload))
 
 
+def request_note(
+    session: AsyncSession, room: Room, member: RoomMember, note: int | None = None
+) -> None:
+    """С заявкой что-то случилось — служба сверяет с этим её заметку в группе
+    (service._request_note): новую объявит, одобренную поправит, остальные
+    удалит. Ставим на любую перемену, пока Sayr Admin в группе: заметка могла
+    уже уйти, а могла ещё ждать очереди, — что делать, служба решает по тому,
+    что с заявкой к часу задания. `note` — номер заметки, когда строки заявки
+    к тому часу уже не будет"""
+    if room.tg_state == "ready":
+        payload = {"note": note} if note else {}
+        session.add(
+            TgJob(kind="request_note", room_id=room.id, member_id=member.id, payload=payload)
+        )
+
+
 def cancel(session: AsyncSession, room: Room) -> None:
     """Поход отменён: всем живым участникам пуш, в группу — сообщение"""
     now = datetime.now(timezone.utc)
@@ -558,6 +574,7 @@ def cancel(session: AsyncSession, room: Room) -> None:
         if m.status == "requested":
             m.status = "declined"
             m.decided_at = now
+            request_note(session, room, m)
     if room.tg_state == "ready":
         session.add(TgJob(kind="post", room_id=room.id, payload={"text": "cancelled"}))
 
@@ -886,6 +903,9 @@ async def invite_join(
     await session.flush()
     notify(session, room, room.organizer_id, "room_joined", user.first_name)
     _after_join(session, room, mine)
+    if role == "requested":
+        # Просился, а вошёл по ссылке своих: заметка о заявке — «теперь в походе»
+        request_note(session, room, mine)
     await session.commit()
     return await _reply(session, await _load(session, id=room.id), user, lang)
 
@@ -934,6 +954,8 @@ async def room_request(
     mine.note = body.note.strip()
     mine.decided_at = None
     notify(session, room, room.organizer_id, "room_request", user.first_name)
+    await session.flush()  # новой строке — номер, заданию — на неё ссылку
+    request_note(session, room, mine)
     await session.commit()
     return await _reply(session, await _load(session, id=room.id), user, lang)
 
@@ -986,6 +1008,7 @@ async def member_approve(
     member.decided_at = datetime.now(timezone.utc)
     notify(session, room, member.user_id, "room_approved")
     _after_join(session, room, member)
+    request_note(session, room, member)
     await session.commit()
     return await _reply(session, await _load(session, id=room.id), user, lang)
 
@@ -1010,6 +1033,7 @@ async def member_decline(
     member.status = "declined"
     member.decided_at = datetime.now(timezone.utc)
     notify(session, room, member.user_id, "room_declined")
+    request_note(session, room, member)
     await session.commit()
     return await _reply(session, await _load(session, id=room.id), user, lang)
 
@@ -1035,6 +1059,8 @@ async def member_remove(
     notify(session, room, member.user_id, "room_removed")
     if was_joined:
         kick(session, room, member, "removed")
+    else:
+        request_note(session, room, member)
     await session.commit()
     return await _reply(session, await _load(session, id=room.id), user, lang)
 
@@ -1058,6 +1084,8 @@ async def room_leave(
     mine.decided_at = datetime.now(timezone.utc)
     if role == "joined":
         kick(session, room, mine, "left")
+    else:
+        request_note(session, room, mine)  # отозвал заявку
     await session.commit()
 
 
@@ -1267,11 +1295,15 @@ async def block(
             them.status, them.decided_at = "removed", now
             if joined:
                 kick(session, room, them, "removed")
+            else:
+                request_note(session, room, them)
         elif _role(them) == "organizer" and me.status in LIVE:
             joined = me.status == "joined"
             me.status, me.decided_at = "left", now
             if joined:
                 kick(session, room, me, "left")
+            else:
+                request_note(session, room, me)
         elif _role(me) == _role(them) == "joined":
             # Только оба вступивших: заявку к тому, с кем блокировка,
             # организатор уже не одобрит (`member_blocked`) — вместе их
@@ -1330,10 +1362,47 @@ FORGET_AFTER = timedelta(days=180)
 
 
 async def housekeeping(session: AsyncSession, day: date) -> None:
-    """Раз в час из `stats.purge`: архив, уход из групп, старые хвосты.
+    """Раз в час из `stats.purge`: заметки о прошедших заявках, архив, уход
+    из групп, старые хвосты.
 
     Коммитит вызывающий."""
     now = datetime.now(timezone.utc)
+    # Заявки, которых уже не одобрить: поход прошёл (_require_active). Их
+    # заметки в группе служба удаляет — задание на заметку, и одно: номер
+    # служба забирает из строки в задание, следующий проход его не увидит.
+    # Раньше архива: из группы Sayr Admin выходит уже без них
+    busy = (
+        select(TgJob.id)
+        .where(
+            TgJob.kind == "request_note",
+            TgJob.member_id == RoomMember.id,
+            TgJob.status == "pending",
+        )
+        .exists()
+    )
+    expired = (
+        await session.execute(
+            select(RoomMember.id, RoomMember.room_id)
+            .join(Room, Room.id == RoomMember.room_id)
+            .where(
+                RoomMember.status == "requested",
+                RoomMember.tg_request_message_id.is_not(None),
+                Room.tg_state == "ready",
+                # _end(room) < day: последний день похода позади
+                Room.day + func.greatest(Room.days, 1) <= day,
+                ~busy,
+            )
+        )
+    ).all()
+    for member_id, room_id in expired:
+        session.add(
+            TgJob(
+                kind="request_note",
+                room_id=room_id,
+                member_id=member_id,
+                payload={"expired": True},
+            )
+        )
     rooms = (
         await session.execute(
             select(Room).where(
@@ -1405,6 +1474,8 @@ async def ban_companions(session: AsyncSession, user: User) -> None:
             mine.status, mine.decided_at = "removed", now
             if joined:
                 kick(session, room, mine, "removed")
+            else:
+                request_note(session, room, mine)
 
 
 # MARK: - Удаление аккаунта
@@ -1433,5 +1504,8 @@ async def on_account_deleted(session: AsyncSession, user: User) -> None:
             cancel(session, room)
         if mine.status == "joined":
             kick(session, room, mine, "deleted")
+        elif mine.status == "requested":
+            # Заметку о заявке — удалить; номер её уйдёт со строкой заявки
+            request_note(session, room, mine, mine.tg_request_message_id)
     # Его сообщения из групп — тоже: удаление аккаунта уносит всё его
     await session.execute(delete(TgMessage).where(TgMessage.user_id == user.id))

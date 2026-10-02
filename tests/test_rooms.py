@@ -11,7 +11,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from fastapi_storages import StorageFile
-from sqlalchemy import delete, event, select
+from sqlalchemy import delete, event, select, update
 
 from app.api import rooms as rooms_api
 from app.auth.tokens import new_token
@@ -96,7 +96,7 @@ async def open_room(client, headers, **kw) -> dict:
 
 async def jobs(kind: str | None = None) -> list[TgJob]:
     async with SessionLocal() as session:
-        q = select(TgJob)
+        q = select(TgJob).order_by(TgJob.id)
         if kind:
             q = q.where(TgJob.kind == kind)
         return list((await session.execute(q)).scalars())
@@ -510,6 +510,8 @@ async def test_заявка_одобрение_и_ссылка_в_готовую
     )
     assert req.status_code == 200 and req.json()["my_role"] == "requested"
     assert await pushes(org_id) == ["room_request"]
+    # Группа готова — Sayr Admin объявит заявку и в ней
+    assert [j.kind for j in await jobs()] == ["request_note"]
 
     mine = (await client.get(f"/api/v1/rooms/{room['code']}", headers=org)).json()
     assert len(mine["requests"]) == 1
@@ -524,7 +526,8 @@ async def test_заявка_одобрение_и_ссылка_в_готовую
     assert ok.status_code == 200
     assert ok.json()["people"] == 2
     assert await pushes(madina_id) == ["room_approved"]
-    assert [j.kind for j in await jobs()] == ["invite_link"]
+    # Ссылка в группу и заметка о заявке — «теперь в походе»
+    assert [j.kind for j in await jobs()] == ["request_note", "invite_link", "request_note"]
 
 
 async def test_отказ_и_повторная_заявка(client):
@@ -866,6 +869,129 @@ async def test_новая_ссылка_гасит_старую(client):
     assert fresh["invite_url"].rsplit("/", 1)[1] != old
     friend, _ = await person(name="Друг")
     assert (await client.get(f"/api/v1/invites/{old}", headers=friend)).status_code == 404
+
+
+# --- Заметка о заявке в группе -----------------------------------------------
+
+
+async def _requested(client, tg_state: str = "ready") -> tuple[dict, dict, dict, int, int]:
+    """Открытая комната, Мадина просится: (комната, организатор, Мадина,
+    её id, номер её заявки). Заметка о заявке уже висит в группе"""
+    org, _ = await person()
+    room = await open_room(client, org)
+    await set_room(room["code"], tg_state=tg_state, tg_chat_id=-100123)
+    madina, madina_id = await person(name="Мадина")
+    req = await client.post(f"/api/v1/rooms/{room['code']}/requests", json={}, headers=madina)
+    assert req.status_code == 200
+    # Служба заметку уже написала
+    member_id = await set_member(madina_id, tg_request_message_id=55)
+    async with SessionLocal() as session:
+        await session.execute(update(TgJob).values(status="done"))
+        await session.commit()
+    return room, org, madina, madina_id, member_id
+
+
+@pytest.mark.parametrize("tg_state", ["none", "pending", "leaving", "left", "failed"])
+async def test_заметка_о_заявке_только_пока_sayr_admin_в_группе(client, tg_state):
+    """Группа ещё собирается или Sayr Admin в ней уже нет — организатору
+    только пуш, как и без группы"""
+    await _requested(client, tg_state)
+    assert await jobs("request_note") == []
+
+
+async def _decline(client, room, org, madina, member_id):
+    await client.post(f"/api/v1/rooms/{room['code']}/members/{member_id}/decline", headers=org)
+
+
+async def _withdraw(client, room, org, madina, member_id):
+    await client.post(f"/api/v1/rooms/{room['code']}/leave", headers=madina)
+
+
+async def _remove_request(client, room, org, madina, member_id):
+    await client.delete(f"/api/v1/rooms/{room['code']}/members/{member_id}", headers=org)
+
+
+async def _cancel(client, room, org, madina, member_id):
+    await client.delete(f"/api/v1/rooms/{room['code']}", headers=org)
+
+
+async def _approve(client, room, org, madina, member_id):
+    await client.post(f"/api/v1/rooms/{room['code']}/members/{member_id}/approve", headers=org)
+
+
+async def _join_by_invite(client, room, org, madina, member_id):
+    invite = room["invite_url"].rsplit("/", 1)[1]
+    await client.post(f"/api/v1/invites/{invite}/join", headers=madina)
+
+
+async def _organizer_blocks(client, room, org, madina, member_id):
+    async with SessionLocal() as session:
+        madina_id = (await session.get(RoomMember, member_id)).user_id
+    await client.post("/api/v1/blocks", json={"user_id": madina_id}, headers=org)
+
+
+async def _blocks_organizer(client, room, org, madina, member_id):
+    async with SessionLocal() as session:
+        org_id = (
+            await session.execute(select(Room.organizer_id).where(Room.code == room["code"]))
+        ).scalar_one()
+    await client.post("/api/v1/blocks", json={"user_id": org_id}, headers=madina)
+
+
+async def _ban_requester(client, room, org, madina, member_id):
+    async with SessionLocal() as session:
+        user_id = (await session.get(RoomMember, member_id)).user_id
+        await rooms_api.ban_companions(session, await session.get(User, user_id))
+        await session.commit()
+
+
+@pytest.mark.parametrize(
+    "way, status",
+    [
+        (_approve, "joined"),
+        (_join_by_invite, "joined"),
+        (_decline, "declined"),
+        (_withdraw, "left"),
+        (_remove_request, "removed"),
+        (_cancel, "declined"),
+        (_organizer_blocks, "removed"),
+        (_blocks_organizer, "left"),
+        (_ban_requester, "removed"),
+    ],
+)
+async def test_любая_перемена_с_заявкой_сверяет_её_заметку(client, way, status):
+    """Что сделать с заметкой, служба решит сама по тому, что с заявкой:
+    API только ставит задание на эту заявку"""
+    room, org, madina, madina_id, member_id = await _requested(client)
+    await way(client, room, org, madina, member_id)
+    async with SessionLocal() as session:
+        assert (await session.get(RoomMember, member_id)).status == status
+    notes = await jobs("request_note")
+    assert [(j.member_id, j.payload) for j in notes] == [(member_id, {})] * 2
+
+
+async def test_удалившему_аккаунт_заметка_уходит_по_номеру_из_задания(client):
+    """Строка заявки уйдёт с человеком — номер заметки служба возьмёт из задания"""
+    room, org, madina, madina_id, member_id = await _requested(client)
+    assert (await client.delete("/api/v1/me", headers=madina)).status_code == 204
+    [_, drop] = await jobs("request_note")
+    assert drop.payload == {"note": 55}
+
+
+async def test_уборка_убирает_заметки_прошедших_заявок_один_раз(client):
+    room, org, madina, madina_id, member_id = await _requested(client)
+    async with SessionLocal() as session:
+        # Последний день похода ещё сегодня — заявку можно одобрить
+        await rooms_api.housekeeping(session, DAY)
+        await session.commit()
+    assert len(await jobs("request_note")) == 1
+    async with SessionLocal() as session:
+        await rooms_api.housekeeping(session, DAY + timedelta(days=1))
+        # Задание ещё ждёт службу — второе не ставим
+        await rooms_api.housekeeping(session, DAY + timedelta(days=1))
+        await session.commit()
+    expired = [j for j in await jobs("request_note") if j.payload.get("expired")]
+    assert [(j.member_id, j.payload) for j in expired] == [(member_id, {"expired": True})]
 
 
 # --- Блокировки и жалобы -----------------------------------------------------

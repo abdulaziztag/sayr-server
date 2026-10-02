@@ -50,6 +50,25 @@ def _who(name: str | None) -> tuple[str, str]:
     return (name, name) if name else NOBODY
 
 
+def request_note(name: str, code: str) -> str:
+    """Кто-то попросился в комнату. Ссылка — /j/ по коду комнаты: приложения
+    открывают по ней ту же комнату, что из пуша, и организатор решает там.
+    Не /r/: та — по секрету «Позвать своих», пускает без одобрения, и в
+    истории группы её мог бы взять кто угодно"""
+    ru, uz = _who(name)
+    return uz_display(
+        f"{ru} просится в поход. Решает организатор — в Sayr.\n\n"
+        f"{uz} sayohatga qoʻshilmoqchi. Tashkilotchi Sayr ilovasida hal qiladi.\n\n"
+        f"{settings.public_url}/j/{code}"
+    )
+
+
+def request_approved(name: str) -> str:
+    """Та же заметка после одобрения: ссылка больше не нужна"""
+    ru, uz = _who(name)
+    return uz_display(f"{ru} теперь в походе.\n\n{uz} endi sayohatda.")
+
+
 def left_note(reason: str, name: str | None, gender: str | None) -> str:
     """Человека убрали из группы, потому что в комнате его больше нет.
     «Вышел сам» — только когда вышел сам; удалил ли его организатор,
