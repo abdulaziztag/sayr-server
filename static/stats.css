@@ -88,6 +88,8 @@ h3 { font-size: 1.02rem; font-weight: 600; margin: 0 0 .75rem; }
 .table .warn { color: var(--terra); font-size: .85rem; min-width: 11rem; }
 .table.dense th, .table.dense td { padding: .38rem .45rem; }
 tr.below td { background: color-mix(in srgb, var(--terra) 7%, transparent); }
+/* Итоговая строка: отбита сверху, чтобы не читалась ещё одним способом */
+.table tr.total td { border-top: 1px solid var(--edge2); font-weight: 600; }
 .flag { display: inline-block; font-size: .72rem; color: #fff; background: var(--terra); border-radius: 999px; padding: .05rem .5rem; margin-left: .35rem; vertical-align: middle; }
 
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }

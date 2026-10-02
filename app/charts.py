@@ -284,7 +284,11 @@ def funnel(steps: list[tuple[str, int]]) -> Markup:
     previous = first
     for i, (label, value) in enumerate(steps):
         y = PAD_T + row_h * i
-        width = (x1 - x0) * value / first
+        # Шаг шире первого бывает, когда воронка — из чисел событий, а не
+        # из одних и тех же устройств (вход и попутчики: в комнату вступают
+        # и по ссылке, минуя выбор даты). Полоса упирается в край, число
+        # и доля остаются честными
+        width = (x1 - x0) * min(value / first, 1)
         share = f"{round(100 * value / previous)} %" if previous else "—"
         body.append(
             f'<text x="{x0 - 8}" y="{y + 19}" text-anchor="end" fill="{INK}" font-size="12">'

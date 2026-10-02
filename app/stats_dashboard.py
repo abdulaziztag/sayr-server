@@ -1,4 +1,4 @@
-"""Данные страницы «Статистика»: пять разделов одним вызовом.
+"""Данные страницы «Статистика»: шесть разделов одним вызовом.
 
 Источники — три слоя, у каждого своя честность:
 
@@ -70,6 +70,17 @@ TOP_LIMIT = 25
 #: С какой версии приложения едут клиентские события — обе платформы
 #: выпущены с ними в 1.7.2 (решение владельца, 19 сентября 2026)
 CLIENT_EVENTS_SINCE: dict[str, str | None] = {"ios": "1.7.2", "android": "1.7.2"}
+#: С какой версии едут клиентские события входа и попутчиков (02.10.2026):
+#: нажали «Войти», отменили, ошибка, «Привязать Telegram», откуда анкета,
+#: «Пойду» не дошло, развернули месяц, поделились комнатой. Пусто, пока
+#: выпуск не собран, — номера проставляются на этапе выкладки клиентов.
+#: Серверные исходы — входы, анкета, комнаты, группы — идут со всех версий
+ACCOUNT_EVENTS_SINCE: dict[str, str | None] = {"ios": None, "android": None}
+ACCOUNT_CLIENT_KINDS = (
+    "auth_start", "auth_cancel", "auth_fail", "tg_link_start", "profile_open",
+    "go_fail", "calendar_month", "room_share",
+)
+LOGIN_METHODS = (("telegram", "Telegram"), ("apple", "Apple"), ("phone", "По номеру"))
 
 TZ = "Asia/Tashkent"
 WEEKDAYS = ("пн", "вт", "ср", "чт", "пт", "сб", "вс")
@@ -90,13 +101,15 @@ CATEGORY_RU = {
 }
 
 
-def since_text() -> str:
-    """Подпись пустого блока: откуда ждать данные."""
+def since_text(since: dict[str, str | None] | None = None) -> str:
+    """Подпись пустого блока: откуда ждать данные. `since` — свой перечень
+    версий у событий, пришедших позже первых (ACCOUNT_EVENTS_SINCE)."""
+    since = CLIENT_EVENTS_SINCE if since is None else since
     parts = []
     for platform in ("ios", "android"):
-        version = CLIENT_EVENTS_SINCE.get(platform)
+        version = since.get(platform)
         parts.append(f"{PLATFORM_RU[platform]} {version}" if version else PLATFORM_RU[platform])
-    if any(CLIENT_EVENTS_SINCE.values()):
+    if any(since.values()):
         return "Данные пойдут с версий " + " и ".join(parts) + "."
     return "Данные пойдут с ближайшего обновления приложения (iOS и Android)."
 
@@ -142,7 +155,8 @@ class Counts:
 
 async def dashboard(session: AsyncSession, period_days: int = DEFAULT_PERIOD,
                     sort: str = "opens", today: date | None = None) -> dict:
-    """Всё для страницы: обзор, запуск, места, тропа, приложение."""
+    """Всё для страницы: обзор, запуск, места, тропа, приложение, вход
+    и попутчики."""
     today = today or date.today()
     period = period_days if period_days in PERIODS else DEFAULT_PERIOD
     retention = settings.stats_retention_days
@@ -177,6 +191,7 @@ async def dashboard(session: AsyncSession, period_days: int = DEFAULT_PERIOD,
     data["places"] = await _places(session, counts, unique_w, intents, sort, since, today, window)
     data["trail"] = await _trail(session, counts, unique_r, intents, rsince, retention)
     data["app"] = await _app(session, counts, daily, days, wsince, today, window)
+    data["accounts"] = _accounts(counts)
     return data
 
 
@@ -1011,4 +1026,113 @@ async def _app(session: AsyncSession, counts: Counts, daily: Daily, days: list[d
         "has_permissions": any(p["yes"] or p["no"] for p in permissions),
         "has_push_opens": bool(opened),
         "window": window,
+    }
+
+
+def _accounts(counts: Counts) -> dict:
+    """Вход и попутчики: что вышло на деле — рядом с тем, что пытались.
+
+    Исходы пишет сервер (login, tg_link, profile_save, room_*, tg_group),
+    и они идут со всех версий приложения. Попытки — нажатия, отмены,
+    ошибки — шлют только обновлённые приложения (ACCOUNT_EVENTS_SINCE):
+    пока ни одного такого события нет, их клетки — прочерк с подписью
+    «данные пойдут с версии», а не ноль как факт.
+
+    Всё — числа событий за период, не уникальные устройства: заявку
+    одобряет организатор со своего телефона, а вход в группу узнаёт служба,
+    у которой номера устройства нет вовсе.
+    """
+    client = any(counts.total(kind) for kind in ACCOUNT_CLIENT_KINDS)
+
+    def tried(value: int) -> int | str:
+        return value if client else "—"
+
+    logins = []
+    sums = defaultdict(int)
+    for method, label in LOGIN_METHODS:
+        row = {
+            "started": counts.get("auth_start", method),
+            "cancelled": counts.get("auth_cancel", method),
+            "failed": counts.get("auth_fail", method),
+            "new": counts.get("login", f"{method}:new"),
+            "back": counts.get("login", f"{method}:back"),
+        }
+        for key, value in row.items():
+            sums[key] += value
+        logins.append(_login_row(label, row, client, cancel=method != "phone"))
+    logins.append(_login_row("Всего", sums, client))
+
+    # Подписи короткие: у воронки под них ~25 знаков, длиннее — обрезка
+    created = counts.get("room_create", "open") + counts.get("room_create", "own")
+    steps = [
+        ("Выбрали дату", counts.total("date_pick")),
+        ("Комната или заявка", created + counts.get("room_ask")),
+        ("Вступили в комнату", counts.get("room_approve") + counts.get("room_join")),
+        ("Вошли в группу", counts.get("tg_group", "joined")),
+    ]
+    rooms = {
+        "open": counts.get("room_create", "open"),
+        "own": counts.get("room_create", "own"),
+        "ask": counts.get("room_ask"),
+        "approve": counts.get("room_approve"),
+        "decline": counts.get("room_decline"),
+        "join": counts.get("room_join"),
+        "groups": counts.get("tg_group", "ready"),
+        "entered": counts.get("tg_group", "joined"),
+        "left_self": counts.get("room_leave", "self"),
+        "left_removed": counts.get("room_leave", "removed"),
+        "cancel": counts.get("room_cancel"),
+        "report": counts.get("room_report"),
+        "block": counts.get("room_block"),
+    }
+    login_bars = [(label, counts.get("login", f"{m}:new"), counts.get("login", f"{m}:back"))
+                  for m, label in LOGIN_METHODS]
+    return {
+        "client": client,
+        "since_text": since_text(ACCOUNT_EVENTS_SINCE),
+        "logins": logins,
+        "login_chart": (
+            charts.paired(login_bars, ("Новый аккаунт", "Вернулись"))
+            if sums["new"] or sums["back"] else None
+        ),
+        "telegram": {
+            "start": tried(counts.total("tg_link_start")),
+            "ok": counts.get("tg_link", "ok"),
+            "taken": counts.get("tg_link", "taken"),
+        },
+        "profile": {
+            "signup": tried(counts.get("profile_open", "signup")),
+            "rooms": tried(counts.get("profile_open", "rooms")),
+            "edit": tried(counts.get("profile_open", "edit")),
+            "first": counts.get("profile_save", "first"),
+            "saved": counts.get("profile_save", "edit"),
+        },
+        "funnel": charts.funnel(steps),
+        "steps": steps,
+        "rooms": rooms,
+        "has_rooms": any(rooms.values()),
+        "extras": {
+            "room_open": counts.total("room_open"),
+            "share_open": tried(counts.get("room_share", "open")),
+            "share_own": tried(counts.get("room_share", "own")),
+            "calendar": tried(counts.total("calendar_month")),
+            "go_fail": tried(counts.total("go_fail")),
+        },
+    }
+
+
+def _login_row(label: str, row: dict, client: bool, cancel: bool = True) -> dict:
+    """Строка таблицы входа. Отмены у входа по номеру не бывает — у него нет
+    чужого окна, из которого возвращаются ни с чем. Доля — входы от нажатий:
+    сервер считает входы и со старых сборок, которые нажатий не шлют, —
+    честной она становится с их обновлением, о чём и подпись под таблицей"""
+    done = row["new"] + row["back"]
+    return {
+        "label": label,
+        "started": row["started"] if client else "—",
+        "cancelled": row["cancelled"] if client and cancel else "—",
+        "failed": row["failed"] if client else "—",
+        "new": row["new"],
+        "back": row["back"],
+        "share": pct_text(done, row["started"]) if client else "—",
     }

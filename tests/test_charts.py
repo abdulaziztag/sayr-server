@@ -80,6 +80,17 @@ def test_funnel_shows_share_of_previous_step():
     assert "нет данных" in charts.funnel([])
 
 
+def test_funnel_step_wider_than_first_stays_inside():
+    """Воронка из чисел событий: шаг бывает больше первого. Полоса — не шире
+    первой, число и доля — как есть"""
+    import re
+
+    svg = charts.funnel([("Выбрали дату", 10), ("Вступили", 25)])
+    widths = [float(w) for w in re.findall(r'<rect [^>]*width="([\d.]+)"', svg)]
+    assert widths[0] == widths[1]
+    assert "<title>Вступили: 25 (250 % от предыдущего)</title>" in svg
+
+
 def test_heatmap_skips_unknown_cells_and_keeps_zero():
     svg = charts.heatmap(["пн", "вт"], ["нед. 1", "нед. 2"], [[25, None], [0, 10]], unit=" %")
     assert svg.count("<title>") == 3

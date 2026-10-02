@@ -1,4 +1,4 @@
-{# Страница «Статистика»: пять разделов, период и сортировка — адресом.
+{# Страница «Статистика»: шесть разделов, период и сортировка — адресом.
 
    Всё рендерит сервер; графики — SVG из app/charts.py, уже безопасная
    разметка (Markup), поэтому без |safe. Под каждым графиком строка-
@@ -24,7 +24,7 @@
       {% for p in periods %}<a href="?period={{ p }}&amp;sort={{ d.sort }}"{% if p == d.period %} aria-current="page"{% endif %}>{{ p }} дней</a>{% endfor %}
     </nav>
     <nav class="sections" aria-label="Разделы">
-      <a href="#overview">Обзор</a><a href="#launch">Запуск</a><a href="#places">Места</a><a href="#trail">Тропа</a><a href="#app">Приложение</a>
+      <a href="#overview">Обзор</a><a href="#launch">Запуск</a><a href="#places">Места</a><a href="#trail">Тропа</a><a href="#app">Приложение</a><a href="#people">Вход и попутчики</a>
     </nav>
     <a class="back" href="/admin">В админку</a>
   </div>
@@ -360,6 +360,84 @@
     {% if d.app.pushes and not d.app.has_push_opens %}{{ empty() }}{% endif %}
     <p class="def">Напоминания: еженедельное открыли <b>{{ d.app.reminders.weekly }}</b> раз, накануне выхода — <b>{{ d.app.reminders.eve }}</b>.</p>
     {{ define("Отправлено и не дошло — со стороны сервера при рассылке; открыто — событие приложения по тапу на уведомление, доля от отправленных.") }}
+  </div>
+</section>
+
+{# ----------------------------------------------------- Вход и попутчики #}
+{% set a = d.accounts %}
+<section id="people">
+  <h2>Вход и попутчики</h2>
+  <div class="card">
+    <h3>Вход по способам</h3>
+    <div class="scroll">
+    <table class="table">
+      <thead><tr><th>Способ</th><th class="num">Нажали «Войти»</th><th class="num">Отменили</th><th class="num">Ошибки</th><th class="num">Новый аккаунт</th><th class="num">Вернулись</th><th class="num">Вошли от нажавших</th></tr></thead>
+      <tbody>{% for r in a.logins %}
+        <tr{% if loop.last %} class="total"{% endif %}><td>{{ r.label }}</td><td class="num">{{ r.started }}</td><td class="num">{{ r.cancelled }}</td><td class="num">{{ r.failed }}</td><td class="num">{{ r.new }}</td><td class="num">{{ r.back }}</td><td class="num">{{ r.share }}</td></tr>
+      {% endfor %}</tbody>
+    </table>
+    </div>
+    {% if not a.client %}{{ empty(a.since_text) }}{% endif %}
+    {{ define("Нажали, отменили, ошибки — события приложения: нажато «Войти», человек вернулся из Telegram или Apple ни с чем, ему показали ошибку; у входа по номеру нет чужого окна, отмены у него не бывает. Новый аккаунт и вернулись — сервер по удачному входу: заведён аккаунт или найден прежний (вход через Telegram в аккаунт по номеру — возвращение). Последний столбец — входы от нажатий; старые сборки нажатий не шлют, поэтому честной доля становится с их обновлением.") }}
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Новые аккаунты и возвращения</h3>
+      {% if a.login_chart %}{{ a.login_chart }}{% else %}{{ empty("Входов за период не было.") }}{% endif %}
+      {{ define("Удачные входы за период по способам. Пишет сервер — со всех версий приложения.") }}
+    </div>
+    <div class="card">
+      <h3>Привязка Telegram и анкета</h3>
+      <table class="table kv"><tbody>
+        <tr><td>Нажали «Привязать Telegram»</td><td class="num">{{ a.telegram.start }}</td></tr>
+        <tr><td>Привязали</td><td class="num">{{ a.telegram.ok }}</td></tr>
+        <tr><td>Telegram уже у другого аккаунта</td><td class="num">{{ a.telegram.taken }}</td></tr>
+        <tr><td>Анкета открыта: сразу после входа</td><td class="num">{{ a.profile.signup }}</td></tr>
+        <tr><td>Анкета открыта: комната попросила</td><td class="num">{{ a.profile.rooms }}</td></tr>
+        <tr><td>Анкета открыта: из Профиля</td><td class="num">{{ a.profile.edit }}</td></tr>
+        <tr><td>Анкета заполнена впервые</td><td class="num">{{ a.profile.first }}</td></tr>
+        <tr><td>Анкета поправлена</td><td class="num">{{ a.profile.saved }}</td></tr>
+      </tbody></table>
+      {% if not a.client %}{{ empty(a.since_text) }}{% endif %}
+      {{ define("Нажатия и открытия анкеты — события приложения; привязку и сохранения пишет сервер. «Впервые» — сохранение, которое заполнило анкету; имя из Telegram или Apple при входе анкету заполненной не делает.") }}
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Воронка попутчиков</h3>
+    {{ a.funnel }}
+    {{ define("Выбрали дату в «Пойду» → открыли комнату или попросились в чужую → вступили: взял организатор или по ссылке своих → вошли в группу Telegram. Числа событий за период, а не одни и те же устройства: заявку одобряет организатор со своего телефона, а вход в группу узнаёт Sayr Admin, у которого номера устройства нет. Поэтому шаг бывает больше предыдущего: в комнату вступают и по ссылке своих, минуя выбор даты, а в группу входит и сам организатор.") }}
+  </div>
+
+  <div class="card">
+    <h3>Комнаты и группы</h3>
+    {% if a.has_rooms %}
+    {% set r = a.rooms %}{% set x = a.extras %}
+    <div class="pair">
+      <table class="table kv"><tbody>
+        <tr><td>Открыли комнату для всех</td><td class="num">{{ r.open }}</td></tr>
+        <tr><td>Открыли комнату для своих</td><td class="num">{{ r.own }}</td></tr>
+        <tr><td>Попросились</td><td class="num">{{ r.ask }}</td></tr>
+        <tr><td>Взяли / отказали</td><td class="num">{{ r.approve }} / {{ r.decline }}</td></tr>
+        <tr><td>Вступили по ссылке своих</td><td class="num">{{ r.join }}</td></tr>
+        <tr><td>Групп собрано</td><td class="num">{{ r.groups }}</td></tr>
+        <tr><td>Вошли в группу</td><td class="num">{{ r.entered }}</td></tr>
+      </tbody></table>
+      <table class="table kv"><tbody>
+        <tr><td>Вышли сами</td><td class="num">{{ r.left_self }}</td></tr>
+        <tr><td>Убрал организатор</td><td class="num">{{ r.left_removed }}</td></tr>
+        <tr><td>Отменили поход</td><td class="num">{{ r.cancel }}</td></tr>
+        <tr><td>Жалоб / блокировок</td><td class="num">{{ r.report }} / {{ r.block }}</td></tr>
+        <tr><td>Открыли комнату из «Пойду»</td><td class="num">{{ x.room_open }}</td></tr>
+        <tr><td>Поделились: для всех / для своих</td><td class="num">{{ x.share_open }} / {{ x.share_own }}</td></tr>
+        <tr><td>Развернули месяц в «Когда идём?»</td><td class="num">{{ x.calendar }}</td></tr>
+        <tr><td>«Пойду» не дошло до сервера</td><td class="num">{{ x.go_fail }}</td></tr>
+      </tbody></table>
+    </div>
+    {% if not a.client %}{{ empty(a.since_text) }}{% endif %}
+    {% else %}{{ empty("Комнат за период не открывали.") }}{% endif %}
+    {{ define("Всё, кроме четырёх нижних строк справа, пишет сервер — что вышло на деле; нижние четыре — события приложения. Уход — только из комнаты, где человек был: отозванная заявка не уход. «Убрал организатор» — и блоком, «вышли сами» — и уйдя от заблокированного организатора.") }}
   </div>
 </section>
 </main>

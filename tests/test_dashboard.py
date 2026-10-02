@@ -333,12 +333,13 @@ async def test_pushes_join_open_events():
     assert d["app"]["has_push_opens"] is True
 
 
-async def test_page_renders_five_sections_for_each_period(admin_client):
+async def test_page_renders_every_section_for_each_period(admin_client):
     await _clear()
     for period in (7, 90):
         resp = await admin_client.get(f"/admin/stats?period={period}")
         assert resp.status_code == 200, resp.text[:300]
-        for head in ("Обзор", "Запуск и каналы", "Места", "Тропа и запись", "Приложение"):
+        for head in ("Обзор", "Запуск и каналы", "Места", "Тропа и запись", "Приложение",
+                     "Вход и попутчики"):
             assert f">{head}</h2>" in resp.text, head
         assert f'?period={period}&amp;sort=opens" aria-current="page"' in resp.text
         assert "Данные пойдут" in resp.text  # клиентских событий нет — блоки говорят про версию
@@ -350,3 +351,124 @@ async def test_page_renders_five_sections_for_each_period(admin_client):
 async def test_page_requires_admin(client):
     resp = await client.get("/admin/stats?period=7", follow_redirects=False)
     assert resp.status_code in (302, 307)
+
+
+# --- Вход и попутчики (02.10.2026) ------------------------------------------
+
+
+def _rolled(day: date, kind: str, key: str, events: int) -> DailyCount:
+    return DailyCount(day=day, kind=kind, key=key, events=events, devices=0)
+
+
+async def test_accounts_section_without_data():
+    """Исходов нет — нули; попыток нет — прочерки и «данные пойдут»,
+    а не ноль как факт"""
+    await _clear()
+    a = (await _data())["accounts"]
+    assert a["client"] is False
+    assert a["since_text"] == "Данные пойдут с ближайшего обновления приложения (iOS и Android)."
+    assert [r["label"] for r in a["logins"]] == ["Telegram", "Apple", "По номеру", "Всего"]
+    assert all(r["started"] == "—" and r["share"] == "—" for r in a["logins"])
+    assert all(r["new"] == 0 and r["back"] == 0 for r in a["logins"])
+    assert a["login_chart"] is None
+    assert "нет данных" in a["funnel"]
+    assert a["has_rooms"] is False
+    assert a["telegram"] == {"start": "—", "ok": 0, "taken": 0}
+    assert a["profile"]["signup"] == "—" and a["profile"]["first"] == 0
+
+
+async def test_accounts_since_text_names_versions(monkeypatch):
+    monkeypatch.setattr(stats_dashboard, "ACCOUNT_EVENTS_SINCE", {"ios": "1.9.6", "android": "1.8.1"})
+    await _clear()
+    a = (await _data())["accounts"]
+    assert a["since_text"] == "Данные пойдут с версий iOS 1.9.6 и Android 1.8.1."
+    # Остальные разделы — со своими версиями
+    assert "1.7.2" in (await _data())["since_text"]
+
+
+async def test_accounts_section_mixes_server_outcomes_and_client_tries():
+    await _clear()
+    today = date.today()
+    y = today - timedelta(days=1)
+    async with SessionLocal() as session:
+        session.add_all([
+            _rolled(y, "login", "telegram:new", 3), _rolled(y, "login", "telegram:back", 2),
+            _rolled(y, "login", "apple:new", 1), _rolled(y, "login", "phone:back", 4),
+            _rolled(y, "auth_start", "telegram", 6), _rolled(y, "auth_start", "apple", 2),
+            _rolled(y, "auth_start", "phone", 5),
+            _rolled(y, "auth_cancel", "telegram", 1), _rolled(y, "auth_fail", "phone", 1),
+            _rolled(y, "tg_link_start", "", 2), _rolled(y, "tg_link", "ok", 1),
+            _rolled(y, "tg_link", "taken", 1),
+            _rolled(y, "profile_open", "signup", 3), _rolled(y, "profile_save", "first", 3),
+            _rolled(y, "profile_save", "edit", 2),
+            _rolled(y, "date_pick", "test-peak", 20),
+            _rolled(y, "room_create", "open", 2), _rolled(y, "room_create", "own", 1),
+            _rolled(y, "room_ask", "", 4), _rolled(y, "room_approve", "", 2),
+            _rolled(y, "room_decline", "", 1), _rolled(y, "room_join", "", 1),
+            _rolled(y, "tg_group", "ready", 2), _rolled(y, "tg_group", "joined", 4),
+            _rolled(y, "room_leave", "self", 1), _rolled(y, "room_leave", "removed", 1),
+            _rolled(y, "room_cancel", "", 1), _rolled(y, "room_report", "", 1),
+            _rolled(y, "room_block", "", 1),
+            _rolled(y, "room_share", "own", 2), _rolled(y, "calendar_month", "test-peak", 3),
+            _rolled(y, "go_fail", "test-lake", 1),
+            # Сегодня — из сырья: серверные события, у заявки ключа нет
+            ApiEvent(kind="room_ask", device=None, ts=_at(today)),
+            ApiEvent(kind="login", slug="telegram:new", device="d-today", ts=_at(today)),
+        ])
+        await session.commit()
+
+    a = (await _data())["accounts"]
+    assert a["client"] is True
+    telegram, apple, phone, total = a["logins"]
+    assert (telegram["started"], telegram["cancelled"], telegram["failed"],
+            telegram["new"], telegram["back"], telegram["share"]) == (6, 1, 0, 4, 2, "100 %")
+    assert (apple["new"], apple["back"], apple["share"]) == (1, 0, "50 %")
+    # Отмены у входа по номеру не бывает — прочерк, а не ноль
+    assert (phone["cancelled"], phone["failed"], phone["share"]) == ("—", 1, "80 %")
+    assert (total["started"], total["cancelled"], total["new"], total["back"], total["share"]) == (
+        13, 1, 5, 6, "85 %")
+    assert a["steps"] == [
+        ("Выбрали дату", 20),
+        ("Комната или заявка", 8),
+        ("Вступили в комнату", 3),
+        ("Вошли в группу", 4),
+    ]
+    # В группу входит и организатор — шаг больше предыдущего, и это честно
+    assert "<title>Вошли в группу: 4 (133 % от предыдущего)</title>" in a["funnel"]
+    assert "<title>Apple — Новый аккаунт: 1</title>" in a["login_chart"]
+    assert a["telegram"] == {"start": 2, "ok": 1, "taken": 1}
+    assert a["profile"] == {"signup": 3, "rooms": 0, "edit": 0, "first": 3, "saved": 2}
+    assert a["has_rooms"] is True
+    rooms = a["rooms"]
+    assert (rooms["open"], rooms["own"], rooms["ask"], rooms["approve"], rooms["decline"]) == (
+        2, 1, 5, 2, 1)
+    assert (rooms["groups"], rooms["entered"], rooms["left_self"], rooms["left_removed"]) == (
+        2, 4, 1, 1)
+    assert (rooms["cancel"], rooms["report"], rooms["block"]) == (1, 1, 1)
+    assert a["extras"] == {"room_open": 0, "share_open": 0, "share_own": 2, "calendar": 3,
+                           "go_fail": 1}
+
+
+async def test_page_renders_accounts_section_with_and_without_data(admin_client):
+    await _clear()
+    empty = await admin_client.get("/admin/stats?period=7")
+    assert empty.status_code == 200
+    assert 'href="#people"' in empty.text and 'id="people"' in empty.text
+    assert "Комнат за период не открывали." in empty.text
+    assert "Входов за период не было." in empty.text
+    assert "Данные пойдут с ближайшего обновления" in empty.text
+
+    y = date.today() - timedelta(days=1)
+    async with SessionLocal() as session:
+        session.add_all([
+            _rolled(y, "login", "telegram:new", 2), _rolled(y, "auth_start", "telegram", 3),
+            _rolled(y, "date_pick", "test-peak", 5), _rolled(y, "room_create", "open", 1),
+            _rolled(y, "room_join", "", 1), _rolled(y, "tg_group", "joined", 1),
+        ])
+        await session.commit()
+    full = await admin_client.get("/admin/stats?period=7")
+    assert full.status_code == 200, full.text[:300]
+    assert "Комнат за период не открывали." not in full.text
+    assert "Данные пойдут с ближайшего обновления" not in full.text
+    assert "<title>Telegram — Новый аккаунт: 2</title>" in full.text
+    assert "<title>Вошли в группу: 1 (100 % от предыдущего)</title>" in full.text
