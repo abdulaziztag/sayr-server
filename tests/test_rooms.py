@@ -633,7 +633,10 @@ async def test_удалённого_убирают_из_группы_и_по_с�
     assert out.status_code == 200
     kicks = await jobs("kick")
     assert len(kicks) == 1
-    assert kicks[0].payload == {"tg_user_id": 555, "tg_user_hash": None, "tg_link": None}
+    assert kicks[0].payload == {
+        "tg_user_id": 555, "tg_user_hash": None, "tg_link": None,
+        "reason": "removed", "name": "Друг", "gender": None,
+    }
     assert "room_removed" in await pushes(friend_id)
     back = await client.post(f"/api/v1/invites/{invite}/join", headers=friend)
     assert back.status_code == 403 and back.json()["detail"] == "removed"
@@ -678,12 +681,22 @@ async def _deleted(client, room, org, friend, org_id, friend_id, member_id):
 
 @pytest.mark.parametrize("cancelled", [False, True], ids=["идёт", "отменён"])
 @pytest.mark.parametrize(
-    "way", [_remove, _leave, _blocked_by_organizer, _blocks_organizer, _banned, _deleted]
+    "way, reason",
+    [
+        (_remove, "removed"),
+        (_leave, "left"),
+        (_blocked_by_organizer, "removed"),
+        (_blocks_organizer, "left"),
+        (_banned, "removed"),
+        (_deleted, "deleted"),
+    ],
 )
-async def test_ушедший_любым_путём_теряет_ссылку_в_группу(client, way, cancelled):
+async def test_ушедший_любым_путём_теряет_ссылку_в_группу(client, way, reason, cancelled):
     """Аккаунт службе ещё не известен — он не открыл ссылку. Раньше задание
     не ставилось вовсе, и ссылка работала до конца похода. В отменённом
-    походе — так же: группа остаётся тем, кто идёт всё равно"""
+    походе — так же: группа остаётся тем, кто идёт всё равно. Причина — для
+    заметки в группе: заблокировавший организатора вышел сам, а о блоке
+    группа не узнает; у удалившего аккаунт имени в задании нет"""
     org, org_id = await person()
     room = await open_room(client, org, is_open=False)
     await set_room(room["code"], tg_state="ready", tg_chat_id=-100123)
@@ -697,9 +710,11 @@ async def test_ушедший_любым_путём_теряет_ссылку_в
     await way(client, room, org, friend, org_id, friend_id, member_id)
     kicks = await jobs("kick")
     assert len(kicks) == 1
+    who = {} if reason == "deleted" else {"name": "Друг", "gender": None}
     assert kicks[0].payload == {
         "tg_user_id": None, "tg_user_hash": None, "tg_link": "https://t.me/+friend",
-    }
+        "reason": reason,
+    } | who
 
 
 async def test_запрещённого_организатора_убирают_и_из_своей_группы(client):
@@ -714,8 +729,10 @@ async def test_запрещённого_организатора_убирают_
     assert [k.payload["tg_user_id"] for k in kicks] == [501]
 
 
-@pytest.mark.parametrize("way", [_banned, _deleted], ids=["запрет", "удаление"])
-async def test_организатор_отменённого_похода_уходит_из_группы(client, way):
+@pytest.mark.parametrize(
+    "way, reason", [(_banned, "removed"), (_deleted, "deleted")], ids=["запрет", "удаление"]
+)
+async def test_организатор_отменённого_похода_уходит_из_группы(client, way, reason):
     """Поход отменили раньше: группа живёт для тех, кто идёт всё равно, —
     и запрещённому или удалившемуся организатору в ней не место"""
     org, org_id = await person()
@@ -726,8 +743,10 @@ async def test_организатор_отменённого_похода_ухо
     # В «ушедшем» пути он сам и есть тот, кого убирают
     await way(client, room, None, org, None, org_id, None)
     kicks = await jobs("kick")
+    who = {} if reason == "deleted" else {"name": "Азиз", "gender": None}
     assert [k.payload for k in kicks] == [
-        {"tg_user_id": 501, "tg_user_hash": None, "tg_link": "https://t.me/+org"}
+        {"tg_user_id": 501, "tg_user_hash": None, "tg_link": "https://t.me/+org", "reason": reason}
+        | who
     ]
     # Отменённый второй раз не отменяется: сообщение в группу одно
     assert len(await jobs("post")) == 1

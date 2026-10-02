@@ -283,13 +283,23 @@ class TelethonApi:
         )
 
     async def kick(self, chat: Chat, user_id: int, user_hash: int) -> None:
-        """Выгнать, а не забанить: бан и сразу снятие — так Telegram и кикает"""
-        from telethon.tl.functions.channels import EditBannedRequest
-        from telethon.tl.types import ChatBannedRights, InputPeerUser
+        """Выгнать, а не забанить: бан и сразу снятие — так Telegram и кикает.
+        Нет его в группе — NotParticipant: бан того, кто уже вышел, Telegram
+        принимает молча, а служба пишет в группу только о выгнанном на деле"""
+        from telethon.tl.functions.channels import EditBannedRequest, GetParticipantRequest
+        from telethon.tl.types import ChannelParticipantLeft, ChatBannedRights, InputPeerUser
 
-        if not user_hash:
-            user_hash = await self._member_hash(chat, user_id)
-        peer = InputPeerUser(user_id, user_hash)
+        if user_hash:
+            peer = InputPeerUser(user_id, user_hash)
+            found = await self._call(GetParticipantRequest(self._channel(chat), peer))
+            # Ограниченный участник — тоже Banned, но в группе; выгнанный — left
+            if isinstance(found.participant, ChannelParticipantLeft) or getattr(
+                found.participant, "left", False
+            ):
+                raise NotParticipant("вышел")
+        else:
+            # Ключ найдётся только у того, кто в группе
+            peer = InputPeerUser(user_id, await self._member_hash(chat, user_id))
         await self._call(
             EditBannedRequest(
                 self._channel(chat), peer, ChatBannedRights(until_date=None, view_messages=True)

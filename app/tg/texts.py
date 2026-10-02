@@ -2,13 +2,19 @@
 с приложением и на русском, и на узбекском, а знать его язык служба не может.
 
 Первое сообщение утвердил владелец 27 сентября (спека попутчиков, часть 2).
+Заметки о людях — только имя, как его видят в комнате: ни номера, ни ника
+Telegram, ни слова о блоках и жалобах (владелец, 01–02.10).
 """
 
 from datetime import date
 
 from ..config import settings
+from ..models import User
 from ..push.outbox import day_text
 from ..typography import uz_display
+
+#: Кого назвать, когда имени в анкете нет
+NOBODY = ("Пользователь Sayr", "Sayr foydalanuvchisi")
 
 
 def title(place: str, day: date) -> str:
@@ -31,6 +37,30 @@ def first_message(place: str, place_uz: str, day: date, slug: str) -> str:
         "haqida yozganlaringizni yigʻaman, ilovadagi maʼlumotlar aniqroq boʻlishi uchun. "
         "Tashkilotchi meni /leave buyrugʻi bilan chiqarib yuborishi mumkin."
     )
+
+
+def person(user: User) -> dict:
+    """Что заметке о человеке нужно знать — в задание, пока строка участия
+    цела: имя, как его видят в комнате, и пол — «вышел» или «вышла»"""
+    return {"name": user.first_name, "gender": user.gender.value if user.gender else None}
+
+
+def _who(name: str | None) -> tuple[str, str]:
+    name = (name or "").strip()
+    return (name, name) if name else NOBODY
+
+
+def left_note(reason: str, name: str | None, gender: str | None) -> str:
+    """Человека убрали из группы, потому что в комнате его больше нет.
+    «Вышел сам» — только когда вышел сам; удалил ли его организатор,
+    заблокировал или запретили попутчиков — группе одно: не в походе"""
+    ru, uz = _who(name)
+    if reason == "left":
+        verb = "вышла" if gender == "female" else "вышел"
+        return uz_display(
+            f"{ru} {verb} из комнаты в Sayr.\n\n{uz} Sayr ilovasidagi xonadan chiqdi."
+        )
+    return uz_display(f"{ru} больше не в походе.\n\n{uz} endi sayohatda emas.")
 
 
 TEXTS = {

@@ -237,7 +237,8 @@ async def _promote(api: TgApi, session: AsyncSession, job: TgJob, room: Room) ->
 async def _kick(api: TgApi, session: AsyncSession, job: TgJob, room: Room) -> None:
     """Ушёл из комнаты — уходит и из группы. Его личная ссылка гаснет, а кто
     успел по ней войти — вылетает: такого служба могла ещё не связать с
-    человеком (событие входа опаздывает, сверка — раз в пять минут)"""
+    человеком (событие входа опаздывает, сверка — раз в пять минут).
+    Выгнали на деле — группе заметка, куда он делся (texts.left_note)"""
     if room.tg_chat_id is None or room.tg_state not in ("ready", "leaving"):
         return
     member = next((m for m in room.members if m.id == job.member_id), None)
@@ -263,6 +264,11 @@ async def _kick(api: TgApi, session: AsyncSession, job: TgJob, room: Room) -> No
                 await api.kick(chat, user_id, user_hash)
             except NotParticipant:
                 pass  # уже вышел сам
+            else:
+                if not job.payload.get("removed"):
+                    # Отметка сразу: повтор после сбоя выгонять уже некого
+                    # (NotParticipant), а заметку он должен написать
+                    await _step(session, job, removed=True)
             kicked.add(user_id)
 
     # Сначала — уже известных: выгнать вошедшего важнее, чем погасить
@@ -278,6 +284,19 @@ async def _kick(api: TgApi, session: AsyncSession, job: TgJob, room: Room) -> No
         await out(await api.link_importers(chat, link))
     if member is not None:
         member.tg_link = None  # погашена
+    # Заметка — только выгнанному на деле: вышедший из группы сам или так и
+    # не вошедший в неё вопроса «куда он делся» не вызывает. Удалившему
+    # аккаунт её нет (rooms.kick), заданиям без причины — тоже
+    reason = job.payload.get("reason")
+    if (
+        job.payload.get("removed")
+        and not job.payload.get("said")
+        and reason in ("left", "removed")
+        and room.tg_state == "ready"
+    ):
+        name, gender = job.payload.get("name"), job.payload.get("gender")
+        await api.send(chat, texts.left_note(reason, name, gender))
+        await _step(session, job, said=True)
 
 
 async def _post(api: TgApi, session: AsyncSession, job: TgJob, room: Room) -> None:
@@ -474,6 +493,9 @@ async def _admit(
                         "tg_user_id": user_id,
                         "tg_user_hash": user_hash,
                         "tg_link": member.tg_link,
+                        # Заметка — как при уходе: группа видела, что он вошёл
+                        "reason": "left" if member.status == "left" else "removed",
+                        **texts.person(member.user),
                     },
                 )
             )

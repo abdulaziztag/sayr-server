@@ -1,7 +1,7 @@
 """Sayr Admin на подменном клиенте: создание группы, личные ссылки, вход
-по ссылке, админ-организатор, удаление из группы, переписка, /leave,
-паузы Telegram и ограничение аккаунта; гашение ссылок ушедших, застрявшие
-без ссылки люди, недособранные группы и недовыполненный /leave.
+по ссылке, админ-организатор, удаление из группы и заметка о нём, переписка,
+/leave, паузы Telegram и ограничение аккаунта; гашение ссылок ушедших,
+застрявшие без ссылки люди, недособранные группы и недовыполненный /leave.
 
 Настоящий Telegram здесь не нужен: логика знает его только через TgApi.
 """
@@ -15,6 +15,7 @@ from app.api import rooms as rooms_api
 from app.config import settings
 from app.db import SessionLocal
 from app.models import (
+    Gender,
     Place,
     PushOutbox,
     Room,
@@ -158,7 +159,7 @@ async def drop(member_id: int, status: str = "removed") -> None:
         room = await service._room(session, member.room_id)
         member = next(m for m in room.members if m.id == member_id)
         member.status = status
-        rooms_api.kick(session, room, member)
+        rooms_api.kick(session, room, member, "left" if status == "left" else "removed")
         await session.commit()
 
 
@@ -170,6 +171,11 @@ async def job_of(kind: str) -> TgJob:
 async def all_jobs() -> list[TgJob]:
     async with SessionLocal() as session:
         return list((await session.execute(select(TgJob))).scalars())
+
+
+def said(api: FakeApi) -> list[str]:
+    """Что Sayr Admin написал в группу"""
+    return [c[2] for c in api.calls if c[0] == "send"]
 
 
 async def test_группа_заводится_и_всем_приходят_ссылки():
@@ -395,8 +401,9 @@ async def test_удаление_аккаунта_стирает_его_сооб�
     async with SessionLocal() as session:
         assert (await session.execute(select(TgMessage))).scalars().all() == []
         kicks = (await session.execute(select(TgJob).where(TgJob.kind == "kick"))).scalars().all()
+    # Без имени: удаление уносит всё о человеке, и заметки о нём не будет
     assert kicks and kicks[0].payload == {
-        "tg_user_id": 5002, "tg_user_hash": 6002, "tg_link": member.tg_link,
+        "tg_user_id": 5002, "tg_user_hash": 6002, "tg_link": member.tg_link, "reason": "deleted",
     }
 
 
@@ -461,6 +468,8 @@ async def test_вход_удалённого_без_события_находи�
     kinds = [c[0] for c in api.calls]
     assert kinds.index("revoke_link") < kinds.index("kick")
     assert ("kick", (777, 999), 5002, 6002) in api.calls
+    # Выгнан на деле — и группе заметка, хотя службе он был не известен
+    assert said(api)[-1] == "Человек1 больше не в походе.\n\nЧеловек1 endi sayohatda emas."
 
 
 async def test_известного_выгоняют_раньше_гашения_и_дважды_не_гасят():
@@ -500,9 +509,13 @@ async def test_сверка_выгоняет_вошедшего_после_уд�
     api.importers[link] = [(5002, 6002)]
     async with SessionLocal() as session:
         await service.reconcile_all(api, session)
-    assert (await job_of("kick")).payload["tg_user_id"] == 5002
+    payload = (await job_of("kick")).payload
+    assert payload["tg_user_id"] == 5002
+    # Задание поставила служба, а не API — причина и имя для заметки и в нём
+    assert (payload["reason"], payload["name"]) == ("removed", "Человек1")
     await run(api)
     assert ("kick", (777, 999), 5002, 6002) in api.calls
+    assert said(api)[-1].startswith("Человек1 больше не в походе.")
 
 
 async def test_удаление_аккаунта_гасит_ссылку_и_выгоняет():
@@ -519,6 +532,174 @@ async def test_удаление_аккаунта_гасит_ссылку_и_вы
     await run(api)
     assert ("revoke_link", (777, 999), fresh.tg_link) in api.calls
     assert ("kick", (777, 999), 5002, 6002) in api.calls
+
+
+# --- Вышел из комнаты — заметка в группе ------------------------------------
+
+
+async def in_group(**user) -> tuple[int, list[int], FakeApi]:
+    """Готовая группа, и второй участник вошёл в неё по своей ссылке. Что
+    служба делала до этого, забыто"""
+    room_id, members, api = await ready_room()
+    member = await get(RoomMember, members[1])
+    async with SessionLocal() as session:
+        person = await session.get(User, member.user_id)
+        for k, v in user.items():
+            setattr(person, k, v)
+        await service.on_join(api, session, 777, 5002, 6002, member.tg_link)
+    api.calls.clear()
+    return room_id, members, api
+
+
+@pytest.mark.parametrize(
+    "status, user, note",
+    [
+        (
+            "left",
+            dict(first_name="Азиз", gender=Gender.male),
+            "Азиз вышел из комнаты в Sayr.\n\nАзиз Sayr ilovasidagi xonadan chiqdi.",
+        ),
+        (
+            "left",
+            dict(first_name="Мадина", gender=Gender.female),
+            "Мадина вышла из комнаты в Sayr.\n\nМадина Sayr ilovasidagi xonadan chiqdi.",
+        ),
+        (
+            "removed",
+            dict(first_name="Мадина", gender=Gender.female),
+            "Мадина больше не в походе.\n\nМадина endi sayohatda emas.",
+        ),
+        (
+            "left",
+            dict(first_name=" "),
+            "Пользователь Sayr вышел из комнаты в Sayr.\n\n"
+            "Sayr foydalanuvchisi Sayr ilovasidagi xonadan chiqdi.",
+        ),
+    ],
+    ids=["вышел", "вышла", "убрали", "без-имени"],
+)
+async def test_выгнанному_заметка_в_группу(status, user, note):
+    """Имя — как в комнате, и только оно: ни номера, ни ника Telegram.
+    Убрал ли организатор, блок или запрет — группе одно «больше не в походе»"""
+    room_id, members, api = await in_group(telegram_username="madina_tg", **user)
+    await drop(members[1], status)
+    await run(api)
+    assert ("kick", (777, 999), 5002, 6002) in api.calls
+    assert said(api) == [note]
+
+
+async def test_вышедшему_из_группы_самому_заметки_нет():
+    """Из группы он ушёл раньше, чем из комнаты: выгонять некого, и вопроса
+    «куда он делся» у группы нет"""
+    room_id, members, api = await in_group()
+
+    async def absent(chat, user_id, user_hash):
+        await api._step("kick", chat, user_id, user_hash)
+        raise NotParticipant("UserNotParticipantError")
+
+    api.kick = absent
+    await drop(members[1], "left")
+    await run(api)
+    assert (await job_of("kick")).status == "done"
+    assert ("kick", (777, 999), 5002, 6002) in api.calls
+    assert said(api) == []
+
+
+async def test_не_входившему_в_группу_заметки_нет():
+    """Ссылку он так и не открыл: гасим её, а в группе о нём не пишем"""
+    room_id, members, api = await ready_room()
+    api.calls.clear()
+    await drop(members[1], "left")
+    await run(api)
+    assert [c[0] for c in api.calls] == ["revoke_link", "link_importers"]
+
+
+async def test_заметка_после_паузы_пишется_хотя_выгонять_уже_некого():
+    room_id, members, api = await in_group()
+    await drop(members[1], "left")
+    send = api.send
+
+    async def flood(chat, text):
+        raise FloodWait(30)
+
+    async def absent(chat, user_id, user_hash):
+        raise NotParticipant("UserNotParticipantError")
+
+    # Выгнали, а на заметке — пауза
+    api.send = flood
+    await run(api)
+    assert (await job_of("kick")).status == "pending"
+    # Повтор: в группе его уже нет, а сказать группе всё ещё нужно — один раз
+    api.send, api.kick = send, absent
+    await rerun(api)
+    await rerun(api)
+    assert (await job_of("kick")).status == "done"
+    assert said(api) == [
+        "Человек1 вышел из комнаты в Sayr.\n\nЧеловек1 Sayr ilovasidagi xonadan chiqdi."
+    ]
+
+
+async def test_пока_sayr_admin_уходит_заметок_нет():
+    """Организатор сказал /leave: выгнать ещё выгоняем, а писать — нет"""
+    room_id, members, api = await in_group()
+    async with SessionLocal() as session:
+        (await session.get(Room, room_id)).tg_state = "leaving"
+        await session.commit()
+    await drop(members[1], "left")
+    await run(api)
+    assert ("kick", (777, 999), 5002, 6002) in api.calls
+    assert said(api) == []
+
+
+async def test_об_удалившем_аккаунт_заметки_нет():
+    room_id, members, api = await in_group()
+    async with SessionLocal() as session:
+        member = await session.get(RoomMember, members[1])
+        user = await session.get(User, member.user_id)
+        await rooms_api.on_account_deleted(session, user)
+        await session.delete(user)
+        await session.commit()
+    await run(api)
+    assert ("kick", (777, 999), 5002, 6002) in api.calls
+    assert said(api) == []
+
+
+async def test_выгнать_можно_только_того_кто_в_группе():
+    """Бан вышедшего Telegram принимает молча — служба сначала спрашивает,
+    в группе ли он: заметка только о выгнанном на деле"""
+    from telethon.tl import types
+    from telethon.tl.functions.channels import GetParticipantRequest
+
+    class Client:
+        def __init__(self, participant):
+            self.participant = participant
+            self.requests: list[str] = []
+
+        async def __call__(self, request):
+            self.requests.append(type(request).__name__)
+            if isinstance(request, GetParticipantRequest):
+                return types.channels.ChannelParticipant(
+                    participant=self.participant, chats=[], users=[]
+                )
+
+    def banned(left: bool):
+        return types.ChannelParticipantBanned(
+            peer=types.PeerUser(3), kicked_by=1, date=None,
+            banned_rights=types.ChatBannedRights(until_date=None, send_messages=True), left=left,
+        )
+
+    for participant in (types.ChannelParticipantLeft(peer=types.PeerUser(3)), banned(True)):
+        client = Client(participant)
+        with pytest.raises(NotParticipant):
+            await TelethonApi(client).kick((1, 2), 3, 4)
+        assert client.requests == ["GetParticipantRequest"]
+    # В группе — и обычный участник, и ограниченный в правах
+    for participant in (types.ChannelParticipant(user_id=3, date=None), banned(False)):
+        client = Client(participant)
+        await TelethonApi(client).kick((1, 2), 3, 4)
+        assert client.requests == [
+            "GetParticipantRequest", "EditBannedRequest", "EditBannedRequest",
+        ]
 
 
 # --- Никто не остаётся без ссылки -------------------------------------------

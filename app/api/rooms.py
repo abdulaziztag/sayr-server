@@ -48,6 +48,7 @@ from ..models import (
 )
 from ..push import outbox
 from ..schemas import DEFAULT_LANG, Lang, pick
+from ..tg import texts
 
 router = APIRouter(prefix="/api/v1", tags=["rooms"])
 
@@ -62,6 +63,9 @@ ADULT_YEARS = 19
 LIVE = ("requested", "joined")
 Transport = Literal["own_car", "need_car", "self"]
 Reason = Literal["abuse", "danger", "fake", "spam", "other"]
+#: Почему человека убирают из группы: вышел сам, убрали (организатор,
+#: блок, запрет попутчиков) или удалил аккаунт
+KickReason = Literal["left", "removed", "deleted"]
 
 
 def rooms_on() -> None:
@@ -519,25 +523,27 @@ def _after_join(session: AsyncSession, room: Room, member: RoomMember) -> None:
         session.add(TgJob(kind="invite_link", room_id=room.id, member_id=member.id, payload={}))
 
 
-def kick(session: AsyncSession, room: Room, member: RoomMember) -> None:
+def kick(session: AsyncSession, room: Room, member: RoomMember, reason: KickReason) -> None:
     """Ушёл из комнаты — уходит и из группы. Задание и тогда, когда служба
     его аккаунта не знает: личная ссылка гаснет, иначе удалённый открыл бы её
     позже и оказался в группе со всеми никами. Пока группа создаётся, тоже:
     ссылку ему могли успеть выдать. Аккаунт и ссылку кладём в задание
-    заранее — строка участия может уйти вместе с удалённым аккаунтом"""
+    заранее — строка участия может уйти вместе с удалённым аккаунтом.
+
+    Причина и имя — для заметки в группе, когда служба выгонит его на деле.
+    Удалившему аккаунт заметки нет и имени в задании тоже: удаление уносит
+    всё о человеке, а новая запись о нём в группе пережила бы и его, и
+    Sayr Admin"""
     if room.tg_state in ("pending", "ready", "leaving"):
-        session.add(
-            TgJob(
-                kind="kick",
-                room_id=room.id,
-                member_id=member.id,
-                payload={
-                    "tg_user_id": member.tg_user_id,
-                    "tg_user_hash": member.tg_user_hash,
-                    "tg_link": member.tg_link,
-                },
-            )
-        )
+        payload = {
+            "tg_user_id": member.tg_user_id,
+            "tg_user_hash": member.tg_user_hash,
+            "tg_link": member.tg_link,
+            "reason": reason,
+        }
+        if reason != "deleted":
+            payload |= texts.person(member.user)
+        session.add(TgJob(kind="kick", room_id=room.id, member_id=member.id, payload=payload))
 
 
 def cancel(session: AsyncSession, room: Room) -> None:
@@ -1028,7 +1034,7 @@ async def member_remove(
     member.decided_at = datetime.now(timezone.utc)
     notify(session, room, member.user_id, "room_removed")
     if was_joined:
-        kick(session, room, member)
+        kick(session, room, member, "removed")
     await session.commit()
     return await _reply(session, await _load(session, id=room.id), user, lang)
 
@@ -1051,7 +1057,7 @@ async def room_leave(
     mine.status = "left"
     mine.decided_at = datetime.now(timezone.utc)
     if role == "joined":
-        kick(session, room, mine)
+        kick(session, room, mine, "left")
     await session.commit()
 
 
@@ -1260,12 +1266,12 @@ async def block(
             joined = them.status == "joined"
             them.status, them.decided_at = "removed", now
             if joined:
-                kick(session, room, them)
+                kick(session, room, them, "removed")
         elif _role(them) == "organizer" and me.status in LIVE:
             joined = me.status == "joined"
             me.status, me.decided_at = "left", now
             if joined:
-                kick(session, room, me)
+                kick(session, room, me, "left")
         elif _role(me) == _role(them) == "joined":
             # Только оба вступивших: заявку к тому, с кем блокировка,
             # организатор уже не одобрит (`member_blocked`) — вместе их
@@ -1393,12 +1399,12 @@ async def ban_companions(session: AsyncSession, user: User) -> None:
         if _role(mine) == "organizer":
             if room.status == "active":
                 cancel(session, room)
-            kick(session, room, mine)
+            kick(session, room, mine, "removed")
         elif mine.status in LIVE:
             joined = mine.status == "joined"
             mine.status, mine.decided_at = "removed", now
             if joined:
-                kick(session, room, mine)
+                kick(session, room, mine, "removed")
 
 
 # MARK: - Удаление аккаунта
@@ -1426,6 +1432,6 @@ async def on_account_deleted(session: AsyncSession, user: User) -> None:
         if _role(mine) == "organizer" and room.status == "active":
             cancel(session, room)
         if mine.status == "joined":
-            kick(session, room, mine)
+            kick(session, room, mine, "deleted")
     # Его сообщения из групп — тоже: удаление аккаунта уносит всё его
     await session.execute(delete(TgMessage).where(TgMessage.user_id == user.id))
