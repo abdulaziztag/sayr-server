@@ -621,6 +621,9 @@ async def _admit(
         return False
     if member.role == "organizer":
         session.add(TgJob(kind="promote", room_id=room.id, member_id=member.id, payload={}))
+        # Организатор в своей группе — не шаг воронки «вступили → вошли
+        # в группу»: иначе шаг выходит больше предыдущего
+        return False
     return entered
 
 

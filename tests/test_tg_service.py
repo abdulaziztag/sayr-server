@@ -1491,6 +1491,19 @@ async def test_статистика_вход_в_группу_по_ссылке_�
     assert await groups_counted() == [("joined", None), ("joined", None)]
 
 
+async def test_статистика_организатор_в_своей_группе_не_считается():
+    """Организатор вошёл в свою группу — его повышают, но шаг воронки
+    «вошли в группу» про участников: иначе шаг больше «вступили»"""
+    room_id, members, api = await ready_room(2)
+    await forget_events()
+    organizer = await get(RoomMember, members[0])
+    assert organizer.role == "organizer"
+    async with SessionLocal() as session:
+        await service.on_join(api, session, 777, 5001, 6001, organizer.tg_link)
+    assert await groups_counted() == []
+    assert (await job_of("promote")) is not None
+
+
 async def test_статистика_вошедший_без_места_в_группе_не_считается():
     """Ушёл из комнаты, а старую ссылку открыл — служба его выгоняет:
     в группу он на деле не вошёл"""
