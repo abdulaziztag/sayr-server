@@ -1816,8 +1816,9 @@ async def test_статистика_заявка_одобрение_отказ(c
         assert resp.status_code == 200
     asks = (await client.get(f"/api/v1/rooms/{room['code']}", headers=org)).json()["requests"]
     members = f"/api/v1/rooms/{room['code']}/members"
-    assert (await client.post(f"{members}/{asks[0]['member_id']}/approve", headers=org)).status_code == 200
-    assert (await client.post(f"{members}/{asks[1]['member_id']}/decline", headers=org)).status_code == 200
+    ok = await client.post(f"{members}/{asks[0]['member_id']}/approve", headers=org)
+    no = await client.post(f"{members}/{asks[1]['member_id']}/decline", headers=org)
+    assert ok.status_code == no.status_code == 200
     # Решённая заявка второй раз не решается — и не считается
     again = await client.post(f"{members}/{asks[0]['member_id']}/approve", headers=org)
     assert again.status_code == 409
@@ -1900,7 +1901,8 @@ async def test_статистика_отмена_похода_и_жалоба_п
         assert (await client.post("/api/v1/reports", json=body, headers=madina)).status_code == 204
     # Отменённый поход второй раз не отменяется
     for _ in range(2):
-        assert (await client.delete(f"/api/v1/rooms/{room['code']}", headers=org)).status_code == 204
+        resp = await client.delete(f"/api/v1/rooms/{room['code']}", headers=org)
+        assert resp.status_code == 204
     assert await counted("room_report", "room_cancel") == [
         ("room_report", None),
         ("room_cancel", None),

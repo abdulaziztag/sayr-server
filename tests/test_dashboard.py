@@ -378,7 +378,9 @@ async def test_accounts_section_without_data():
 
 
 async def test_accounts_since_text_names_versions(monkeypatch):
-    monkeypatch.setattr(stats_dashboard, "ACCOUNT_EVENTS_SINCE", {"ios": "1.9.6", "android": "1.8.1"})
+    monkeypatch.setattr(
+        stats_dashboard, "ACCOUNT_EVENTS_SINCE", {"ios": "1.9.6", "android": "1.8.1"}
+    )
     await _clear()
     a = (await _data())["accounts"]
     assert a["since_text"] == "Данные пойдут с версий iOS 1.9.6 и Android 1.8.1."

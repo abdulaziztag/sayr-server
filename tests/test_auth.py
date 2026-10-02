@@ -647,6 +647,8 @@ async def test_статистика_вход_по_номеру_новый_и_в�
 async def test_статистика_неверный_код_не_вход(client, channel):
     request_id = (await _request(client)).json()["request_id"]
     channel.check_status = CODE_INVALID
-    resp = await client.post("/api/v1/auth/verify", json={"request_id": request_id, "code": "000000"})
+    resp = await client.post(
+        "/api/v1/auth/verify", json={"request_id": request_id, "code": "000000"}
+    )
     assert resp.status_code == 400
     assert await _logins() == []
