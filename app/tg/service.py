@@ -377,13 +377,19 @@ async def _request_note(api: TgApi, session: AsyncSession, job: TgJob, room: Roo
         # найдёт его здесь, а уборка не возьмётся за ту же заметку снова
         note, member.tg_request_message_id = member.tg_request_message_id, None
         await _step(session, job, note=note)
+    await _settle(api, room, member, note)
+
+
+async def _settle(api: TgApi, room: Room, member: RoomMember | None, note: int) -> None:
+    """Заметку о заявке, решения по которой группе больше не ждать:
+    одобренному — поправить на «теперь в походе», остальным — удалить"""
     try:
         if member is not None and member.status == "joined":
-            await api.edit(chat, note, texts.request_approved(member.user.first_name))
+            await api.edit(_chat(room), note, texts.request_approved(member.user.first_name))
         else:
-            # Отказ, отзыв, отмена, прошедший поход, блок — молча: о том,
-            # что человека не взяли, группе знать незачем
-            await api.delete(chat, note)
+            # Отказ, отзыв, отмена, прошедший поход, блок, уход Sayr Admin —
+            # молча: о том, что человека не взяли, группе знать незачем
+            await api.delete(_chat(room), note)
     except MessageGone as e:
         # Заметку удалил организатор или у Sayr Admin отобрали права —
         # повтор ничего не изменит
@@ -414,6 +420,14 @@ async def _quit(api: TgApi, session: AsyncSession, job: TgJob, room: Room) -> No
                     await api.revoke_link(chat, member.tg_link)
                     member.tg_link = None
                     await session.commit()
+        # Заметки о заявках — тоже, пока мы в группе: после выхода их уже не
+        # поправить, и «просится» со ссылкой висела бы и после решения. Задания
+        # на них служба после /leave не выполняет — Sayr Admin уже «уходит»
+        for member in room.members:
+            if member.tg_request_message_id is not None:
+                await _settle(api, room, member, member.tg_request_message_id)
+                member.tg_request_message_id = None
+                await session.commit()
         if text and not job.payload.get("said"):
             await api.send(chat, text)
             await _step(session, job, said=True)

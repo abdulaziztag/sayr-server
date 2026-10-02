@@ -1009,6 +1009,39 @@ async def test_сбой_удаления_повторяется_но_не_веч
     assert len(await note_jobs()) == 2
 
 
+async def test_уходя_по_leave_sayr_admin_разбирает_заметки_о_заявках():
+    """После /leave задания на заметки служба уже не выполняет, а после выхода
+    их не поправить: «просится» со ссылкой висела бы и после решения. Уходя,
+    ждущую решения заметку удаляем, одобренную — правим"""
+    room_id, member_id, note, api = await noted()
+    lola = await ask(room_id, first_name="Лола")
+    await run(api)
+    lola_note = (await get(RoomMember, lola)).tg_request_message_id
+    async with SessionLocal() as session:
+        organizer = (
+            await session.execute(
+                select(RoomMember).where(
+                    RoomMember.room_id == room_id, RoomMember.role == "organizer"
+                )
+            )
+        ).scalar_one()
+        await service.on_join(api, session, 777, 5001, 6001, organizer.tg_link)
+    # Лолу одобрили, а поправить заметку служба не успела: сказали /leave
+    await decide(lola, "joined")
+    async with SessionLocal() as session:
+        await service.on_message(session, 777, 10, 5001, "/leave", False, NOW)
+    api.calls.clear()
+    await run(api)
+    notes = [c for c in api.calls if c[0] in ("edit", "delete")]
+    assert sorted(notes) == [
+        ("delete", (777, 999), note),
+        ("edit", (777, 999), lola_note, "Лола теперь в походе.\n\nЛола endi sayohatda."),
+    ]
+    assert api.calls[-1] == ("leave", (777, 999))
+    assert (await get(RoomMember, member_id)).tg_request_message_id is None
+    assert (await get(RoomMember, lola)).tg_request_message_id is None
+
+
 async def test_миграция_0034_откатывается_и_накатывается():
     """Номер заметки — колонкой миграции 0034: откат её убирает, накат
     возвращает, а голова у миграций одна"""
