@@ -4,9 +4,10 @@ from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import delete, select
 
-from app.api.events import DAILY_CAP, clamp_at, validate_key
+from app.api.events import ALLOWED_KINDS, DAILY_CAP, clamp_at, validate_key
 from app.db import SessionLocal
 from app.models import ApiEvent, Device
+from app.stats import SERVER_KINDS
 
 # Номера устройств — UUID, как у приложений: чужой формат сервер не считает
 DEVICE = "0f8e3c2a-5b1d-4c7e-9a6f-2d4b8e1c7a90"
@@ -266,6 +267,29 @@ def test_account_and_rooms_kinds_reject_anything_but_their_keys():
     ]
     for kind, key in bad:
         assert validate_key(kind, key)[0] is False, (kind, key)
+
+
+def test_server_kinds_are_not_in_client_list():
+    """Перечни не пересекаются: иначе клиент мог бы прислать «вошёл»
+    или «вступил в комнату», и дашборд считал бы выдуманное."""
+    assert not SERVER_KINDS & ALLOWED_KINDS.keys()
+
+
+async def test_client_cannot_send_server_kinds(client):
+    await _clear()
+    forged = {
+        "login": "telegram:new", "tg_link": "ok", "profile_save": "first",
+        "room_create": "open", "room_ask": None, "room_approve": None,
+        "room_decline": None, "room_join": None, "room_leave": "self",
+        "room_cancel": None, "room_report": None, "room_block": None,
+        "tg_group": "joined", "store_ios": "gorets", "place": "test-peak",
+    }
+    assert set(forged) <= SERVER_KINDS
+    resp = await _post(client, [
+        _event(f"es{i:06d}", kind, key) for i, (kind, key) in enumerate(forged.items())
+    ])
+    assert resp.status_code == 204
+    assert await _rows() == []
 
 
 async def test_account_and_rooms_kinds_are_written(client):

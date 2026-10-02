@@ -1,10 +1,11 @@
 """Статистика владельца: сбор, ротация, свёртки.
 
 Два потока событий. Серверный: middleware выводит открытия каталога,
-мест и треков из запросов, которые и так приходят. Клиентский: приложения
-шлют события по перечню из api/events.py и заголовок X-Sayr-App
-с платформой и версией. Всё, что показывает страница «Статистика»,
-собирает stats_dashboard.py.
+мест и треков из запросов, которые и так приходят, а ручки входа, анкеты
+и комнат пишут, что вышло на деле (`Tally`, виды — `SERVER_KINDS`).
+Клиентский: приложения шлют события по перечню из api/events.py
+и заголовок X-Sayr-App с платформой и версией. Всё, что показывает
+страница «Статистика», собирает stats_dashboard.py.
 """
 
 import asyncio
@@ -28,6 +29,7 @@ from sqlalchemy import (
     select,
     update,
 )
+from fastapi import BackgroundTasks, Request
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -245,6 +247,57 @@ async def record_event(
     """Записать событие вне middleware — редирект в магазины пишет клик
     по каналу сам. Тот же путь, те же гарантии: ошибка не роняет запрос."""
     await _record(kind, slug, device, info)
+
+
+#: Виды, которые пишет только сервер — из запросов, из ручек и из службы
+#: Sayr Admin, — а не со слов телефона. В перечень клиентских
+#: (api/events.py) им нельзя: тогда любой номер устройства прислал бы
+#: «вошёл», «вступил в комнату» или клик в магазин, и дашборд считал бы
+#: выдуманное. Что перечни не пересекаются, проверяет test_events
+SERVER_KINDS = frozenset(
+    {
+        # Из запросов (middleware) и редиректа в магазины
+        "catalog", "place", "gpx", "share", "landing", "store_ios", "store_android",
+        # Вход, привязка Telegram, анкета (02.10.2026)
+        "login", "tg_link", "profile_save",
+        # Комнаты попутчиков и их группы в Telegram
+        "room_create", "room_ask", "room_approve", "room_decline", "room_join",
+        "room_leave", "room_cancel", "room_report", "room_block", "tg_group",
+    }
+)
+
+
+class Tally:
+    """Серверные события ручки — зависимостью: `tally: Tally = Depends()`.
+
+    `tally(kind, key)` ставит запись в фоновые задачи ответа: она идёт уже
+    после него, своей сессией и своей транзакцией (`_record`), — человек
+    её не ждёт, а сбой записи только попадает в журнал. Звать после
+    коммита основного дела: откатившееся не должно оставить события.
+
+    Ответ ошибкой (HTTPException) фоновые задачи с собой не уносит — для
+    него `await tally.now(kind, key)`: человек и так получает отказ,
+    и миллисекунды записи ему не помеха.
+
+    Номер устройства и заголовок — из запроса, как у middleware: отладочные
+    сборки не считаются и здесь.
+    """
+
+    def __init__(self, request: Request, background: BackgroundTasks) -> None:
+        self.device = clean_device(request.headers.get("x-device-id"))
+        self.info = parse_app_header(request.headers.get("x-sayr-app"))
+        self.background = background
+
+    def _counted(self) -> bool:
+        return not (self.info is not None and self.info.debug and not settings.stats_count_debug)
+
+    def __call__(self, kind: str, key: str | None = None) -> None:
+        if self._counted():
+            self.background.add_task(_record, kind, key, self.device, self.info)
+
+    async def now(self, kind: str, key: str | None = None) -> None:
+        if self._counted():
+            await _record(kind, key, self.device, self.info)
 
 
 async def _record(
