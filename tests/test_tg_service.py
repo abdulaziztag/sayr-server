@@ -17,6 +17,7 @@ from app.api import rooms as rooms_api
 from app.config import settings
 from app.db import SessionLocal, engine
 from app.models import (
+    ApiEvent,
     Gender,
     Place,
     PushOutbox,
@@ -1420,3 +1421,83 @@ async def test_выходя_служба_гасит_ссылки_ушедших(
     # Ссылку того, кто в комнате, не трогаем — по ней войдёт свой
     assert [c[2] for c in api.calls if c[0] == "revoke_link"] == [link]
     assert (await get(RoomMember, members[2])).tg_link
+
+
+# --- Статистика (02.10.2026) -----------------------------------------------
+
+
+async def forget_events() -> None:
+    async with SessionLocal() as session:
+        await session.execute(delete(ApiEvent))
+        await session.commit()
+
+
+async def groups_counted() -> list[tuple[str | None, str | None]]:
+    """(ключ, устройство) событий tg_group — в порядке записи"""
+    async with SessionLocal() as session:
+        rows = await session.execute(
+            select(ApiEvent.slug, ApiEvent.device)
+            .where(ApiEvent.kind == "tg_group")
+            .order_by(ApiEvent.id)
+        )
+        return [tuple(r) for r in rows.all()]
+
+
+async def test_статистика_группа_готова_один_раз_и_после_паузы():
+    """Пауза посреди выдачи ссылок: повтор доводит ссылки веткой «уже готова»
+    и второй раз группу готовой не считает. Номера устройства у службы нет"""
+    await forget_events()
+    room_id, _ = await room_with(3)
+    api = FakeApi()
+    original, calls = api.export_link, 0
+
+    async def flaky(chat, title, expire):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise FloodWait(30)
+        return await original(chat, title, expire)
+
+    api.export_link = flaky
+    await run(api)
+    await rerun(api)
+    assert (await job_of("create_group")).status == "done"
+    assert (await get(Room, room_id)).tg_state == "ready"
+    assert await groups_counted() == [("ready", None)]
+
+
+async def test_статистика_несобранная_группа_готовой_не_считается():
+    await forget_events()
+    await room_with(2)
+    api = FakeApi()
+    api.fail = Restricted("USER_RESTRICTED")
+    await run(api)
+    assert await groups_counted() == []
+
+
+async def test_статистика_вход_в_группу_по_ссылке_и_по_сверке():
+    """Вошёл по ссылке — joined; то же событие второй раз — не новый вход;
+    вход, найденный сверкой списка вошедших, — тоже joined"""
+    room_id, members, api = await ready_room(3)
+    await forget_events()
+    first = await get(RoomMember, members[1])
+    for _ in range(2):
+        async with SessionLocal() as session:
+            await service.on_join(api, session, 777, 5002, 6002, first.tg_link)
+    second = await get(RoomMember, members[2])
+    api.importers[second.tg_link] = [(5003, 6003)]
+    async with SessionLocal() as session:
+        await service.on_join(api, session, 777, 5003, 0, None)
+    assert await groups_counted() == [("joined", None), ("joined", None)]
+
+
+async def test_статистика_вошедший_без_места_в_группе_не_считается():
+    """Ушёл из комнаты, а старую ссылку открыл — служба его выгоняет:
+    в группу он на деле не вошёл"""
+    room_id, members, api = await ready_room()
+    link = (await get(RoomMember, members[1])).tg_link
+    await drop(members[1], "left")
+    await forget_events()
+    async with SessionLocal() as session:
+        await service.on_join(api, session, 777, 5002, 6002, link)
+    assert await groups_counted() == []

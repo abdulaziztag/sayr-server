@@ -10,6 +10,10 @@
 `promote`, когда в группу вошёл организатор; `kick`, когда по личной ссылке
 вошёл тот, кому в группе уже не место; `leave` по /leave организатора;
 `invite_link` тем, кто при сверке остался без ссылки.
+
+Статистика — событие `tg_group`: ready, когда группа собрана, joined,
+когда человек на деле вошёл в неё. Пишется после коммита своей сессией
+(stats.record_event), без номера устройства: у службы его нет.
 """
 
 import logging
@@ -22,6 +26,7 @@ from sqlalchemy.orm import selectinload
 from ..config import PHOTOS_DIR, settings
 from ..models import Place, Room, RoomMember, TgJob, TgMessage, TgStatus, User, UserBlock
 from ..push import outbox
+from ..stats import record_event
 from . import texts
 from .api import Chat, FloodWait, Gone, MessageGone, NotParticipant, Restricted, TgApi
 
@@ -207,6 +212,9 @@ async def _create_group(api: TgApi, session: AsyncSession, job: TgJob, room: Roo
     # «Готова» — только собранная целиком и уже в базе, отдельно от ссылок
     room.tg_state = "ready"
     await session.commit()
+    # Один раз на группу: повтор после паузы посреди ссылок идёт веткой
+    # «уже готова» в начале и сюда не доходит
+    await record_event("tg_group", "ready", None)
     await _links_for_all(api, session, room)
 
 
@@ -572,10 +580,15 @@ async def run_due(api: TgApi, session: AsyncSession, limit: int = 20) -> int:
 
 async def _admit(
     session: AsyncSession, room: Room, member: RoomMember, user_id: int, user_hash: int
-) -> None:
+) -> bool:
     """Вошёл по личной ссылке — аккаунт его. Место в группе есть — только
     связываем; нет (удалили или вышел, пока ссылка лежала неоткрытой) —
-    выгоняем, а не пускаем ко всем никам"""
+    выгоняем, а не пускаем ко всем никам.
+
+    Да — человек вошёл в группу на деле, для статистики: место есть,
+    а ссылка до того не была использована. Повтор того же события
+    о входе второго входа не делает"""
+    entered = not member.tg_link_used
     member.tg_user_id = user_id
     member.tg_user_hash = user_hash
     member.tg_link_used = True
@@ -605,9 +618,10 @@ async def _admit(
                     },
                 )
             )
-        return
+        return False
     if member.role == "organizer":
         session.add(TgJob(kind="promote", room_id=room.id, member_id=member.id, payload={}))
+    return entered
 
 
 async def on_join(
@@ -625,15 +639,25 @@ async def on_join(
         return
     member = next((m for m in room.members if link and m.tg_link == link), None)
     if member is not None:
-        await _admit(session, room, member, user_id, user_hash)
+        entered = await _admit(session, room, member, user_id, user_hash)
         await session.commit()
+        await _count_entered(1 if entered else 0)
         return
     await reconcile_room(api, session, room)
+
+
+async def _count_entered(people: int) -> None:
+    """Статистика: сколько человек вошли в группу на деле. После коммита —
+    своей сессией (stats._record): сбой записи службу не держит. Номера
+    устройства у службы нет — событие без него"""
+    for _ in range(people):
+        await record_event("tg_group", "joined", None)
 
 
 async def reconcile_room(api: TgApi, session: AsyncSession, room: Room) -> None:
     """Неиспользованные ссылки — у всех, а не только у вступивших: по ссылке
     удалённого, если её ещё не погасили, тоже могли войти"""
+    entered = 0
     for member in room.members:
         if not member.tg_link or member.tg_link_used:
             continue
@@ -643,8 +667,10 @@ async def reconcile_room(api: TgApi, session: AsyncSession, room: Room) -> None:
             break  # остальных — в следующий раз; уже сверенных не теряем
         if importers:
             user_id, user_hash = importers[0]
-            await _admit(session, room, member, user_id, user_hash)
+            if await _admit(session, room, member, user_id, user_hash):
+                entered += 1
     await session.commit()
+    await _count_entered(entered)
 
 
 async def _stranded(session: AsyncSession) -> None:
