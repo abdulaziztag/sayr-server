@@ -169,3 +169,70 @@ async def test_near_только_земные_координаты(client):
     assert resp.status_code == 200
     assert resp.json() == []
 
+
+# Предел каталога. Установленные сборки обеих платформ просят limit=200
+# и обновиться не могут, а мест уже под полторы сотни, и импорты добавляют
+# их пачками: за двумя сотнями алфавитный хвост тихо пропал бы из списка,
+# карты и офлайн-кэша. Поэтому их 200 сервер понимает как «весь каталог»,
+# а новые сборки просят 1000 — столько он и отдаёт за раз
+
+
+async def _add_tail_places(count: int):
+    """Места в конце алфавита — именно их срезала бы обрезка"""
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models import Difficulty, Place, PlaceCategory
+
+    async with SessionLocal() as session:
+        lake = (await session.execute(select(Place).where(Place.slug == "test-lake"))).scalar_one()
+        session.add_all([
+            Place(
+                slug=f"test-tail-{i:03d}", name=f"Я хвост {i:03d}",
+                category=PlaceCategory.lake, difficulty=Difficulty.easy,
+                lat=lake.lat, lng=lake.lng, region_id=lake.region_id,
+                short_desc="", is_published=True,
+            )
+            for i in range(count)
+        ])
+        await session.commit()
+
+
+async def _drop_tail_places():
+    from sqlalchemy import delete
+
+    from app.db import SessionLocal
+    from app.models import Place
+
+    async with SessionLocal() as session:
+        await session.execute(delete(Place).where(Place.slug.like("test-tail-%")))
+        await session.commit()
+
+
+async def test_limit_200_старых_сборок_отдаёт_весь_каталог(client):
+    await _add_tail_places(200)
+    try:
+        resp = await client.get("/api/v1/places", params={"limit": 200})
+        assert resp.status_code == 200
+        slugs = [p["slug"] for p in resp.json()]
+        assert len(slugs) == 205, "фикстуры и все двести добавленных — хвост не срезан"
+        assert slugs[-1] == "test-tail-199"
+        # Новые сборки просят тысячу — и получают то же
+        resp = await client.get("/api/v1/places", params={"limit": 1000})
+        assert resp.status_code == 200
+        assert [p["slug"] for p in resp.json()] == slugs
+    finally:
+        await _drop_tail_places()
+
+
+async def test_limit_до_тысячи_а_меньший_предел_режет_как_раньше(client):
+    resp = await client.get("/api/v1/places", params={"limit": 1001})
+    assert resp.status_code == 422
+    resp = await client.get("/api/v1/places", params={"limit": 0})
+    assert resp.status_code == 422
+    everything = [p["slug"] for p in (await client.get("/api/v1/places")).json()]
+    resp = await client.get("/api/v1/places", params={"limit": 3})
+    assert [p["slug"] for p in resp.json()] == everything[:3]
+    resp = await client.get("/api/v1/places", params={"limit": 3, "offset": 3})
+    assert [p["slug"] for p in resp.json()] == everything[3:6]
+

@@ -35,6 +35,16 @@ NEARBY_LIMIT = 6
 #: каталога в сотню мест бессмыслен, а число за пределами типа Postgres
 #: встречал ошибкой, и человек получал 500 вместо 422
 INT_MAX = 2**31 - 1
+#: Потолок каталога за один запрос. Клиенты берут каталог целиком и фильтруют
+#: у себя, а мест на 17.09.2026 — 147, и импорты («ГОРЕЦ», tabiatsari)
+#: добавляют их пачками: с запасом на годы
+CATALOG_MAX = 1000
+#: Предел, который просят сборки, вышедшие до 03.10.2026 (Android и iOS).
+#: Обновить у них нельзя ни число, ни код, а за двумя сотнями мест их
+#: алфавитный хвост тихо пропал бы из списка, карты и офлайн-кэша. Поэтому
+#: ровно это число сервер понимает как «весь каталог»; новые сборки просят
+#: CATALOG_MAX сами
+LEGACY_CATALOG_LIMIT = 200
 
 
 def _distance_km_expr(lat: float, lng: float):
@@ -68,10 +78,12 @@ async def list_places(
     q: str | None = Query(None, max_length=100, pattern=NO_NUL),
     near: str | None = Query(None, description="lat,lng — сортирует по удалённости"),
     radius_km: float = Query(150, gt=0, le=1000),
-    limit: int = Query(100, ge=1, le=200),
+    limit: int = Query(100, ge=1, le=CATALOG_MAX),
     offset: int = Query(0, ge=0, le=INT_MAX),
     lang: Lang = Query(DEFAULT_LANG, description="язык текстов; без него — русский"),
 ):
+    if limit == LEGACY_CATALOG_LIMIT:
+        limit = CATALOG_MAX
     stmt = (
         select(Place)
         .options(
