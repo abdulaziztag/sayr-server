@@ -1200,6 +1200,12 @@ class UserTripDay(Base):
     answered_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    #: План по дням: сколько дней длится поход (1..30) и во сколько выезд
+    #: в день 1, минуты от полуночи (0..1439). По ним вход восстанавливает
+    #: план на телефоне. Пусто у расчётных выходов и у записей от сборок,
+    #: которые этих полей не знают, — тогда длину берут из каталога
+    days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    depart_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     #: Как у избранного: updated_at — часы телефона, server_updated_at — сервера
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True

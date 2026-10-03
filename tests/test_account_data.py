@@ -15,7 +15,7 @@ from sqlalchemy import delete, func, select
 from app.api import sync as sync_api
 from app.auth.tokens import new_token
 from app.config import AVATARS_DIR
-from app.db import SessionLocal
+from app.db import SessionLocal, engine
 from app.models import (
     LoginRequest,
     Place,
@@ -522,6 +522,73 @@ async def test_первая_сверка_с_двух_телефонов_разо
         for model in (UserFavorite, UserTripDay, UserSetting):
             count = (await session.execute(select(func.count()).select_from(model))).scalar_one()
             assert count == 1, model.__name__
+
+
+# --- План в записи дня: длина похода и час выезда ---------------------------
+
+
+async def test_миграция_0035_откатывается_и_накатывается():
+    """Длина похода и час выезда — колонками миграции 0035: откат убирает
+    их, не трогая самих записей дня, накат возвращает пустыми, голова одна"""
+    import importlib.util
+    from pathlib import Path
+
+    from alembic.config import Config
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import Integer, inspect, text
+
+    versions = Path(__file__).parent.parent / "alembic"
+    config = Config()
+    config.set_main_option("script_location", str(versions))
+    script = ScriptDirectory.from_config(config)
+    assert len(script.get_heads()) == 1
+    assert script.get_revision("0035").down_revision == "0034"
+
+    spec = importlib.util.spec_from_file_location(
+        "migration_0035", versions / "versions" / "0035_trip_day_plan.py"
+    )
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    def plan_columns(conn) -> dict:
+        return {
+            c["name"]: c
+            for c in inspect(conn).get_columns("user_trip_days")
+            if c["name"] in ("days", "depart_minutes")
+        }
+
+    def roundtrip(conn) -> None:
+        user_id = conn.execute(text("INSERT INTO users DEFAULT VALUES RETURNING id")).scalar_one()
+        conn.execute(
+            text(
+                "INSERT INTO user_trip_days"
+                " (user_id, place_id, day, outcome, days, depart_minutes)"
+                " SELECT :user, id, '2026-10-10', 'planned', 3, 120 FROM places LIMIT 1"
+            ),
+            {"user": user_id},
+        )
+        with Operations.context(MigrationContext.configure(conn)):
+            migration.downgrade()
+            assert plan_columns(conn) == {}
+            migration.upgrade()
+        columns = plan_columns(conn)
+        assert set(columns) == {"days", "depart_minutes"}
+        assert all(isinstance(c["type"], Integer) and c["nullable"] for c in columns.values())
+        # Запись дня пережила откат, а длина и час после наката пустые —
+        # так выглядят и строки, записанные до миграции
+        row = conn.execute(
+            text("SELECT outcome, days, depart_minutes FROM user_trip_days WHERE user_id = :user"),
+            {"user": user_id},
+        ).one()
+        assert tuple(row) == ("planned", None, None)
+
+    # Одной транзакцией с откатом: ни схема, ни строки тестовой базы
+    # не меняются при любом исходе
+    async with engine.connect() as conn:
+        await conn.run_sync(roundtrip)
+        await conn.rollback()
 
 
 # --- Планы по человеку ----------------------------------------------------
