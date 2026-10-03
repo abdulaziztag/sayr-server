@@ -509,7 +509,16 @@ async def test_лента_четвёртая_ступень_приходит_ф�
     assert place["difficulty"] == "hard" and place["alpine"] is True
 
 
-async def test_лента_только_на_месяц_вперёд_и_по_опубликованным(client):
+async def test_лента_видит_второй_месяц_календаря(client):
+    """Календарь «Пойду» открывает комнаты до конца следующего месяца — лента
+    их показывает: при горизонте в 30 дней такая комната пропадала"""
+    room = await open_room(client, (await person())[0])
+    await set_room(room["code"], day=TODAY + timedelta(days=45))
+    body = (await client.get("/api/v1/rooms")).json()
+    assert [r["code"] for r in body["public_rooms"]] == [room["code"]]
+
+
+async def test_лента_только_на_срок_календаря_и_по_опубликованным(client):
     far = await open_room(client, (await person())[0])
     await set_room(far["code"], day=TODAY + timedelta(days=rooms_api.AHEAD_DAYS + 1))
     await open_room(client, (await person(name="Мадина"))[0], place="test-lake")

@@ -62,8 +62,11 @@ router = APIRouter(prefix="/api/v1", tags=["rooms"])
 TASHKENT = ZoneInfo("Asia/Tashkent")
 #: Код комнаты и секрет ссылки — без похожих знаков: их переписывают руками
 _ALPHABET = "23456789abcdefghjkmnpqrstuvwxyz"
-#: Сколько дней вперёд показываем открытые комнаты места
-AHEAD_DAYS = 30
+#: Сколько дней вперёд показываем открытые комнаты — у места и в «Походах».
+#: Столько же, сколько охватывает календарь «Пойду»: этот месяц и следующий,
+#: до 61 дня. При 30 комнаты на второй месяц, открытые из календаря, в ленту
+#: не попадали вовсе, а «Все даты» совпадали с «Ближайшими 30 днями»
+AHEAD_DAYS = 61
 #: Возраст по одному году рождения точно не узнать — спорный год решаем
 #: в пользу отказа: 18+ значит год рождения не позже «текущий − 19»
 ADULT_YEARS = 19
@@ -703,7 +706,7 @@ class JoinIn(BaseModel):
 async def place_rooms(
     slug: str,
     lang: Lang = Query(DEFAULT_LANG),
-    ahead: int = Query(AHEAD_DAYS, ge=1, le=60),
+    ahead: int = Query(AHEAD_DAYS, ge=1, le=AHEAD_DAYS),
     user: User | None = Depends(optional_user),
     session: AsyncSession = Depends(get_session),
 ) -> PlaceRoomsOut:
@@ -720,7 +723,7 @@ async def place_rooms(
 @router.get("/rooms", response_model=RoomsFeedOut, dependencies=[Depends(rooms_on)])
 async def rooms_feed(
     lang: Lang = Query(DEFAULT_LANG),
-    ahead: int = Query(AHEAD_DAYS, ge=1, le=60),
+    ahead: int = Query(AHEAD_DAYS, ge=1, le=AHEAD_DAYS),
     user: User | None = Depends(optional_user),
     session: AsyncSession = Depends(get_session),
 ) -> RoomsFeedOut:
