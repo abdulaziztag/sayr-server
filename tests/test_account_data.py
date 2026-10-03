@@ -591,6 +591,144 @@ async def test_миграция_0035_откатывается_и_накатыв�
         await conn.rollback()
 
 
+def _trip_day(slug: str, at: datetime, day: str = "2026-10-10", **fields) -> dict:
+    """Запись дня с телефона. Без days и depart_minutes — как от сборки,
+    которая этих полей не знает"""
+    return {"slug": slug, "day": day, "updated_at": at.isoformat(), **fields}
+
+
+def _plan(out: dict) -> tuple:
+    """Длина и час единственной записи дня в ответе сверки"""
+    [day] = out["trip_days"]
+    return day["days"], day["depart_minutes"]
+
+
+async def test_длина_похода_и_час_выезда_доезжают_до_второго_телефона(client):
+    """По ним вход восстанавливает план: многодневка возвращается
+    многодневкой, с часом выезда из плана"""
+    token, user_id = await _login()
+    _, two = await _slugs()
+    sent = await client.post(
+        "/api/v1/sync",
+        json={"trip_days": [_trip_day(two, NOW, days=3, depart_minutes=120)]},
+        headers=_auth(token),
+    )
+    assert sent.status_code == 200, sent.text
+    assert _plan(sent.json()) == (3, 120)
+
+    resp = await client.post("/api/v1/sync", json={}, headers=await _second_phone(user_id))
+    assert _plan(resp.json()) == (3, 120)
+
+
+async def test_сборка_без_плана_его_не_стирает(client):
+    """Старые сборки шлют запись дня без длины и часа. Их правка свежее —
+    исход меняется, а план, записанный новым телефоном, остаётся: иначе
+    отметка «Были» со старого телефона превращала бы многодневку в однодневку"""
+    token, user_id = await _login()
+    _, two = await _slugs()
+    old = await _second_phone(user_id)
+    base = NOW - timedelta(hours=1)
+
+    # Запись, заведённая старой сборкой: длины и часа нет, ключи в ответе пустые
+    created = await client.post(
+        "/api/v1/sync", json={"trip_days": [_trip_day(two, base)]}, headers=old
+    )
+    assert _plan(created.json()) == (None, None)
+
+    await client.post(
+        "/api/v1/sync",
+        json={
+            "trip_days": [
+                _trip_day(two, base + timedelta(minutes=10), days=3, depart_minutes=120)
+            ]
+        },
+        headers=_auth(token),
+    )
+    resp = await client.post(
+        "/api/v1/sync",
+        json={
+            "trip_days": [
+                _trip_day(two, base + timedelta(minutes=20), outcome="went", pace="slower")
+            ]
+        },
+        headers=old,
+    )
+    assert resp.status_code == 200, resp.text
+    [day] = resp.json()["trip_days"]
+    assert (day["outcome"], day["pace"]) == ("went", "slower")
+    assert (day["days"], day["depart_minutes"]) == (3, 120)
+    async with SessionLocal() as session:
+        row = (await session.execute(select(UserTripDay))).scalar_one()
+    assert (row.outcome, row.days, row.depart_minutes) == ("went", 3, 120)
+
+
+async def test_null_стирает_план_а_старая_правка_его_не_трогает(client):
+    """Длина и час правятся, как вся запись: побеждает свежая правка. Ключ
+    с null стирает значение — так план меняют на расчётный выход, —
+    а отсутствующий ключ оставляет лежащее, у каждого поля отдельно"""
+    token, _ = await _login()
+    _, two = await _slugs()
+    base = NOW - timedelta(hours=1)
+
+    async def send(minutes: int, **fields) -> tuple:
+        resp = await client.post(
+            "/api/v1/sync",
+            json={"trip_days": [_trip_day(two, base + timedelta(minutes=minutes), **fields)]},
+            headers=_auth(token),
+        )
+        assert resp.status_code == 200, resp.text
+        return _plan(resp.json())
+
+    assert await send(10, days=3, depart_minutes=120) == (3, 120)
+    # Правка старше записанной проигрывает целиком
+    assert await send(0, days=2, depart_minutes=60) == (3, 120)
+    # Пришла только длина — час остаётся
+    assert await send(20, days=2) == (2, 120)
+    assert await send(30, days=None, depart_minutes=None) == (None, None)
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [("days", 0), ("days", 31), ("depart_minutes", -1), ("depart_minutes", 24 * 60)],
+)
+async def test_длина_и_час_вне_пределов_не_принимаются(client, field, value):
+    """Длина — от 1 до 30 дней, час — минуты от полуночи, 0..1439. Остальное —
+    ошибка клиента: сверка отвечает 422 и не записывает из запроса ничего"""
+    token, _ = await _login()
+    one, two = await _slugs()
+    resp = await client.post(
+        "/api/v1/sync",
+        json={
+            "favorites": [{"slug": one, "updated_at": NOW.isoformat()}],
+            "trip_days": [_trip_day(two, NOW, **{field: value})],
+        },
+        headers=_auth(token),
+    )
+    assert resp.status_code == 422
+    assert resp.json()["detail"][0]["loc"] == ["body", "trip_days", 0, field]
+    async with SessionLocal() as session:
+        for model in (UserFavorite, UserTripDay):
+            assert (await session.execute(select(model))).first() is None
+
+
+async def test_крайние_длина_и_час_принимаются(client):
+    token, _ = await _login()
+    _, two = await _slugs()
+    resp = await client.post(
+        "/api/v1/sync",
+        json={
+            "trip_days": [
+                _trip_day(two, NOW, days=1, depart_minutes=0),
+                _trip_day(two, NOW, day="2026-10-11", days=30, depart_minutes=24 * 60 - 1),
+            ]
+        },
+        headers=_auth(token),
+    )
+    assert resp.status_code == 200, resp.text
+    got = sorted((d["day"], d["days"], d["depart_minutes"]) for d in resp.json()["trip_days"])
+    assert got == [("2026-10-10", 1, 0), ("2026-10-11", 30, 1439)]
+
+
 # --- Планы по человеку ----------------------------------------------------
 
 

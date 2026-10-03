@@ -14,6 +14,10 @@
 Первый вход шлёт всё локальное без `since` — так гостевое избранное
 и выходы попадают в аккаунт, ничего не спрашивая у человека.
 
+Запись дня правится целиком, кроме длины похода и часа выезда: сборки
+до 03.10 этих полей не знают, и отсутствие ключа значит «оставить как есть»
+(см. sync).
+
 Записанных треков здесь нет: они остаются на телефоне, это обещано
 в политике.
 """
@@ -22,7 +26,7 @@ from datetime import date, datetime, timezone
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends
-from pydantic import AfterValidator, BaseModel
+from pydantic import AfterValidator, BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -63,6 +67,11 @@ class TripDayIn(BaseModel):
     distance_km: float | None = None
     elevation_gain_m: int | None = None
     answered_at: Stamp | None = None
+    #: План по дням: сколько дней длится поход и во сколько выезд в день 1,
+    #: минуты от полуночи. Пусто — выход без плана по дням. Месяц — потолок
+    #: с запасом: он отсекает мусор, а не длинные походы
+    days: int | None = Field(default=None, ge=1, le=30)
+    depart_minutes: int | None = Field(default=None, ge=0, le=24 * 60 - 1)
     updated_at: Stamp
     deleted: bool = False
 
@@ -172,6 +181,17 @@ async def sync(
         row.distance_km = item.distance_km
         row.elevation_gain_m = item.elevation_gain_m
         row.answered_at = item.answered_at
+        # Длину похода и час выезда шлют только сборки, которые восстанавливают
+        # план из облака. Прежние присылают ту же запись без этих ключей, и пиши
+        # мы строку целиком, отметка «Были» со старого телефона стёрла бы план,
+        # записанный новым: многодневка после следующего входа вернулась бы
+        # однодневкой. Поэтому нет ключа — оставляем, что лежит; null — стираем:
+        # так новый клиент меняет план на расчётный выход. Отсюда правило для
+        # новых клиентов — слать оба ключа всегда, пустые как null
+        if "days" in item.model_fields_set:
+            row.days = item.days
+        if "depart_minutes" in item.model_fields_set:
+            row.depart_minutes = item.depart_minutes
         row.updated_at = at
         row.server_updated_at = now
         row.deleted_at = at if item.deleted else None
@@ -217,6 +237,8 @@ async def sync(
             distance_km=row.distance_km,
             elevation_gain_m=row.elevation_gain_m,
             answered_at=row.answered_at,
+            days=row.days,
+            depart_minutes=row.depart_minutes,
             updated_at=row.updated_at,
             deleted=row.deleted_at is not None,
         )
