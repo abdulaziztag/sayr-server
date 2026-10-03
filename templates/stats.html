@@ -358,7 +358,7 @@
     </table>
     {% else %}{{ empty("Рассылок ещё не было.") }}{% endif %}
     {% if d.app.pushes and not d.app.has_push_opens %}{{ empty() }}{% endif %}
-    <p class="def">Напоминания: еженедельное открыли <b>{{ d.app.reminders.weekly }}</b> раз, накануне выхода — <b>{{ d.app.reminders.eve }}</b>.</p>
+    <p class="def">Напоминания: еженедельное открыли <b>{{ d.app.reminders.weekly }}</b> раз, накануне выхода — <b>{{ d.app.reminders.eve }}</b>, вечерний вопрос «Как сходили?» — <b>{{ d.app.reminders.outcome }}</b>.</p>
     {{ define("Отправлено и не дошло — со стороны сервера при рассылке; открыто — событие приложения по тапу на уведомление, доля от отправленных.") }}
   </div>
 </section>

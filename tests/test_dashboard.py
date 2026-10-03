@@ -292,6 +292,7 @@ async def test_app_versions_below_threshold_and_headerless_row():
             DailyCount(day=today - timedelta(days=1), kind="permission", key="notif:yes", events=3, devices=3),
             DailyCount(day=today - timedelta(days=1), kind="permission", key="notif:no", events=1, devices=1),
             DailyCount(day=today - timedelta(days=1), kind="reminder_open", key="eve", events=2, devices=2),
+            DailyCount(day=today - timedelta(days=1), kind="reminder_open", key="outcome", events=1, devices=1),
         ])
         await session.commit()
     d = await _data()
@@ -311,7 +312,7 @@ async def test_app_versions_below_threshold_and_headerless_row():
     # Смена языка не считается ни дошедшим, ни пропуском
     assert (app["onboarding"]["lang_uz"], app["onboarding"]["lang_ru"]) == (3, 0)
     assert app["permissions"][0]["share"] == "75 %"
-    assert app["reminders"] == {"weekly": 0, "eve": 2}
+    assert app["reminders"] == {"weekly": 0, "eve": 2, "outcome": 1}
     assert "<title>" in app["platforms"]  # стопка за сегодня из сырья
     assert app["has_header"] is True
 

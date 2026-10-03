@@ -1019,8 +1019,10 @@ async def _app(session: AsyncSession, counts: Counts, daily: Daily, days: list[d
         "permissions": permissions,
         "offline": {"devices": int(offline_devices), "opens": counts.total("offline_use")},
         "pushes": pushes,
+        # Вечерний вопрос «Как сходили?» обе платформы шлют с 03.10 (PLAT-06)
         "reminders": {"weekly": counts.get("reminder_open", "weekly"),
-                      "eve": counts.get("reminder_open", "eve")},
+                      "eve": counts.get("reminder_open", "eve"),
+                      "outcome": counts.get("reminder_open", "outcome")},
         "has_header": any(p != "unknown" for p in by_platform),
         "has_onboarding": bool(onboarding),
         "has_permissions": any(p["yes"] or p["no"] for p in permissions),
