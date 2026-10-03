@@ -263,6 +263,9 @@ SERVER_KINDS = frozenset(
         # Комнаты попутчиков и их группы в Telegram
         "room_create", "room_ask", "room_approve", "room_decline", "room_join",
         "room_leave", "room_cancel", "room_report", "room_block", "tg_group",
+        # Гость открыл страницу комнаты (03.10.2026): сколько гостей приводит
+        # к входу комната, а не само приложение
+        "room_guest_open",
     }
 )
 

@@ -22,6 +22,7 @@
 кто вывел; ни кода комнаты, ни места, ни людей.
 """
 
+import re
 import secrets
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -216,15 +217,45 @@ class FeedDay(BaseModel):
     rooms: int
 
 
+class PublicRoom(BaseModel):
+    """Комната глазами гостя в ленте «Походы» — место, дни и сколько человек,
+    как на странице /j/ в браузере. Ни организатора, ни мужчин и женщин:
+    «1 человек · 1 женщина» с местом и датой — объявление, что девушка идёт
+    одна, а имя организатора заблокированный увидел бы, просто выйдя
+    из аккаунта, — гостя сервер не знает и скрыть от него нечего"""
+
+    code: str
+    place_slug: str
+    day: date
+    days: int
+    people: int
+
+
 class RoomsFeedOut(BaseModel):
     """Лента вкладки «Походы»: открытые комнаты во все места. Платные туры
     придут своей ручкой и своим видом карточки рядом с этой лентой"""
 
     places: list[FeedPlace]
-    #: Числа по месту и дню — всем; гость видит только их
+    #: Числа по месту и дню — всем
     days: list[FeedDay]
     #: Пусто у гостя: карточки чужих людей — только вошедшим
     rooms: list[RoomBrief] = []
+    #: Только гостю — те же комнаты без людей: тап ведёт на страницу комнаты,
+    #: а попроситься — после входа. Вошедшему пусто, у него `rooms`.
+    #: Сборки до 03.10 поля не знают и рисуют гостю числа, как раньше
+    public_rooms: list[PublicRoom] = []
+
+
+class PublicRoomOut(BaseModel):
+    """Страница комнаты для гостя — то же, что страница /j/ в браузере"""
+
+    code: str
+    place_slug: str
+    place_name: str
+    day: date
+    days: int
+    people: int
+    request_url: str
 
 
 def _card(member: RoomMember, contact: bool) -> CardOut:
@@ -357,6 +388,16 @@ def _brief(room: Room, viewer: User | None, lang: Lang) -> RoomBrief:
     )
 
 
+def _public(room: Room) -> PublicRoom:
+    return PublicRoom(
+        code=room.code,
+        place_slug=room.place.slug,
+        day=room.day,
+        days=room.days,
+        people=_people(room),
+    )
+
+
 # MARK: - Проверки
 
 
@@ -485,6 +526,42 @@ async def _room_for(session: AsyncSession, code: str) -> Room:
     if room is None:
         raise HTTPException(status_code=404, detail="room_not_found")
     return room
+
+
+#: Код комнаты в адресе /j/{код} и /rooms/{код}/public — 8 знаков без похожих
+#: букв (`_token`). Чужое в базу не шлём: NUL-байт в адресе дал бы 422 вместо
+#: ответа «такой комнаты нет»
+ROOM_CODE = re.compile(r"[a-z0-9]{4,32}")
+
+
+async def askable_room(session: AsyncSession, code: str) -> Room | None:
+    """Комната, к которой можно попроситься, по коду — или None.
+
+    Условия askable — прямо в запросе: комната только для своих, отменённая
+    или прошедшая не находится тем же одним запросом, что и несуществующий
+    код. Иначе за ней догружались бы место, снимки и люди, и по времени
+    ответа было бы видно, что код занят. askable после запроса — мерило,
+    общее с заявкой и request_url: запрос его лишь повторяет, и разойтись
+    им это не даст"""
+    if not ROOM_CODE.fullmatch(code):
+        return None
+    room = (
+        await session.execute(
+            select(Room)
+            .where(
+                Room.code == code,
+                Room.is_open,
+                Room.status == "active",
+                # _end(room) >= today(): последний день похода ещё впереди
+                Room.day + func.greatest(Room.days, 1) > today(),
+            )
+            .options(
+                selectinload(Room.place).selectinload(Place.photos),
+                selectinload(Room.members).selectinload(RoomMember.user),
+            )
+        )
+    ).scalar_one_or_none()
+    return room if room is not None and askable(room) else None
 
 
 def _require_organizer(room: Room, user: User) -> None:
@@ -648,7 +725,7 @@ async def rooms_feed(
     session: AsyncSession = Depends(get_session),
 ) -> RoomsFeedOut:
     """Вкладка «Походы»: открытые комнаты во все места на месяц вперёд.
-    Правила те же, что у комнат места: гостю — числа, вошедшему — карточки"""
+    Вошедшему — карточки, гостю — числа и те же комнаты без людей"""
     shown = await _open_rooms(session, user, ahead)
     places: dict[str, FeedPlace] = {}
     counts: dict[tuple[date, str], int] = {}
@@ -676,6 +753,7 @@ async def rooms_feed(
         places=list(places.values()),
         days=[FeedDay(place_slug=s, day=d, rooms=n) for (d, s), n in sorted(counts.items())],
         rooms=[_brief(r, user, lang) for r in shown] if user else [],
+        public_rooms=[] if user else [_public(r) for r in shown],
     )
 
 
@@ -787,6 +865,35 @@ async def room_view(
     if not visible or (organizer and organizer.user_id in hidden):
         raise HTTPException(status_code=404, detail="room_not_found")
     return _out(room, user, lang, hidden)
+
+
+@router.get("/rooms/{code}/public", response_model=PublicRoomOut, dependencies=[Depends(rooms_on)])
+async def room_public(
+    code: str,
+    lang: Lang = Query(DEFAULT_LANG),
+    session: AsyncSession = Depends(get_session),
+    tally: Tally = Depends(),
+) -> PublicRoomOut:
+    """Комната для гостя: тап по комнате в «Походах» и ссылка /j/ без входа.
+    Видно ровно то, что на странице /j/ в браузере, — место, дни и сколько
+    человек (почему не больше — `PublicRoom`); кто идёт, гость узнаёт после
+    входа. Закрытая, отменённая, прошедшая и несуществующая отвечают одним
+    и тем же 404, как /j/"""
+    room = await askable_room(session, code)
+    organizer = _organizer(room) if room else None
+    # Организатора под запретом нет и в ленте — и комнаты его гостю нет
+    if organizer is None or organizer.user.companions_banned_at is not None:
+        raise HTTPException(status_code=404, detail="room_not_found")
+    tally("room_guest_open")
+    return PublicRoomOut(
+        code=room.code,
+        place_slug=room.place.slug,
+        place_name=pick(room.place.name, room.place.name_uz, lang),
+        day=room.day,
+        days=room.days,
+        people=_people(room),
+        request_url=f"{settings.public_url}/j/{room.code}",
+    )
 
 
 @router.patch("/rooms/{code}", response_model=RoomOut, dependencies=[Depends(rooms_on)])

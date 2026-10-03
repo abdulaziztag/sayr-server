@@ -1073,6 +1073,7 @@ def _accounts(counts: Counts) -> dict:
     rooms = {
         "open": counts.get("room_create", "open"),
         "own": counts.get("room_create", "own"),
+        "guest_open": counts.get("room_guest_open"),
         "ask": counts.get("room_ask"),
         "approve": counts.get("room_approve"),
         "decline": counts.get("room_decline"),

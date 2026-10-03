@@ -415,12 +415,66 @@ async def test_лента_собирает_открытые_комнаты_вс�
     assert card["seats"] == 2 and card["telegram_username"] is None
 
 
-async def test_лента_гостю_только_числа(client):
-    await open_room(client, (await person())[0])
+async def test_лента_гостю_числа_и_комнаты_без_людей(client):
+    org, _ = await person(gender=Gender.female)
+    room = await open_room(client, org, days=2)
     body = (await client.get("/api/v1/rooms")).json()
     assert body["rooms"] == []
     assert body["days"] == [{"place_slug": "test-peak", "day": DAY.isoformat(), "rooms": 1}]
     assert body["places"][0]["name"] == "Тестовый пик"
+    # Ни организатора, ни мужчин и женщин — только место, дни и сколько человек
+    assert body["public_rooms"] == [
+        {"code": room["code"], "place_slug": "test-peak", "day": DAY.isoformat(), "days": 2, "people": 1}
+    ]
+    signed_in = (await client.get("/api/v1/rooms", headers=org)).json()
+    assert signed_in["public_rooms"] == [] and len(signed_in["rooms"]) == 1
+
+
+async def test_комната_для_гостя_как_страница_заявки(client):
+    org, _ = await person(gender=Gender.female)
+    room = await open_room(client, org, place="test-lake", days=3)
+    resp = await client.get(f"/api/v1/rooms/{room['code']}/public")
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "code": room["code"],
+        "place_slug": "test-lake",
+        "place_name": "Тестовое озеро",
+        "day": DAY.isoformat(),
+        "days": 3,
+        "people": 1,
+        "request_url": f"https://sayr.info/j/{room['code']}",
+    }
+    uz = await client.get(f"/api/v1/rooms/{room['code']}/public", params={"lang": "uz"})
+    assert uz.json()["place_name"] == "Test ko\u2018li"
+
+
+async def test_комната_для_гостя_не_выдаёт_закрытые(client):
+    """Только для своих, отменена, прошла, организатор под запретом, нет
+    такого кода — один и тот же 404, как у страницы /j/"""
+    org, _ = await person()
+    closed = await open_room(client, org, is_open=False)
+    cancelled = await open_room(client, org, day=(DAY + timedelta(days=2)).isoformat())
+    await client.delete(f"/api/v1/rooms/{cancelled['code']}", headers=org)
+    past = await open_room(client, org, day=(DAY + timedelta(days=4)).isoformat())
+    await set_room(past["code"], day=TODAY - timedelta(days=1))
+    banned, banned_id = await person(name="Бахтиёр")
+    of_banned = await open_room(client, banned, place="test-lake")
+    async with SessionLocal() as session:
+        (await session.get(User, banned_id)).companions_banned_at = datetime.now(timezone.utc)
+        await session.commit()
+
+    unknown = await client.get("/api/v1/rooms/zzzzzzzz/public")
+    assert (unknown.status_code, unknown.json()) == (404, {"detail": "room_not_found"})
+    for code in (closed["code"], cancelled["code"], past["code"], of_banned["code"], "a%00b"):
+        resp = await client.get(f"/api/v1/rooms/{code}/public")
+        assert (resp.status_code, resp.json()) == (404, unknown.json()), code
+
+
+async def test_комната_для_гостя_при_выключенных_попутчиках(client, monkeypatch):
+    room = await open_room(client, (await person())[0])
+    monkeypatch.setattr(settings, "rooms_open", False)
+    resp = await client.get(f"/api/v1/rooms/{room['code']}/public")
+    assert (resp.status_code, resp.json()) == (404, {"detail": "rooms_closed"})
 
 
 async def test_лента_по_узбекски(client):
@@ -1782,6 +1836,15 @@ async def counted(*kinds: str) -> list[tuple[str, str | None]]:
             .order_by(ApiEvent.id)
         )
         return [tuple(r) for r in rows.all()]
+
+
+async def test_статистика_гость_открыл_комнату(client):
+    await forget_events()
+    room = await open_room(client, (await person())[0])
+    await client.get(f"/api/v1/rooms/{room['code']}/public", headers={"X-Device-Id": DEVICE})
+    await client.get("/api/v1/rooms/zzzzzzzz/public", headers={"X-Device-Id": DEVICE})
+    # Несуществующая комната — не открытие
+    assert await counted("room_guest_open") == [("room_guest_open", None)]
 
 
 async def test_статистика_комната_для_всех_и_для_своих(client):

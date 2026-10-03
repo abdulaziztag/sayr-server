@@ -8,12 +8,11 @@ https://sayr.info/j/{code} и файлы «универсальных» ссыл
 и когда зовут, кто зовёт, и кнопки магазинов.
 """
 
-import re
 from html import escape
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -24,7 +23,7 @@ from ..push.outbox import day_text
 from ..schemas import DEFAULT_LANG, Lang, pick
 from ..typography import uz_display
 from .app_links import smart_banner, store_buttons
-from .rooms import _end, _organizer, _people, askable, today
+from .rooms import _end, _organizer, _people, askable_room
 
 router = APIRouter(tags=["links"])
 
@@ -258,9 +257,6 @@ async def invite_page(
     return HTMLResponse(uz_display(page))
 
 
-#: Код комнаты — 8 знаков без похожих букв (rooms._token). Чужое в базу
-#: не шлём: NUL-байт в адресе дал бы 422 вместо страницы «не действует»
-_CODE = re.compile(r"[a-z0-9]{4,32}")
 #: Превью, когда у места нет снимков, — картинка лендинга
 _DEFAULT_IMAGE = "/static/img/shot-catalog.jpg"
 
@@ -302,36 +298,13 @@ async def request_page(
     организатор, анкету и 18+ проверяет сервер. Код комнаты не секрет — он
     и так виден в поиске."""
     t = _T[lang]
-    room = None
-    if settings.rooms_open and _CODE.fullmatch(code):
-        # Условия askable — прямо в запросе: комната только для своих,
-        # отменённая или прошедшая не находится тем же одним запросом, что
-        # и несуществующий код. Иначе за ней догружались бы место, снимки
-        # и люди, и по времени ответа было бы видно, что код занят
-        room = (
-            await session.execute(
-                select(Room)
-                .where(
-                    Room.code == code,
-                    Room.is_open,
-                    Room.status == "active",
-                    # _end(room) >= today(): последний день похода ещё впереди
-                    Room.day + func.greatest(Room.days, 1) > today(),
-                )
-                .options(
-                    selectinload(Room.place).selectinload(Place.photos),
-                    selectinload(Room.members).selectinload(RoomMember.user),
-                )
-            )
-        ).scalar_one_or_none()
+    room = await askable_room(session, code) if settings.rooms_open else None
     # Нет такой, только для своих, отменена или прошла — одна и та же
     # страница с тем же 404: по ответу не понять, стоит ли за кодом комната
-    # только для своих. askable — мерило, общее с заявкой и request_url:
-    # запрос выше его лишь повторяет, и разойтись им это не даст
-    if room is None or not askable(room):
+    # только для своих (как ищем — `askable_room`)
+    if room is None:
         page = _GONE.format(lang=lang, title=t["gone_title"], text=t["gone_request"])
         return HTMLResponse(uz_display(page), status_code=404)
-
     place = pick(room.place.name, room.place.name_uz, lang)
     dates = _dates(room, lang)
     title = f"{place} · {dates}"
