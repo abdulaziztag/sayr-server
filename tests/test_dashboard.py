@@ -449,7 +449,7 @@ async def test_accounts_section_mixes_server_outcomes_and_client_tries():
         2, 4, 1, 1)
     assert (rooms["cancel"], rooms["report"], rooms["block"]) == (1, 1, 1)
     assert a["extras"] == {"room_open": 0, "share_open": 0, "share_own": 2, "calendar": 3,
-                           "go_fail": 1}
+                           "go_fail": 1, "hints": "0 / 0 / 0 / 0"}
 
 
 async def test_page_renders_accounts_section_with_and_without_data(admin_client):

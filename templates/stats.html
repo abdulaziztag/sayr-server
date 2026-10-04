@@ -434,6 +434,7 @@
         <tr><td>Поделились: для всех / для своих</td><td class="num">{{ x.share_open }} / {{ x.share_own }}</td></tr>
         <tr><td>Развернули месяц в «Когда идём?»</td><td class="num">{{ x.calendar }}</td></tr>
         <tr><td>«Пойду» не дошло до сервера</td><td class="num">{{ x.go_fail }}</td></tr>
+        <tr><td>Онбординг: «Пойду» / компания / «Иду» / «Что дальше»</td><td class="num">{{ x.hints }}</td></tr>
       </tbody></table>
     </div>
     {% if not a.client %}{{ empty(a.since_text) }}{% endif %}

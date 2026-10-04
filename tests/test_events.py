@@ -246,6 +246,7 @@ def test_account_and_rooms_kinds_take_their_keys():
         ("go_fail", "test-peak"),
         ("calendar_month", "test-peak"),
         ("room_share", "open"), ("room_share", "own"),
+        ("rooms_hint", "go"), ("rooms_hint", "companions"), ("rooms_hint", "confirm"), ("rooms_hint", "room"),
     ]
     for kind, key in good:
         assert validate_key(kind, key) == (True, key), (kind, key)
@@ -264,6 +265,7 @@ def test_account_and_rooms_kinds_reject_anything_but_their_keys():
         ("go_fail", "Bad Slug!"), ("go_fail", "test-peak:2026-10-05"), ("go_fail", None),
         ("calendar_month", "05.10.2026"), ("calendar_month", None),
         ("room_share", "k7m2q9xa"), ("room_share", "public"), ("room_share", None),
+        ("rooms_hint", "tour"), ("rooms_hint", None),
     ]
     for kind, key in bad:
         assert validate_key(kind, key)[0] is False, (kind, key)

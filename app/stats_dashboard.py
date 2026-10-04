@@ -78,7 +78,7 @@ CLIENT_EVENTS_SINCE: dict[str, str | None] = {"ios": "1.7.2", "android": "1.7.2"
 ACCOUNT_EVENTS_SINCE: dict[str, str | None] = {"ios": None, "android": None}
 ACCOUNT_CLIENT_KINDS = (
     "auth_start", "auth_cancel", "auth_fail", "tg_link_start", "profile_open",
-    "go_fail", "calendar_month", "room_share",
+    "go_fail", "calendar_month", "room_share", "rooms_hint",
 )
 LOGIN_METHODS = (("telegram", "Telegram"), ("apple", "Apple"), ("phone", "По номеру"))
 
@@ -1116,7 +1116,7 @@ def _accounts(counts: Counts) -> dict:
         # Строки приложения справа («Пойду» не дошло и др.) — не про комнаты
         # сервера: карточка видна, если есть хоть что-то из двух
         "has_rooms": any(rooms.values()) or any(
-            counts.total(kind) for kind in ("room_open", "room_share", "calendar_month", "go_fail")
+            counts.total(kind) for kind in ("room_open", "room_share", "calendar_month", "go_fail", "rooms_hint")
         ),
         "extras": {
             "room_open": counts.total("room_open"),
@@ -1124,6 +1124,11 @@ def _accounts(counts: Counts) -> dict:
             "share_own": tried(counts.get("room_share", "own")),
             "calendar": tried(counts.total("calendar_month")),
             "go_fail": tried(counts.total("go_fail")),
+            # Сколько раз показали шаги онбординга: по ним видно, доходят ли
+            # люди от «Пойду» до своей комнаты
+            "hints": " / ".join(
+                str(tried(counts.get("rooms_hint", step))) for step in ("go", "companions", "confirm", "room")
+            ),
         },
     }
 
